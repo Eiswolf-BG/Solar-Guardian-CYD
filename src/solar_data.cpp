@@ -51,6 +51,16 @@ void pushHistoryPoint(time_t epoch, float watts) {
     });
 }
 
+void setHistory(const HistoryPoint* points, uint8_t count) {
+    mutate([&](Data& d) {
+        uint8_t n = count > HISTORY_MAX_POINTS ? HISTORY_MAX_POINTS : count;
+        for (uint8_t i = 0; i < n; i++) d.history[i] = points[i];
+        d.historyCount = n;
+        d.historyHead = (uint8_t)(n % HISTORY_MAX_POINTS);
+        d.historyValid = true;
+    });
+}
+
 void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh) {
     mutate([&](Data& d) {
         d.energyTodayKwh = todayKwh;
@@ -69,6 +79,15 @@ void setBattery(float voltage, float current, float socPercent, float tempC, tim
         d.batteryTempC = tempC;
         d.batteryValid = true;
         d.batteryMeasuredAt = measuredAt;
+    });
+}
+
+void setPv(float voltage, float current, time_t measuredAt) {
+    mutate([&](Data& d) {
+        d.pvVoltage = voltage;
+        d.pvCurrent = current;
+        d.pvValid = true;
+        d.pvMeasuredAt = measuredAt;
     });
 }
 

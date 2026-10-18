@@ -24,9 +24,16 @@ vorausgesetzt werden.
 ## Pflichtregeln
 
 - **Nur bauen und flashen.** Niemals committen, taggen oder pushen, außer
-  die Nutzerin fordert das in ihrer aktuellen Nachricht ausdrücklich an. Dieses
-  Projekt hat kein Git-Repo und keinen Remote — das bleibt so, bis
-  ausdrücklich etwas anderes verlangt wird.
+  die Nutzerin fordert das in ihrer aktuellen Nachricht ausdrücklich an. Seit
+  V1.0 liegt das Projekt öffentlich auf GitHub
+  (`Eiswolf-BG/Solar-Guardian-CYD`, MIT-Lizenz, Web-Flasher via GitHub
+  Pages) — das ändert nichts an dieser Regel, jeder Push/Tag/Release
+  bleibt an eine ausdrückliche Aufforderung in der jeweiligen Nachricht
+  gebunden.
+- **Release-Notes sind IMMER zweisprachig**, erst Deutsch, dann
+  Englisch (fester Wunsch der Projektinhaberin für dieses Repo: ein Nutzer des Geräts
+  spricht nur wenig Englisch) — gilt für jedes GitHub-Release, ohne
+  Ausnahme, auch bei kleinen Patch-Versionen.
 - **Keine Geheimnisse im Log.** E-Mail-Adresse, Passwort, WLAN-Passwort,
   MD5-Hash des Passworts, Portal-Token und Meldungstexte aus
   Login-Antworten (die enthalten die E-Mail) werden NIE über den
@@ -215,10 +222,27 @@ Gemeinsame Header: `Content-Type: application/json`,
   Abfrage wiederholt (`fetch_task.cpp::runBatteryFetch()`, gleiches
   Muster wie bei der Ertragsabfrage). Ladestatus-Zuordnung (vorläufig,
   noch nicht am Portal bestätigt): Rohwert 0-3 direkt (0 Kein Laden, 1
-  Erhaltungsladung, 2 Schnellladung, 3 Ausgleichsladung), bei Rohwert >3
-  gilt `(wert >> 2) & 3` mit derselben Zuordnung. Läuft im selben
+  Erhaltung, 2 Schnellladen, 3 Ausgleich — kurze Bezeichnungen seit der
+  Status-Erklärung, siehe "Bisher fertige Features" unten), bei Rohwert
+  >3 gilt `(wert >> 2) & 3` mit derselben Zuordnung. In derselben
+  Anfrage laufen seit der Seite "Leistung" auch PV-Spannung (101596362)
+  und PV-Strom (101596380) mit (kleines `sampleLimit`). Läuft im selben
   5-Minuten-Zyklus direkt nach der
   Ertragsabfrage, gleiche Wiederholungs-/Fehlerregeln.
+- **Leistungskurve** — dieselbe URL/Authentifizierung wie Batterie/
+  Verlauf, aber eigene Anfrage NUR für den Datenpunkt "PV Power"
+  (101596388, W) mit großem `sampleLimit` (`EpeverClient::
+  POWER_CURVE_MAX_POINTS` = 50, deckt die letzten 3 Stunden ab, siehe
+  `epever_client.cpp::fetchPowerCurve()`). Antwort mit ArduinoJson-Filter
+  geparst (nur `status`/`info`/`data.list[].list[].time`+`value`), da bei
+  50 Punkten deutlich größer als die Batterieabfrage. `list[0]` (wegen
+  `"desc"` der neueste Punkt) ist zugleich die aktuelle Leistung samt
+  Messzeit; `fetch_task.cpp::runPowerCurveFetch()` sortiert beim
+  Übernehmen nach `SolarData::setHistory()` auf ältester-zuerst um (die
+  API liefert neuester-zuerst). 0 W (nachts, bei Bewölkung) ist ein
+  gültiger Wert, kein Fehler. Läuft im selben 5-Minuten-Zyklus direkt
+  nach der Batterieabfrage, gleiche Login-/Wiederholungsregeln,
+  gleiches Token.
 
 Zeitschema (siehe `Config::EPEVER_*` in `config.h` und `fetch_task.cpp`):
 direkt nach erfolgreicher WLAN-Verbindung die erste Abfrage, danach alle
@@ -465,12 +489,18 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
     `battery_page.h/.cpp`, `epever_datapoints.h`): Port-7002-Abfrage
     (Spannung/Strom/SOC/Temperatur/Ladestatus + Tagesertrag-Datenpunkt)
     über den Header `token` (siehe "Solar Guardian Portal API" oben),
-    Seite "Batterie" mit großer SOC-Anzeige, Balkengrafik und
-    2x2-Kacheln (Spannung/Strom/Temperatur/Status).
+    Seite "Batterie" mit großer SOC-Anzeige und 2x2-Kacheln
+    (Spannung/Strom/Temperatur/Status) — die ursprüngliche Balkengrafik
+    unter der SOC-Zahl wurde beim Hinzufügen der Status-Erklärung (siehe
+    Punkt 17) wieder entfernt, da der Platz für die neue Erklärungszeile
+    gebraucht wurde.
 14. **Menü "Ertragswerte"** (`yield_values_screen.h/.cpp`): zeigt
-    Heute/Woche/Monat/Jahr, erlaubt manuelle Korrektur von Monat/Jahr
-    (inklusive heute; Woche entfällt, ergibt sich automatisch aus dem
-    gleitenden 7-Tage-Fenster).
+    Heute/Woche/Monat/Jahr UNTEREINANDER (4 Zeilen, z.B. "Heute 1,49
+    kWh"), erlaubt manuelle Korrektur von Monat/Jahr (inklusive heute;
+    Woche entfällt, ergibt sich automatisch aus dem gleitenden
+    7-Tage-Fenster). War ursprünglich eine Zeile mit "/" getrennt und
+    per `fitText()` gekürzt — verletzte die Nie-Kürzen-Regel bei großen
+    Werten, deshalb auf vier volle Bildschirmbreiten-Zeilen umgestellt.
 15. **Layout-Regel** (`layout_utils.h/.cpp`, `layout_check.h/.cpp`):
     `fitText()` für automatische Schriftgrößen-Anpassung/Kürzung,
     Debug-Layout-Prüfer für Überlappungen/Randüberschreitungen.
@@ -495,6 +525,23 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
     seitdem bis zu 10 statt 6 Zeilen und setzt die Textgröße jetzt immer
     explizit auf 1 (vorher abhängig von der zuletzt vom Aufrufer
     gesetzten Größe).
+18. **Seite "Leistung"** (`power_page.h/.cpp`, `epever_client.cpp::
+    fetchPowerCurve()`): löst den früheren Platzhalter ab. Große,
+    zentrierte aktuelle PV-Leistung (ganze Watt, ab 1000 W als "X,XX kW"
+    mit Dezimalkomma/-punkt je Sprache) mit Messzeit darunter, zwei
+    kleine Kacheln (PV-Spannung/-Strom, wiederverwendet die Batterie-
+    Textschlüssel "Spannung"/"Strom"), darunter eine selbst mit
+    `drawLine()` gezeichnete 3-Stunden-Kurve (Y-Achse ab 0, Maximum auf
+    ein 1-2-5-Schema aufgerundet und beschriftet, Hilfslinien in
+    gedimmter Systemfarbe, neuester Punkt als kleiner Kreis, Zeitmarken
+    "-3h"/"-2h"/"-1h"/"jetzt" darunter) und eine Statuszeile wie auf der
+    Seite "Ertrag" (Tipp darauf löst "jetzt aktualisieren" aus). Alle
+    Offsets sind rechnerisch verkettet (nicht einzeln fest verdrahtet),
+    siehe `power_page.cpp` Kommentar am Konstanten-Block — eine erste
+    Fassung reichte mit der Statuszeilen-Tippfläche bis in die
+    Seitenpunkte-/"?"-Zone hinein, was der (seit der Seite "Jahre")
+    zentral in `main_screen.cpp` verankerte Layout-Prüfer direkt beim
+    ersten Testlauf gemeldet hat.
 
 ## Code-Struktur
 
@@ -532,8 +579,9 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
   `credentials_screen.h/.cpp` — Ersteinrichtung-Bildschirme
   (`wifi_select_screen`/`credentials_screen` werden auch von
   Netzwerke/Konto wiederverwendet)
-- `pages.h/.cpp`, `yield_page.h/.cpp`, `years_page.h/.cpp`,
-  `battery_page.h/.cpp` — die per Wisch-Geste erreichbaren Hauptseiten
+- `pages.h/.cpp`, `power_page.h/.cpp`, `yield_page.h/.cpp`,
+  `years_page.h/.cpp`, `battery_page.h/.cpp` — die per Wisch-Geste
+  erreichbaren Hauptseiten
 - `main_screen.h/.cpp`, `menu_screen.h/.cpp`, `networks_screen.h/.cpp`,
   `account_screen.h/.cpp`, `color_picker_screen.h/.cpp`,
   `language_screen.h/.cpp`, `reset_screen.h/.cpp`,

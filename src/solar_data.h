@@ -57,6 +57,14 @@ namespace SolarData {
         float batteryTempC = 0.0f;
         bool batteryValid = false;
         time_t batteryMeasuredAt = 0;
+
+        // PV-Spannung/-Strom (Datenpunkte 101596362/101596380), fuer die
+        // Seite "Leistung" - kommen in derselben Anfrage wie die Batterie-
+        // Werte mit (kleines sampleLimit), siehe CLAUDE.md "Seite Leistung".
+        float pvVoltage = 0.0f;
+        float pvCurrent = 0.0f;
+        bool pvValid = false;
+        time_t pvMeasuredAt = 0;
         // Ladestatus: entweder ein bekannter Zahlencode (0-3, siehe
         // i18n CHARGE_STATUS_*) oder ein roher Text von der API, falls sie
         // keine Zahl liefert. -1 = kein Ladestatus verfuegbar.
@@ -101,8 +109,15 @@ namespace SolarData {
     // wieder frei.
     void setPower(float watts, time_t measuredAt);
     void pushHistoryPoint(time_t epoch, float watts);
+    // Ersetzt den kompletten Verlauf auf einmal (ein Mutex-Zyklus statt
+    // HISTORY_MAX_POINTS einzelner) - die Port-7002-Kurvenabfrage liefert
+    // ohnehin jedes Mal das komplette 3-Stunden-Fenster neu, kein
+    // inkrementelles Anhaengen noetig. points MUSS aeltester zuerst
+    // sortiert sein (siehe CLAUDE.md "Seite Leistung").
+    void setHistory(const HistoryPoint* points, uint8_t count);
     void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh);
     void setBattery(float voltage, float current, float socPercent, float tempC, time_t measuredAt);
+    void setPv(float voltage, float current, time_t measuredAt);
     void setChargeStatusCode(int16_t code);
     void setChargeStatusText(const char* text);
     void setDailySource(float kwh, time_t measuredAt, bool fromDatapoint);

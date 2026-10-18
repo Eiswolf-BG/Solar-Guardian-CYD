@@ -6,6 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
+![version](https://img.shields.io/badge/version-1.1-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -22,10 +23,14 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 
 ### Funktionen
 
-- **Wisch-Seiten**: Leistung (Platzhalter, noch nicht umgesetzt), Ertrag
-  (Heute, Woche als gleitendes 7-Tage-Fenster, Monat, Jahr), Jahre
-  (Balkengrafik der letzten Kalenderjahre) und Batterie (Ladezustand,
-  Spannung, Strom, Temperatur, Ladestatus mit kurzer Erklärung).
+- **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
+  -Strom als Kacheln, Kurve der letzten 3 Stunden), Ertrag (Heute, Woche
+  als gleitendes 7-Tage-Fenster, Monat, Jahr), Jahre (Balkengrafik der
+  letzten Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
+  Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
+- **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
+  haben bekanntermaßen Lücken), mit täglichem Backup und manueller
+  Korrekturmöglichkeit.
 - **Menü**: Konto, Netzwerke (bis zu 3 WLANs), Systemfarbe, Sprache
   (Deutsch/Englisch), Ertragswerte (Monat/Jahr manuell korrigieren),
   Zurücksetzen.
@@ -90,10 +95,14 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 
 ### Features
 
-- **Swipe pages**: Power (placeholder, not implemented yet), Yield
-  (Today, Week as a rolling 7-day window, Month, Year), Years (bar chart
-  of the last calendar years), and Battery (charge level, voltage,
-  current, temperature, charging status with a short explanation).
+- **Swipe pages**: Power (current PV power front and center, PV voltage/
+  current as tiles, a chart of the last 3 hours), Yield (Today, Week as a
+  rolling 7-day window, Month, Year), Years (bar chart of the last
+  calendar years), and Battery (charge level, voltage, current,
+  temperature, charging status with a short explanation of all four
+  states).
+- **Yield log**: counts week/month/year itself (the portal's own totals
+  are known to have gaps), with a daily backup and manual correction.
 - **Menu**: Account, Networks (up to 3 WiFi networks), Theme color,
   Language (German/English), Yield values (manually correct month/year),
   Factory reset.

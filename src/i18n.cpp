@@ -45,6 +45,11 @@ namespace {
         "folgt",
         "Kein Konto eingerichtet",
 
+        // Seite "Leistung"
+        "W",
+        "kW",
+        "jetzt",
+
         // Seite "Ertrag"
         "Heute",
         "Woche",
@@ -122,7 +127,7 @@ namespace {
         "Wert zu niedrig",
 
         // Hilfetexte
-        "Hier erscheint bald die aktuelle PV-Leistung.",
+        "Zeigt, wie viel Strom die Solarmodule gerade liefern, dazu Spannung und Strom der Module und den Verlauf der letzten 3 Stunden. Die Werte kommen vom Solarregler über das Solar-Guardian-Portal und aktualisieren sich alle 5 Minuten. Nachts ist 0 W normal.",
         "Zeigt den erzeugten Strom heute, in den letzten 7 Tagen (heute und die 6 Tage davor), in diesem Monat und in diesem Jahr. Woche, Monat und Jahr zählt das Gerät selbst, weil die Summen des Portals Lücken haben. Die Werte aktualisieren sich alle 5 Minuten.",
         "Zeigt den Ertrag pro Kalenderjahr. Das laufende Jahr zählt das Gerät selbst, die Vorjahre sind gespeichert.",
         "Zeigt Ladezustand, Spannung, Strom, Temperatur und Ladestatus, aktualisiert alle 5 Minuten. Kein Laden: nicht geladen. Erhaltung: fast voll. Schnellladen: volle Leistung. Ausgleich: kurz höhere Spannung, gleicht die Zellen aus, normal.",
@@ -175,6 +180,11 @@ namespace {
         "Battery",
         "coming soon",
         "No account set up",
+
+        // "Power" page
+        "W",
+        "kW",
+        "now",
 
         // "Yield" page
         "Today",
@@ -253,7 +263,7 @@ namespace {
         "Value too low",
 
         // Help texts
-        "The current PV power will appear here soon.",
+        "Shows how much power the solar panels are currently delivering, plus their voltage and current and the curve of the last 3 hours. The values come from the solar controller via the Solar Guardian portal and refresh every 5 minutes. 0 W at night is normal.",
         "Shows the power generated today, in the last 7 days (today and the 6 days before), this month, and this year. The device counts week, month, and year itself because the portal's totals have gaps. The values refresh every 5 minutes.",
         "Shows the yield per calendar year. The device counts the current year itself, previous years are stored.",
         "Shows charge level, voltage, current, temperature, and charging status, refreshed every 5 minutes. Not charging: no charge now. Float: almost full. Boost: full power. Equalize: brief higher voltage that balances the cells, normal.",

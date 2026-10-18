@@ -29,6 +29,9 @@ namespace EpeverClient {
 
     struct BatteryResult {
         BatteryPoint voltage, current, chargeStatus, temperature, soc, dailyGeneration;
+        // PV-Spannung/-Strom (Seite "Leistung") - laufen mit kleinem
+        // sampleLimit in derselben Anfrage mit, siehe CLAUDE.md.
+        BatteryPoint pvVoltage, pvCurrent;
     };
 
     // deviceNo ist keine geheime Information (Geraete-Seriennummer).
@@ -39,4 +42,20 @@ namespace EpeverClient {
     // Fehlerbehandlung im Fetch-Task (erneuter Login bei 401/Fehler).
     bool fetchBatteryData(const String& deviceNo, const String& token,
                           BatteryResult& out, int* outHttpCode, int* outApiStatus);
+
+    constexpr uint8_t POWER_CURVE_MAX_POINTS = 50;
+
+    struct PowerCurvePoint {
+        time_t time = 0; // Sekunden
+        float watts = 0.0f;
+    };
+
+    // Eigene Anfrage nur fuer den Leistungs-Datenpunkt (grosses
+    // sampleLimit) - liefert bis zu POWER_CURVE_MAX_POINTS Punkte der
+    // letzten 3 Stunden, NEUESTER ZUERST (wie von der API geliefert,
+    // "timeSort":"desc") - der Aufrufer sortiert bei Bedarf um. points[0]
+    // ist bei Erfolg zugleich die aktuelle Leistung samt Messzeit.
+    bool fetchPowerCurve(const String& deviceNo, const String& token,
+                        PowerCurvePoint* points, uint8_t& outCount,
+                        int* outHttpCode, int* outApiStatus);
 }

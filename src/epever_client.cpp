@@ -225,6 +225,7 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
         EpeverDatapoints::BATTERY_VOLTAGE, EpeverDatapoints::BATTERY_CURRENT,
         EpeverDatapoints::CHARGE_STATUS, EpeverDatapoints::BATTERY_TEMP,
         EpeverDatapoints::BATTERY_SOC, EpeverDatapoints::DAILY_GENERATION,
+        EpeverDatapoints::PV_VOLTAGE, EpeverDatapoints::PV_CURRENT,
     };
 
     JsonDocument body;
@@ -291,16 +292,101 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
     out.temperature = extractPoint(list, EpeverDatapoints::BATTERY_TEMP);
     out.soc = extractPoint(list, EpeverDatapoints::BATTERY_SOC);
     out.dailyGeneration = extractPoint(list, EpeverDatapoints::DAILY_GENERATION);
+    out.pvVoltage = extractPoint(list, EpeverDatapoints::PV_VOLTAGE);
+    out.pvCurrent = extractPoint(list, EpeverDatapoints::PV_CURRENT);
 
-    Serial.printf("[fetch] Batterie ok: U=%.2fV I=%.2fA SOC=%.1f%% T=%.1fC Tagesertrag=%.2fkWh\n",
+    Serial.printf("[fetch] Batterie ok: U=%.2fV I=%.2fA SOC=%.1f%% T=%.1fC Tagesertrag=%.2fkWh PV U=%.1fV I=%.2fA\n",
                   out.voltage.valid ? out.voltage.value : 0.0f,
                   out.current.valid ? out.current.value : 0.0f,
                   out.soc.valid ? out.soc.value : 0.0f,
                   out.temperature.valid ? out.temperature.value : 0.0f,
-                  out.dailyGeneration.valid ? out.dailyGeneration.value : 0.0f);
+                  out.dailyGeneration.valid ? out.dailyGeneration.value : 0.0f,
+                  out.pvVoltage.valid ? out.pvVoltage.value : 0.0f,
+                  out.pvCurrent.valid ? out.pvCurrent.value : 0.0f);
     // Ladestatus-Rohwert-Log NUR bei Aenderung - siehe fetch_task.cpp
     // (das sich den zuletzt gesehenen Wert merkt), nicht hier.
 
+    return true;
+}
+
+bool fetchPowerCurve(const String& deviceNo, const String& token,
+                    PowerCurvePoint* points, uint8_t& outCount,
+                    int* outHttpCode, int* outApiStatus) {
+    outCount = 0;
+    int64_t nowMs = (int64_t)time(nullptr) * 1000LL;
+    int64_t startMs = nowMs - 3LL * 3600LL * 1000LL;
+
+    JsonDocument body;
+    body["timeSort"] = "desc";
+    JsonArray dps = body["devDatapoints"].to<JsonArray>();
+    JsonObject o = dps.add<JsonObject>();
+    o["deviceNo"] = deviceNo;
+    o["dataPointId"] = EpeverDatapoints::PV_POWER;
+    body["start"] = startMs;
+    body["end"] = nowMs;
+    body["sampleLimit"] = POWER_CURVE_MAX_POINTS;
+
+    String bodyStr;
+    serializeJson(body, bodyStr);
+
+    ExtraHeader headers[4];
+    uint8_t headerCount = 0;
+    headers[headerCount++] = {"token", token.c_str()};
+    headers[headerCount++] = {"languagetype", EpeverAuthHeaders::LANGUAGETYPE};
+    headers[headerCount++] = {"sdk-version", EpeverAuthHeaders::SDK_VERSION};
+    headers[headerCount++] = {"usr-source", EpeverAuthHeaders::USR_SOURCE};
+
+    // Filter, da die Antwort bei grossem sampleLimit deutlich groesser
+    // ausfaellt als bei der Batterieabfrage - nur status/info und die
+    // eigentlichen Messpunkte werden geparst.
+    JsonDocument filter;
+    filter["status"] = true;
+    filter["info"] = true;
+    JsonObject listFilterItem = filter["data"]["list"].add<JsonObject>();
+    JsonObject pointFilterItem = listFilterItem["list"].add<JsonObject>();
+    pointFilterItem["time"] = true;
+    pointFilterItem["value"] = true;
+
+    JsonDocument resp;
+    PostResult res = httpPostJson(Config::EPEVER_BATTERY_URL, bodyStr, resp, &filter, false, headers, headerCount);
+
+    if (outHttpCode) *outHttpCode = res.httpCode;
+    if (outApiStatus) *outApiStatus = -1;
+
+    if (res.httpCode != 200) {
+        Serial.printf("[fetch] Leistungskurve HTTP-Fehler, Code=%d\n", res.httpCode);
+        return false;
+    }
+    if (!res.jsonOk) {
+        Serial.printf("[fetch] Leistungskurve: Antwort kein gueltiges JSON (contentLength=%d, Fehler=%s)\n",
+                      res.contentLength, res.jsonErr);
+        return false;
+    }
+
+    int status = resp["status"] | -1;
+    if (outApiStatus) *outApiStatus = status;
+    if (status != 0) {
+        String info = String((const char*)(resp["info"] | ""));
+        Serial.printf("[fetch] Leistungskurve fehlgeschlagen, status=%d, info=\"%s\"\n", status, info.c_str());
+        return false;
+    }
+
+    JsonArray list = resp["data"]["list"];
+    for (JsonObject item : list) {
+        JsonArray pts = item["list"];
+        for (JsonObject p : pts) {
+            if (outCount >= POWER_CURVE_MAX_POINTS) break;
+            long long t = p["time"] | 0;
+            float w = p["value"] | 0.0f;
+            points[outCount].time = (time_t)(t / 1000);
+            points[outCount].watts = w;
+            outCount++;
+        }
+        break; // nur ein Datenpunkt angefragt - der erste Eintrag ist er
+    }
+
+    Serial.printf("[fetch] Leistungskurve ok: %u Punkte, aktuell=%.0fW\n",
+                  (unsigned)outCount, outCount > 0 ? points[0].watts : 0.0f);
     return true;
 }
 

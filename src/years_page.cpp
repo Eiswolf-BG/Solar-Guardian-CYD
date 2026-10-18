@@ -95,7 +95,7 @@ namespace {
     }
 }
 
-void draw(int16_t areaTop, int16_t areaHeight) {
+void draw(int16_t areaTop, int16_t /*areaHeight*/) {
     uint16_t accent = Display::systemColor();
     uint16_t dimAccent = dimColor(accent);
 
@@ -116,8 +116,13 @@ void draw(int16_t areaTop, int16_t areaHeight) {
     int16_t chartTop = (int16_t)(areaTop + CHART_TOP_OFFSET);
     // Feste Fusszone (Seitenpunkte + "?"-Knopf, siehe main_screen.cpp) PLUS
     // mind. 8px Abstand (Alex' Wunsch) - das Diagramm darf diese Linie nie
-    // unterschreiten.
-    int16_t contentBottom = (int16_t)(areaTop + areaHeight - Config::PAGE_FOOTER_RESERVED_H - 8);
+    // unterschreiten. WICHTIG: ausgehend von SCREEN_HEIGHT, nicht von
+    // areaTop+areaHeight (= BODY_TOP+BODY_H) - letzteres liegt bereits
+    // DOTS_H (16px) oberhalb von SCREEN_HEIGHT, eine fruehere Version
+    // dieser Formel subtrahierte PAGE_FOOTER_RESERVED_H dadurch effektiv
+    // doppelt und war unnoetig streng (betraf nur Sicherheitsabstand,
+    // keine echte Ueberlappung).
+    int16_t contentBottom = (int16_t)(Config::SCREEN_HEIGHT - Config::PAGE_FOOTER_RESERVED_H - 8);
     int16_t baselineY = (int16_t)(contentBottom - YEAR_LABEL_H);
     int16_t barMaxH = (int16_t)(baselineY - chartTop - VALUE_LABEL_H);
     if (barMaxH < 10) barMaxH = 10;

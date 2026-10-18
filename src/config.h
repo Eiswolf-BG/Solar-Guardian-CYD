@@ -16,7 +16,13 @@ namespace Config {
     // y-Werten synchron bleiben: HELP_BTN beginnt bei
     // SCREEN_HEIGHT-32-6=282, DOTS_Y bei SCREEN_HEIGHT-16=304, die Zone
     // deckt beides ab). Jede Seite muss ihren eigenen Inhalt mindestens
-    // 8px darueber enden lassen (siehe pages.h).
+    // 8px darueber enden lassen: Grenze = SCREEN_HEIGHT -
+    // PAGE_FOOTER_RESERVED_H - 8 (= 274, absolute Bildschirm-Y-Koordinate).
+    // WICHTIG: IMMER von SCREEN_HEIGHT ausgehen, NICHT von
+    // areaTop+areaHeight (= BODY_TOP+BODY_H, liegt bereits DOTS_H=16px
+    // oberhalb SCREEN_HEIGHT) - sonst wird die Grenze faelschlich um
+    // weitere 16px verschaerft (siehe years_page.cpp/battery_page.cpp als
+    // Vorbild fuer die korrekte Verwendung).
     constexpr int16_t PAGE_FOOTER_RESERVED_H = 38;
 
     // ---- Touch (XPT2046, uebernommen aus eiswolfs-flightradar-CYD - dort

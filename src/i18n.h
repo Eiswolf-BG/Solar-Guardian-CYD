@@ -49,6 +49,11 @@ namespace I18n {
         COMING_SOON,
         NO_ACCOUNT_CONFIGURED,
 
+        // Seite "Leistung"
+        POWER_UNIT_W,
+        POWER_UNIT_KW,
+        POWER_NOW_LABEL,
+
         // Seite "Ertrag"
         YIELD_TILE_TODAY,
         YIELD_TILE_WEEK,

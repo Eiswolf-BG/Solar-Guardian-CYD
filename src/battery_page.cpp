@@ -19,15 +19,24 @@ namespace {
         }
     };
 
-    constexpr int16_t SOC_Y_OFFSET = 24;
-    constexpr int16_t BAR_Y_OFFSET = 50;
-    constexpr int16_t BAR_H = 18;
-    constexpr int16_t GRID_TOP_OFFSET = 72;
+    // Kein Balkensymbol mehr unter der SOC-Zahl (entfernt, um Platz fuer
+    // die neue Erklaerungszeile zu schaffen, siehe computeLayout()-
+    // Kommentar unten) - die grosse Prozentzahl bleibt der primaere
+    // Ladezustands-Indikator.
+    constexpr int16_t SOC_Y_OFFSET = 20;
+    constexpr int16_t SOC_ZONE_H = 26; // 17 (fontHeight Size1) + 2*4px Pad, siehe fitText()
+    constexpr int16_t GRID_TOP_OFFSET = 50;
     constexpr int16_t TILE_GAP = 4;
-    constexpr int16_t TILE_H = 46;
+    // Mind. 50px, damit selbst bei Size 1 noch 17+2*4=25px Zonenhoehe fuer
+    // Zahlen bleibt (LABEL_H+UNIT_H=20) - siehe CLAUDE.md Layout-Regel
+    // "Zahlen werden nie gekuerzt". Bei TILE_H=46 (fruehere Version)
+    // scheiterte das knapp und fitText() kuerzte Volt/Strom/Temperatur
+    // trotz kurzer Werte mit "...", weil schon die Hoehe nicht reichte.
+    constexpr int16_t TILE_H = 50;
     constexpr uint8_t VALUE_SIZES[] = {2, 1};
     constexpr uint8_t SOC_SIZES[] = {3, 2, 1};
     constexpr uint8_t EXPLAIN_MAX_LINES = 3;
+    constexpr int16_t EXPLAIN_LINE_H = 14; // etwas enger als fontHeight(17) - reicht fuer 3 Zeilen im verfuegbaren Platz
 
     uint32_t lastSeenChangeCounter = 0xFFFFFFFFu;
     int8_t lastSeenMinute = -1;
@@ -152,8 +161,8 @@ namespace {
         tft.setTextColor(accent, TFT_BLACK);
         tft.drawString(I18n::t(labelKey), (int16_t)(x + w / 2), (int16_t)(y + 5));
 
-        constexpr int16_t LABEL_H = 14;
-        constexpr int16_t UNIT_H = 14;
+        constexpr int16_t LABEL_H = 10;
+        constexpr int16_t UNIT_H = 10;
         int16_t valueZoneTop = (int16_t)(y + LABEL_H);
         int16_t valueZoneH = (int16_t)(h - LABEL_H - (unit ? UNIT_H : 2));
 
@@ -183,7 +192,7 @@ namespace {
         tft.setTextColor(accent, TFT_BLACK);
         tft.drawString(I18n::t(I18n::Str::BATTERY_TILE_STATUS), (int16_t)(x + w / 2), (int16_t)(y + 5));
 
-        constexpr int16_t LABEL_H = 14;
+        constexpr int16_t LABEL_H = 10;
         int16_t valueZoneTop = (int16_t)(y + LABEL_H);
         int16_t valueZoneH = (int16_t)(h - LABEL_H - 2);
 
@@ -289,15 +298,13 @@ namespace {
 
         int16_t afterExplain;
         if (L.explainLineCount > 0) {
-            L.explainTop = (int16_t)(afterGrid + 6);
-            tft.setTextSize(1);
-            int16_t lineH = tft.fontHeight();
-            afterExplain = (int16_t)(L.explainTop + L.explainLineCount * lineH);
+            L.explainTop = (int16_t)(afterGrid + 4);
+            afterExplain = (int16_t)(L.explainTop + L.explainLineCount * EXPLAIN_LINE_H);
         } else {
             L.explainTop = afterGrid;
             afterExplain = afterGrid;
         }
-        L.timestampY = (int16_t)(afterExplain + 6);
+        L.timestampY = (int16_t)(afterExplain + 4);
 
         return L;
     }
@@ -329,25 +336,12 @@ void draw(int16_t areaTop, int16_t areaHeight) {
     else strncpy(socStr, "--", sizeof(socStr));
     tft.setTextColor((haveSoc && !stale) ? accent : TFT_DARKGREY, TFT_BLACK);
     int16_t socZoneTop = (int16_t)(areaTop + SOC_Y_OFFSET);
-    LayoutUtils::FitResult socFit = LayoutUtils::fitText(tft, socStr, (int16_t)(Config::SCREEN_WIDTH - 20), 28, SOC_SIZES, 3);
+    LayoutUtils::FitResult socFit = LayoutUtils::fitText(tft, socStr, (int16_t)(Config::SCREEN_WIDTH - 20), SOC_ZONE_H, SOC_SIZES, 3);
     tft.setTextDatum(TC_DATUM);
     tft.drawString(socFit.text, Config::SCREEN_WIDTH / 2, socZoneTop);
     tft.setTextDatum(TL_DATUM);
     tft.setTextSize(1);
-
-    // Batteriesymbol: waagerechter Balken mit kleinem Pol rechts.
-    int16_t barY = (int16_t)(areaTop + BAR_Y_OFFSET);
-    int16_t barW = (int16_t)(Config::SCREEN_WIDTH - 60);
-    int16_t barX = (int16_t)((Config::SCREEN_WIDTH - barW) / 2 - 4);
-    int16_t poleW = 5, poleH = (int16_t)(BAR_H / 2);
-    tft.drawRoundRect(barX, barY, barW, BAR_H, 3, accent);
-    tft.fillRect((int16_t)(barX + barW), (int16_t)(barY + (BAR_H - poleH) / 2), poleW, poleH, accent);
-    if (haveSoc) {
-        float pct = snap.batterySocPercent < 0 ? 0 : (snap.batterySocPercent > 100 ? 100 : snap.batterySocPercent);
-        int16_t fillW = (int16_t)((barW - 4) * pct / 100.0f);
-        if (fillW > 0) tft.fillRect((int16_t)(barX + 2), (int16_t)(barY + 2), fillW, (int16_t)(BAR_H - 4), (!stale) ? accent : TFT_DARKGREY);
-    }
-    LayoutCheck::rect("Batteriesymbol", barX, barY, (int16_t)(barW + poleW), BAR_H);
+    LayoutCheck::rect("Ladezustand", 10, socZoneTop, (int16_t)(Config::SCREEN_WIDTH - 20), SOC_ZONE_H);
 
     PageLayout L = computeLayout(areaTop, snap);
 
@@ -373,14 +367,13 @@ void draw(int16_t areaTop, int16_t areaHeight) {
 
     if (L.explainLineCount > 0) {
         tft.setTextSize(1);
-        int16_t lineH = tft.fontHeight();
         tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         for (uint8_t i = 0; i < L.explainLineCount; i++) {
-            tft.drawString(L.explainLines[i], Config::SCREEN_WIDTH / 2, (int16_t)(L.explainTop + i * lineH));
+            tft.drawString(L.explainLines[i], Config::SCREEN_WIDTH / 2, (int16_t)(L.explainTop + i * EXPLAIN_LINE_H));
         }
         tft.setTextDatum(TL_DATUM);
-        LayoutCheck::rect("Erklaerung", 8, L.explainTop, (int16_t)(Config::SCREEN_WIDTH - 16), (int16_t)(L.explainLineCount * lineH));
+        LayoutCheck::rect("Erklaerung", 8, L.explainTop, (int16_t)(Config::SCREEN_WIDTH - 16), (int16_t)(L.explainLineCount * EXPLAIN_LINE_H));
     }
 
     String statusLine = statusTextFor(snap, stale);

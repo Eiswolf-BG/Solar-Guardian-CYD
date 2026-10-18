@@ -44,6 +44,7 @@ namespace {
     bool forceFetchNow = false;
     bool firstFetchHeapLogged = false;
     bool firstBatteryHeapLogged = false;
+    bool firstPowerCurveHeapLogged = false;
     bool wifiWasConnected = false;
 
     // Port-7002 (Batterie/History) - chargeStatus-Logging nur bei
@@ -129,9 +130,62 @@ namespace {
             outDailyGenValid = true;
         }
 
+        if (result.pvVoltage.valid || result.pvCurrent.valid) {
+            time_t pvMeasuredAt = result.pvVoltage.valid ? result.pvVoltage.time
+                                                           : (result.pvCurrent.valid ? result.pvCurrent.time : time(nullptr));
+            SolarData::setPv(result.pvVoltage.valid ? result.pvVoltage.value : 0.0f,
+                              result.pvCurrent.valid ? result.pvCurrent.value : 0.0f,
+                              pvMeasuredAt);
+        }
+
         if (!firstBatteryHeapLogged) {
             firstBatteryHeapLogged = true;
             Serial.printf("[fetch] minFreeHeap nach erster Port-7002-Abfrage: %u\n",
+                          (unsigned)ESP.getMinFreeHeap());
+        }
+
+        return true;
+    }
+
+    // Leistungs-Kurvenabfrage (Seite "Leistung") - eigene Anfrage mit
+    // grossem sampleLimit, gleiche Login-/Wiederholungsregeln wie die
+    // Batterieabfrage. points[0] der Antwort (neuester Punkt zuerst) ist
+    // zugleich die aktuelle Leistung; SolarData::setHistory() braucht
+    // aeltesten zuerst, daher wird hier umsortiert.
+    bool runPowerCurveFetch() {
+        EpeverClient::PowerCurvePoint points[EpeverClient::POWER_CURVE_MAX_POINTS];
+        uint8_t count = 0;
+        int httpCode = 0, apiStatus = 0;
+        bool ok = EpeverClient::fetchPowerCurve(currentDeviceNo, currentToken, points, count, &httpCode, &apiStatus);
+
+        if (!ok && (httpCode == 401 || apiStatus != 0)) {
+            currentToken = "";
+            if (EpeverClient::login(currentEmail, currentPassword, currentToken)) {
+                needsLogin = false;
+                ok = EpeverClient::fetchPowerCurve(currentDeviceNo, currentToken, points, count, &httpCode, &apiStatus);
+            } else {
+                needsLogin = true;
+            }
+        }
+
+        Serial.printf("[fetch] Leistungskurve: HTTP-Code=%d status=%d Punkte=%u\n", httpCode, apiStatus, (unsigned)count);
+
+        if (!ok) return false;
+
+        if (count > 0) {
+            SolarData::setPower(points[0].watts, points[0].time);
+
+            SolarData::HistoryPoint oldestFirst[EpeverClient::POWER_CURVE_MAX_POINTS];
+            for (uint8_t i = 0; i < count; i++) {
+                oldestFirst[i].epoch = points[count - 1 - i].time;
+                oldestFirst[i].valueW = points[count - 1 - i].watts;
+            }
+            SolarData::setHistory(oldestFirst, count);
+        }
+
+        if (!firstPowerCurveHeapLogged) {
+            firstPowerCurveHeapLogged = true;
+            Serial.printf("[fetch] minFreeHeap waehrend erster Kurvenabfrage: %u\n",
                           (unsigned)ESP.getMinFreeHeap());
         }
 
@@ -191,6 +245,7 @@ namespace {
         float dailyFromDatapoint = 0.0f;
         bool dailyFromDatapointValid = false;
         runBatteryFetch(dailyFromDatapoint, dailyFromDatapointValid);
+        runPowerCurveFetch();
 
         if (dailyFromDatapointValid) {
             SolarData::setDailySource(dailyFromDatapoint, time(nullptr), true);

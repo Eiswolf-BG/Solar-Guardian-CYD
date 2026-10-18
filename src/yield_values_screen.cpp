@@ -103,18 +103,35 @@ void run() {
             strcpy(todayStr, "--"); strcpy(weekStr, "--"); strcpy(monthStr, "--"); strcpy(yearStr, "--");
         }
 
-        // fitText() statt fester Schriftgroesse - bei sehr grossen Werten
-        // (Worst Case, siehe CLAUDE.md Layout-Regel) waere die Zeile sonst
-        // breiter als der Bildschirm.
-        char summary[80];
-        snprintf(summary, sizeof(summary), "%s/%s/%s/%s kWh", todayStr, weekStr, monthStr, yearStr);
+        // Vier Zeilen UNTEREINANDER statt einer Zeile mit "/" getrennt -
+        // bei einer Zeile muessten alle vier Werte in eine einzige
+        // Bildschirmbreite passen, was bei grossen Werten (Worst Case
+        // "Jahr 99999,99 kWh") selbst bei kleinster Schrift nicht
+        // garantiert ist. Zahlen werden NIE gekuerzt (siehe CLAUDE.md
+        // Layout-Regel) - untereinander hat jede Zeile die volle
+        // Bildschirmbreite zur Verfuegung, fitText() kuerzt dadurch nie.
+        constexpr int16_t SUMMARY_TOP = 36;
+        constexpr int16_t SUMMARY_LINE_H = 20;
         constexpr uint8_t SUMMARY_SIZES[] = {1};
-        LayoutUtils::FitResult summaryFit = LayoutUtils::fitText(tft, summary, (int16_t)(Config::SCREEN_WIDTH - 8), 20, SUMMARY_SIZES, 1);
+        struct SummaryRow { I18n::Str labelKey; const char* value; };
+        SummaryRow summaryRows[] = {
+            {I18n::Str::YIELD_TILE_TODAY, todayStr},
+            {I18n::Str::YIELD_TILE_WEEK, weekStr},
+            {I18n::Str::YIELD_TILE_MONTH, monthStr},
+            {I18n::Str::YIELD_TILE_YEAR, yearStr},
+        };
         tft.setTextDatum(TC_DATUM);
-        tft.drawString(summaryFit.text, Config::SCREEN_WIDTH / 2, 40);
+        for (uint8_t i = 0; i < 4; i++) {
+            char line[40];
+            snprintf(line, sizeof(line), "%s %s %s", I18n::t(summaryRows[i].labelKey),
+                     summaryRows[i].value, I18n::t(I18n::Str::KWH_UNIT));
+            LayoutUtils::FitResult fit = LayoutUtils::fitText(tft, line, (int16_t)(Config::SCREEN_WIDTH - 16),
+                                                               SUMMARY_LINE_H, SUMMARY_SIZES, 1);
+            tft.drawString(fit.text, Config::SCREEN_WIDTH / 2, (int16_t)(SUMMARY_TOP + i * SUMMARY_LINE_H));
+        }
         tft.setTextDatum(TL_DATUM);
 
-        constexpr int16_t TOP = 64;
+        constexpr int16_t TOP = (int16_t)(SUMMARY_TOP + 4 * SUMMARY_LINE_H + 8);
         constexpr int16_t ROW_H = 40;
         constexpr int16_t ROW_GAP = 8;
         constexpr int16_t NOTE_H = 18;
