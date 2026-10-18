@@ -1,0 +1,143 @@
+#include "app_config.h"
+#include "config.h"
+#include <SD.h>
+#include <ArduinoJson.h>
+
+AppConfig appConfig;
+
+namespace AppConfigStore {
+
+bool load() {
+    if (!SD.exists(Config::SD_CONFIG_FILE)) return false;
+
+    File f = SD.open(Config::SD_CONFIG_FILE, FILE_READ);
+    if (!f) return false;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) return false; // defekte/unlesbare Datei - Aufrufer zeigt Fehler + startet Ersteinrichtung neu
+
+    appConfig.touchSwapXY = doc["touch_swap_xy"] | false;
+    appConfig.touchScreenXRawMin = doc["touch_x_raw_min"] | 0;
+    appConfig.touchScreenXRawMax = doc["touch_x_raw_max"] | 4095;
+    appConfig.touchScreenYRawMin = doc["touch_y_raw_min"] | 0;
+    appConfig.touchScreenYRawMax = doc["touch_y_raw_max"] | 4095;
+    appConfig.touchCalibrated = doc["touch_calibrated"] | false;
+
+    uint8_t loadedVersion = doc["format_version"] | 1;
+
+    for (uint8_t i = 0; i < Config::MAX_WIFI_SLOTS; i++) {
+        appConfig.wifiSlots[i].ssid = "";
+        appConfig.wifiSlots[i].password = "";
+    }
+    appConfig.lastActiveWifiSlot = 255;
+
+    if (loadedVersion < 2) {
+        // Migration von Version 1 (einzelnes WLAN) auf Version 2 (3
+        // Plaetze) - das alte Netz wird Platz 1, ohne dass die
+        // Ersteinrichtung erneut laufen muss.
+        String oldSsid = String((const char*)(doc["wifi_ssid"] | ""));
+        String oldPassword = String((const char*)(doc["wifi_password"] | ""));
+        if (oldSsid.length() > 0) {
+            appConfig.wifiSlots[0].ssid = oldSsid;
+            appConfig.wifiSlots[0].password = oldPassword;
+            appConfig.lastActiveWifiSlot = 0;
+        }
+    } else {
+        JsonArray slots = doc["wifi_slots"];
+        uint8_t i = 0;
+        for (JsonObject s : slots) {
+            if (i >= Config::MAX_WIFI_SLOTS) break;
+            appConfig.wifiSlots[i].ssid = String((const char*)(s["ssid"] | ""));
+            appConfig.wifiSlots[i].password = String((const char*)(s["password"] | ""));
+            i++;
+        }
+        int lastActive = doc["last_active_wifi_slot"] | 255;
+        appConfig.lastActiveWifiSlot = (lastActive >= 0 && lastActive < Config::MAX_WIFI_SLOTS) ? (uint8_t)lastActive : 255;
+    }
+
+    appConfig.portalEmail = String((const char*)(doc["portal_email"] | ""));
+    appConfig.portalPassword = String((const char*)(doc["portal_password"] | ""));
+
+    appConfig.systemColorIndex = doc["system_color_index"] | 0;
+    if (appConfig.systemColorIndex >= Config::COLOR_COUNT) appConfig.systemColorIndex = 0;
+
+    if (loadedVersion < 3) {
+        // Migration auf Version 3: neues Feld "language", Standard Deutsch.
+        appConfig.language = 0;
+    } else {
+        String lang = String((const char*)(doc["language"] | "de"));
+        appConfig.language = (lang == "en") ? 1 : 0;
+    }
+
+    if (loadedVersion < 4) {
+        // Migration auf Version 4: neues Feld "device_no" mit Standardwert.
+        appConfig.deviceNo = Config::DEFAULT_DEVICE_NO;
+    } else {
+        String dn = String((const char*)(doc["device_no"] | Config::DEFAULT_DEVICE_NO));
+        appConfig.deviceNo = dn.length() > 0 ? dn : String(Config::DEFAULT_DEVICE_NO);
+    }
+
+    appConfig.formatVersion = Config::CONFIG_FORMAT_VERSION; // nach dem Laden immer auf dem aktuellen Stand
+    appConfig.setupComplete = doc["setup_complete"] | false;
+
+    // Grundvoraussetzung fuer einen gueltigen, nutzbaren Zustand - ohne das
+    // waere load() zwar technisch erfolgreich, aber main.cpp wuerde mit
+    // leeren Zugangsdaten weitermachen. Behandelt wie eine defekte Datei.
+    if (!appConfig.setupComplete) return false;
+
+    // Eine Migration auf eine neuere Version sofort sichern, nicht erst
+    // beim naechsten ohnehin anfallenden Speichern (z.B. Farbwechsel)
+    // abwarten.
+    if (loadedVersion < Config::CONFIG_FORMAT_VERSION) save();
+
+    return true;
+}
+
+bool save() {
+    JsonDocument doc;
+
+    doc["touch_swap_xy"] = appConfig.touchSwapXY;
+    doc["touch_x_raw_min"] = appConfig.touchScreenXRawMin;
+    doc["touch_x_raw_max"] = appConfig.touchScreenXRawMax;
+    doc["touch_y_raw_min"] = appConfig.touchScreenYRawMin;
+    doc["touch_y_raw_max"] = appConfig.touchScreenYRawMax;
+    doc["touch_calibrated"] = appConfig.touchCalibrated;
+
+    JsonArray slots = doc["wifi_slots"].to<JsonArray>();
+    for (uint8_t i = 0; i < Config::MAX_WIFI_SLOTS; i++) {
+        JsonObject s = slots.add<JsonObject>();
+        s["ssid"] = appConfig.wifiSlots[i].ssid;
+        s["password"] = appConfig.wifiSlots[i].password;
+    }
+    doc["last_active_wifi_slot"] = appConfig.lastActiveWifiSlot;
+
+    doc["portal_email"] = appConfig.portalEmail;
+    doc["portal_password"] = appConfig.portalPassword;
+
+    doc["system_color_index"] = appConfig.systemColorIndex;
+    doc["language"] = (appConfig.language == 1) ? "en" : "de";
+    doc["device_no"] = appConfig.deviceNo;
+    doc["format_version"] = Config::CONFIG_FORMAT_VERSION;
+    doc["setup_complete"] = appConfig.setupComplete;
+
+    // Erst in die temporaere Datei schreiben, dann umbenennen - so bleibt
+    // bei einem Stromausfall mitten im Schreiben immer entweder die alte
+    // ODER die neue, aber nie eine halb geschriebene Datei uebrig.
+    if (SD.exists(Config::SD_CONFIG_TMP_FILE)) SD.remove(Config::SD_CONFIG_TMP_FILE);
+    File f = SD.open(Config::SD_CONFIG_TMP_FILE, FILE_WRITE);
+    if (!f) return false;
+
+    bool ok = serializeJson(doc, f) > 0;
+    f.close();
+    if (!ok) {
+        SD.remove(Config::SD_CONFIG_TMP_FILE);
+        return false;
+    }
+
+    if (SD.exists(Config::SD_CONFIG_FILE)) SD.remove(Config::SD_CONFIG_FILE);
+    return SD.rename(Config::SD_CONFIG_TMP_FILE, Config::SD_CONFIG_FILE);
+}
+
+}

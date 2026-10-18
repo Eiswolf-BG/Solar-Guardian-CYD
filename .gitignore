@@ -1,0 +1,19 @@
+.pio/
+.vscode/
+*.o
+*.elf
+*.bin
+!/versions/**/*.bin
+.DS_Store
+
+# Zugangsdaten/geraetespezifischer Zustand - nie committen
+secrets.h
+config.json
+yield.json
+years.json
+days.csv
+History/
+
+# Foto-Originale (unverkleinert, mit EXIF) - nur die verkleinerten
+# Kopien in docs/images werden committet, siehe README-Workflow.
+/images/

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Guardian CYD - Web Installer</title>
+    <!-- ESP Web Tools Installer Script -->
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+    <style>
+        :root {
+            --bg-color: #0a0f0d;
+            --card-bg: #111a16;
+            --text-color: #39ff14;
+            --accent-color: #00ff66;
+            --border-color: #1f3a2b;
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: var(--card-bg);
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.2);
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Twinkling star background (same triangle-wave dim/brighten
+           formula as the device's MenuStars) - first element in <body>,
+           z-index:0 so it stacks behind .container, pointer-events:none
+           so the install button and links stay clickable. */
+        #star-bg {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 5px;
+            text-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #88bc88;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        .stars-badge {
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .stars-badge img {
+            vertical-align: middle;
+        }
+        .version-badge {
+            display: inline-block;
+            background-color: rgba(57, 255, 20, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--accent-color);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 25px;
+            text-shadow: 0 0 4px rgba(57, 255, 20, 0.4);
+        }
+        p {
+            font-size: 14px;
+            color: #ffffff;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        .instructions {
+            text-align: left;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #aae0aa;
+            margin-bottom: 30px;
+            border-left: 3px solid var(--accent-color);
+        }
+        .browser-note {
+            font-size: 11px;
+            color: #6a8f6a;
+            margin-top: 20px;
+        }
+
+        esp-web-install-button {
+            --esp-tools-button-bg-color: var(--accent-color);
+            --esp-tools-button-text-color: #0a0f0d;
+            --esp-tools-button-border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="star-bg"></canvas>
+<div class="container">
+    <h1>SOLAR GUARDIAN CYD</h1>
+    <div class="subtitle">Firmware Flash Utility</div>
+    <a class="stars-badge" href="https://github.com/Eiswolf-BG/Solar-Guardian-CYD" target="_blank" rel="noopener">
+        <img src="https://img.shields.io/github/stars/Eiswolf-BG/Solar-Guardian-CYD?style=social" alt="GitHub stars">
+    </a>
+    <div class="version-badge">Version: v1.0</div>
+
+    <p>Install the Solar Guardian firmware directly from your browser to your Cheap Yellow Display.</p>
+
+    <div class="instructions">
+        1. Connect your CYD via USB cable<br>
+        2. Click the "Connect" button below<br>
+        3. Select the correct COM port<br>
+        4. Sit back and wait for the process to finish<br>
+        5. An SD card (FAT32) is required for first-time setup
+    </div>
+    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+
+    <div class="browser-note">Requires Chrome, Edge, or Opera (Web Serial API)</div>
+</div>
+<script>
+(function () {
+  const canvas = document.getElementById('star-bg');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+
+  function starCountFor(w, h) {
+    const density = (w * h) / 9000;
+    return Math.max(40, Math.min(160, Math.round(density)));
+  }
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function initStars() {
+    const count = starCountFor(canvas.width, canvas.height);
+    stars = [];
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        phase: Math.random() * 256,
+        speed: 1 + Math.random() * 2
+      });
+    }
+  }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resize(); initStars(); }, 150);
+  });
+  resize();
+  initStars();
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const s of stars) {
+      s.phase = (s.phase + s.speed) % 256;
+      const bright = s.phase < 128 ? s.phase * 2 : (255 - s.phase) * 2;
+      ctx.fillStyle = `rgb(0, ${bright}, 0)`;
+      ctx.fillRect(s.x, s.y, 2, 2);
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

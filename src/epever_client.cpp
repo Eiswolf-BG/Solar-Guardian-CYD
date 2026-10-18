@@ -1,0 +1,307 @@
+#include "epever_client.h"
+#include "epever_datapoints.h"
+#include "epever_auth_headers.h"
+#include "config.h"
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <MD5Builder.h>
+#include <ArduinoJson.h>
+#include <time.h>
+
+namespace EpeverClient {
+
+namespace {
+    struct PostResult {
+        int httpCode = -1;
+        int contentLength = -1;       // laut Server-Header, -1 = unbekannt/chunked
+        bool jsonOk = false;          // true = deserializeJson() ohne Fehler
+        const char* jsonErr = "";     // Kurzname des Fehlers (kein Antwortinhalt, sicher zu loggen)
+    };
+
+    struct ExtraHeader {
+        const char* name;
+        const char* value;
+    };
+
+    // Fuehrt einen einzelnen POST mit JSON-Body aus (eigene, frische
+    // Verbindung je Aufruf, siehe CLAUDE.md). setInsecure() ist bewusst
+    // gewaehlt - privates Geraet, keine Zertifikatspruefung noetig.
+    // filterDoc == nullptr -> keine Filterung (kompletter Parse).
+    // includeAppid/extraHeaders: Port 7002 (Batterie) braucht laut
+    // Browser-Netzwerk-Tab KEINEN Appid-Header, dafuer einen rohen
+    // JWT-Header "token" (siehe fetchBatteryData()) - Login/Ertrag
+    // (Port 443) bleiben unveraendert mit Appid.
+    PostResult httpPostJson(const char* url, const String& body, JsonDocument& outDoc, JsonDocument* filterDoc,
+                             bool includeAppid = true, const ExtraHeader* extraHeaders = nullptr, uint8_t extraHeaderCount = 0) {
+        PostResult result;
+
+        WiFiClientSecure client;
+        client.setInsecure();
+        client.setTimeout(Config::EPEVER_HTTP_TIMEOUT_MS);
+
+        HTTPClient http;
+        http.setConnectTimeout(Config::EPEVER_HTTP_TIMEOUT_MS);
+        http.setTimeout(Config::EPEVER_HTTP_TIMEOUT_MS);
+        if (!http.begin(client, url)) return result;
+
+        http.addHeader("Content-Type", "application/json");
+        if (includeAppid) http.addHeader("Appid", Config::EPEVER_APPID);
+        http.addHeader("Connection", "close");
+        for (uint8_t i = 0; i < extraHeaderCount; i++) {
+            if (extraHeaders[i].value && extraHeaders[i].value[0] != '\0') {
+                http.addHeader(extraHeaders[i].name, extraHeaders[i].value);
+            }
+        }
+
+        result.httpCode = http.POST((uint8_t*)body.c_str(), body.length());
+        if (result.httpCode == 200) {
+            result.contentLength = http.getSize();
+            // http.getStream() liefert bei "chunked" Transfer-Encoding
+            // (contentLength == -1) die ROHEN Bytes inklusive der
+            // Chunk-Groessen-Header - deserializeJson() daraus direkt
+            // schlug deshalb mit "InvalidInput" fehl. getString() entpackt
+            // sowohl Content-Length- als auch Chunked-Antworten korrekt zu
+            // einem fertigen String, den wir danach parsen.
+            String payload = http.getString();
+            DeserializationError err = filterDoc
+                ? deserializeJson(outDoc, payload, DeserializationOption::Filter(*filterDoc))
+                : deserializeJson(outDoc, payload);
+            result.jsonOk = !err;
+            result.jsonErr = err.c_str();
+        }
+        http.end();
+        return result;
+    }
+
+    // Diagnose ohne Datenschutz-Risiko: loggt NUR Feldnamen (nie Werte) -
+    // damit man die tatsaechliche Antwortstruktur erkennt, ohne E-Mail/
+    // Token/Meldungstexte auszugeben. Siehe CLAUDE.md Log-Regeln.
+    void logJsonKeys(JsonVariantConst v, const String& label, uint8_t depth = 0) {
+        if (depth > 2) return;
+        if (v.is<JsonObjectConst>()) {
+            String keys;
+            for (JsonPairConst kv : v.as<JsonObjectConst>()) {
+                if (keys.length()) keys += ",";
+                keys += kv.key().c_str();
+            }
+            Serial.printf("[fetch] %s Felder: %s\n", label.c_str(), keys.c_str());
+            for (JsonPairConst kv : v.as<JsonObjectConst>()) {
+                if (kv.value().is<JsonObjectConst>()) {
+                    logJsonKeys(kv.value(), label + "." + kv.key().c_str(), (uint8_t)(depth + 1));
+                }
+            }
+        } else if (v.is<JsonArrayConst>()) {
+            Serial.printf("[fetch] %s ist ein Array mit %u Eintraegen\n", label.c_str(), (unsigned)v.size());
+        } else {
+            Serial.printf("[fetch] %s ist kein JSON-Objekt\n", label.c_str());
+        }
+    }
+}
+
+bool login(const String& email, const String& password, String& outToken) {
+    MD5Builder md5;
+    md5.begin();
+    md5.add(password);
+    md5.calculate();
+    String passwordMd5 = md5.toString(); // 32 Zeichen, Hex, klein - niemals loggen
+
+    JsonDocument body;
+    body["account"] = email;
+    body["password"] = passwordMd5;
+    body["captchaVerification"] = "";
+    body["isPhone"] = 0;
+    String bodyStr;
+    serializeJson(body, bodyStr);
+
+    // Bewusst OHNE Filter - solange die tatsaechliche Antwortstruktur
+    // noch nicht zweifelsfrei bestaetigt ist, wuerde ein falsch
+    // angenommener Feldpfad sonst alles herausfiltern. Siehe
+    // logJsonKeys()-Diagnose unten (loggt nur Feldnamen, keine Werte).
+    JsonDocument resp;
+    PostResult res = httpPostJson(Config::EPEVER_LOGIN_URL, bodyStr, resp, nullptr);
+
+    if (res.httpCode != 200) {
+        Serial.printf("[fetch] Login HTTP-Fehler, Code=%d\n", res.httpCode);
+        return false;
+    }
+    if (!res.jsonOk) {
+        Serial.printf("[fetch] Login: Antwort kein gueltiges JSON (contentLength=%d, Fehler=%s)\n",
+                      res.contentLength, res.jsonErr);
+        return false;
+    }
+
+    int status = resp["status"] | -1;
+    if (status != 0) {
+        Serial.printf("[fetch] Login fehlgeschlagen, status=%d\n", status);
+        logJsonKeys(resp, "Login-Antwort");
+        return false;
+    }
+
+    String token = String((const char*)(resp["data"]["token"] | ""));
+    if (token.length() == 0) {
+        Serial.println("[fetch] Login: kein Token in der Antwort");
+        return false;
+    }
+
+    outToken = token;
+    Serial.println("[fetch] Login ok");
+    return true;
+}
+
+bool fetchEnergy(const String& token, float& outTodayKwh, float& outMonthKwh,
+                  float& outYearKwh, float& outTotalKwh) {
+    JsonDocument body;
+    body["loraFlag"] = 0;
+    body["token"] = token;
+    String bodyStr;
+    serializeJson(body, bodyStr);
+
+    // Bewusst OHNE Filter, aus demselben Grund wie bei login() oben.
+    JsonDocument resp;
+    PostResult res = httpPostJson(Config::EPEVER_ENERGY_URL, bodyStr, resp, nullptr);
+
+    if (res.httpCode != 200) {
+        Serial.printf("[fetch] Ertragsabfrage HTTP-Fehler, Code=%d\n", res.httpCode);
+        return false;
+    }
+    if (!res.jsonOk) {
+        Serial.printf("[fetch] Ertragsabfrage: Antwort kein gueltiges JSON (contentLength=%d, Fehler=%s)\n",
+                      res.contentLength, res.jsonErr);
+        return false;
+    }
+
+    int status = resp["status"] | -1;
+    if (status != 0) {
+        Serial.printf("[fetch] Ertragsabfrage fehlgeschlagen, status=%d\n", status);
+        logJsonKeys(resp, "Ertrags-Antwort");
+        return false;
+    }
+
+    outTodayKwh = resp["data"]["toDayGeneratingCapacity"] | 0.0f;
+    outMonthKwh = resp["data"]["monthGeneratedEnergy"] | 0.0f;
+    outYearKwh  = resp["data"]["yearGeneratedEnergy"] | 0.0f;
+    outTotalKwh = resp["data"]["generatingCapacitySum"] | 0.0f;
+
+    Serial.printf("[fetch] Ertrag ok: heute=%.2f monat=%.2f jahr=%.2f gesamt=%.2f kWh\n",
+                  outTodayKwh, outMonthKwh, outYearKwh, outTotalKwh);
+    return true;
+}
+
+namespace {
+    // Sucht in data.list[] den Eintrag mit passender dataPointId und
+    // uebernimmt dessen NEUESTEN Messwert (list[0], wegen "timeSort":"desc").
+    // Wert kann Zahl oder Text sein (siehe Auftrag), beides wird erkannt.
+    BatteryPoint extractPoint(JsonArray list, int32_t wantedId) {
+        BatteryPoint p;
+        for (JsonObject item : list) {
+            long dpId = item["dataPointId"] | 0;
+            if (dpId != wantedId) continue;
+            JsonArray points = item["list"];
+            if (points.size() == 0) break;
+            JsonObject newest = points[0];
+            long long t = newest["time"] | 0; // ms
+            p.time = (time_t)(t / 1000);
+            JsonVariant val = newest["value"];
+            if (val.is<float>() || val.is<int>() || val.is<long>()) {
+                p.isText = false;
+                p.value = val.as<float>();
+            } else {
+                p.isText = true;
+                p.text = String((const char*)(val | ""));
+            }
+            p.valid = true;
+            break;
+        }
+        return p;
+    }
+}
+
+bool fetchBatteryData(const String& deviceNo, const String& token,
+                      BatteryResult& out, int* outHttpCode, int* outApiStatus) {
+    int64_t nowMs = (int64_t)time(nullptr) * 1000LL;
+    int64_t startMs = nowMs - 3LL * 3600LL * 1000LL;
+
+    constexpr int32_t ids[] = {
+        EpeverDatapoints::BATTERY_VOLTAGE, EpeverDatapoints::BATTERY_CURRENT,
+        EpeverDatapoints::CHARGE_STATUS, EpeverDatapoints::BATTERY_TEMP,
+        EpeverDatapoints::BATTERY_SOC, EpeverDatapoints::DAILY_GENERATION,
+    };
+
+    JsonDocument body;
+    body["timeSort"] = "desc";
+    JsonArray dps = body["devDatapoints"].to<JsonArray>();
+    for (int32_t id : ids) {
+        JsonObject o = dps.add<JsonObject>();
+        o["deviceNo"] = deviceNo;
+        o["dataPointId"] = id;
+    }
+    body["start"] = startMs;
+    body["end"] = nowMs;
+    body["sampleLimit"] = 5;
+    // KEIN "token" im Body - laut Browser-Netzwerk-Tab steckt die
+    // Anmeldung hier ausschliesslich im Header "token" (siehe unten).
+
+    String bodyStr;
+    serializeJson(body, bodyStr);
+
+    // Port 7002 braucht keinen Appid-Header, dafuer den rohen JWT im
+    // Header "token" (ohne "Bearer") - plus drei noch unbekannte,
+    // standardmaessig leere Header (epever_auth_headers.h), die nur
+    // gesendet werden, sobald Alex ihre Werte liefert.
+    ExtraHeader headers[4];
+    uint8_t headerCount = 0;
+    headers[headerCount++] = {"token", token.c_str()};
+    headers[headerCount++] = {"languagetype", EpeverAuthHeaders::LANGUAGETYPE};
+    headers[headerCount++] = {"sdk-version", EpeverAuthHeaders::SDK_VERSION};
+    headers[headerCount++] = {"usr-source", EpeverAuthHeaders::USR_SOURCE};
+
+    JsonDocument resp;
+    PostResult res = httpPostJson(Config::EPEVER_BATTERY_URL, bodyStr, resp, nullptr, false, headers, headerCount);
+
+    if (outHttpCode) *outHttpCode = res.httpCode;
+    if (outApiStatus) *outApiStatus = -1;
+
+    if (res.httpCode != 200) {
+        Serial.printf("[fetch] Batterieabfrage HTTP-Fehler, Code=%d\n", res.httpCode);
+        return false;
+    }
+    if (!res.jsonOk) {
+        Serial.printf("[fetch] Batterieabfrage: Antwort kein gueltiges JSON (contentLength=%d, Fehler=%s)\n",
+                      res.contentLength, res.jsonErr);
+        return false;
+    }
+
+    int status = resp["status"] | -1;
+    if (outApiStatus) *outApiStatus = status;
+    if (status != 0) {
+        // "info" ist hier eine technische API-Fehlermeldung zur Anfrage
+        // selbst (z.B. "invalid parameter"), keine Nutzer-/Kontodaten -
+        // anders als bei login() unbedenklich zu loggen, hilft aber sehr
+        // bei der Fehlersuche.
+        String info = String((const char*)(resp["info"] | ""));
+        Serial.printf("[fetch] Batterieabfrage fehlgeschlagen, status=%d, info=\"%s\"\n", status, info.c_str());
+        logJsonKeys(resp, "Batterie-Antwort");
+        return false;
+    }
+
+    JsonArray list = resp["data"]["list"];
+    out.voltage = extractPoint(list, EpeverDatapoints::BATTERY_VOLTAGE);
+    out.current = extractPoint(list, EpeverDatapoints::BATTERY_CURRENT);
+    out.chargeStatus = extractPoint(list, EpeverDatapoints::CHARGE_STATUS);
+    out.temperature = extractPoint(list, EpeverDatapoints::BATTERY_TEMP);
+    out.soc = extractPoint(list, EpeverDatapoints::BATTERY_SOC);
+    out.dailyGeneration = extractPoint(list, EpeverDatapoints::DAILY_GENERATION);
+
+    Serial.printf("[fetch] Batterie ok: U=%.2fV I=%.2fA SOC=%.1f%% T=%.1fC Tagesertrag=%.2fkWh\n",
+                  out.voltage.valid ? out.voltage.value : 0.0f,
+                  out.current.valid ? out.current.value : 0.0f,
+                  out.soc.valid ? out.soc.value : 0.0f,
+                  out.temperature.valid ? out.temperature.value : 0.0f,
+                  out.dailyGeneration.valid ? out.dailyGeneration.value : 0.0f);
+    // Ladestatus-Rohwert-Log NUR bei Aenderung - siehe fetch_task.cpp
+    // (das sich den zuletzt gesehenen Wert merkt), nicht hier.
+
+    return true;
+}
+
+}
