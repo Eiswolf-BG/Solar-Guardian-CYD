@@ -1,6 +1,7 @@
 #include "yield_ledger.h"
 #include "solar_data.h"
 #include "seed_years.h"
+#include "steffen_import.h"
 #include "config.h"
 #include <SD.h>
 #include <ArduinoJson.h>
@@ -36,6 +37,7 @@ namespace {
     time_t lastProcessedMeasuredAt = 0;
     uint32_t lastSeenDayFetchSeq = 0;
     bool restoreAttempted = false;
+    bool historicalImportAttempted = false;
 
     // Tage zwischen zwei "YYYY-MM-DD"-Daten (Mittag lokal, um DST-Kanten
     // zu vermeiden): Ergebnis = epochDay(b) - epochDay(a).
@@ -312,6 +314,65 @@ namespace {
         f.close();
         pruneLastDays(todayStr);
     }
+
+    // Einmaliger historischer Ertragsimport (siehe steffen_import.h) -
+    // laeuft nur, solange die Markerdatei fehlt (die selbst in
+    // /SolarHistory liegt, siehe config.h, und damit einen Werksreset
+    // uebersteht - nach einem Reset soll sich der Ertrag normal aus dem
+    // Backup wiederherstellen, nicht die Importwerte nochmal aufaddieren).
+    // Ruehrt NIE todayMax an (der laufende Tag bleibt unberuehrt), nur
+    // monatBasis/jahrBasis/letzteTage/days.csv. Bestehende, groessere
+    // Werte werden nie verkleinert (siehe Auftrag).
+    void importHistoricalData() {
+        if (SD.exists(Config::SD_IMPORT_MARKER)) return;
+
+        float octSum = 0.0f;
+        for (uint8_t i = 0; i < SteffenImport::DAYS_OCT_2026_COUNT; i++) {
+            octSum += SteffenImport::DAYS_OCT_2026[i].kwh;
+        }
+        float janSepSum = 0.0f;
+        for (uint8_t i = 0; i < SteffenImport::MONTHS_JAN_SEP_2026_COUNT; i++) {
+            janSepSum += SteffenImport::MONTHS_JAN_SEP_2026[i];
+        }
+        float yearImport = janSepSum + octSum;
+
+        for (uint8_t i = 0; i < SteffenImport::DAYS_OCT_2026_COUNT; i++) {
+            appendDaysCsv(SteffenImport::DAYS_OCT_2026[i].date, SteffenImport::DAYS_OCT_2026[i].kwh);
+        }
+
+        // letzteTage = die letzten YIELD_ROLLING_WEEK_DAYS importierten
+        // Tage (chronologisch sortiert in DAYS_OCT_2026) - ersetzt einen
+        // eventuell schon vorhandenen (kleineren/leeren) Stand bewusst,
+        // das sind die tatsaechlichen, bestaetigten Tageswerte.
+        state.lastDaysCount = 0;
+        uint8_t total = SteffenImport::DAYS_OCT_2026_COUNT;
+        uint8_t startIdx = (total > Config::YIELD_ROLLING_WEEK_DAYS) ? (uint8_t)(total - Config::YIELD_ROLLING_WEEK_DAYS) : 0;
+        for (uint8_t i = startIdx; i < total; i++) {
+            pushLastDay(SteffenImport::DAYS_OCT_2026[i].date, SteffenImport::DAYS_OCT_2026[i].kwh);
+        }
+
+        strncpy(state.monthKey, "2026-10", sizeof(state.monthKey) - 1);
+        state.monthBase = max(state.monthBase, octSum);
+
+        strncpy(state.yearKey, "2026", sizeof(state.yearKey) - 1);
+        state.yearBase = max(state.yearBase, yearImport);
+
+        state.initialized = true;
+        state.seeded = true;
+        save();
+
+        // FILE_WRITE haengt beim ESP32-SD-Treiber an, statt zu
+        // ueberschreiben (Auftrag "SD-Schreibfehler pruefen") - hier nur
+        // existenzgeprueft (nie Inhalt gelesen), daher unkritisch, aber
+        // defensiv trotzdem entfernen, falls ein frueherer Versuch schon
+        // unvollstaendig geschrieben hat.
+        if (SD.exists(Config::SD_IMPORT_MARKER)) SD.remove(Config::SD_IMPORT_MARKER);
+        File mf = SD.open(Config::SD_IMPORT_MARKER, FILE_WRITE);
+        if (mf) { mf.println("done"); mf.close(); }
+
+        Serial.printf("[yield] Historischer Import: Monat 2026-10=%.2f kWh, Jahr 2026=%.2f kWh (Jan-Sep=%.2f + Okt 1-17=%.2f)\n",
+                      (double)state.monthBase, (double)state.yearBase, (double)janSepSum, (double)octSum);
+    }
 }
 
 void init() {
@@ -390,6 +451,11 @@ void tick() {
         handleDayChange(todayStr, nowTm);
     }
 
+    if (!historicalImportAttempted && state.seeded) {
+        historicalImportAttempted = true;
+        importHistoricalData();
+    }
+
     SolarData::Data snap = SolarData::snapshot();
 
     if (state.seeded) {
@@ -414,6 +480,14 @@ void tick() {
         save();
         dirty = false;
         lastSaveMs = now;
+    }
+}
+
+void flush() {
+    if (dirty) {
+        save();
+        dirty = false;
+        lastSaveMs = millis();
     }
 }
 

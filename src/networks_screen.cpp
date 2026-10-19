@@ -35,6 +35,7 @@ namespace {
     void showMessage(const char* msg) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(msg, Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
@@ -50,6 +51,7 @@ namespace {
         while (!done) {
             uint16_t accent = Display::systemColor();
             tft.fillScreen(TFT_BLACK);
+            tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
             tft.setTextColor(accent, TFT_BLACK);
             tft.setTextSize(1);
             // fitText() statt festem drawString() - eine lange SSID darf
@@ -137,6 +139,7 @@ void run() {
     while (!done) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::NETWORKS_TITLE), Config::SCREEN_WIDTH / 2, 14);

@@ -8,6 +8,7 @@
 #include "reset_screen.h"
 #include "yield_values_screen.h"
 #include "help_popup.h"
+#include "layout_check.h"
 #include "i18n.h"
 #include "config.h"
 
@@ -23,10 +24,16 @@ namespace {
 
     // Fuer Stift-Bedienung ausgelegt (Alex' Wunsch) - dichter und kleiner
     // als auf den fingerfreundlichen Hauptseiten, aber nicht unter dem
-    // CLAUDE.md-Minimum von ca. 28px fuer Menu-Zeilen.
-    constexpr int16_t ROW_H = 30;
-    constexpr int16_t ROW_GAP = 6;
+    // CLAUDE.md-Minimum von ca. 28px fuer Menu-Zeilen. "Standort" ist kein
+    // eigener Menuepunkt mehr (Auftrag "Standort automatisch, notfalls
+    // einmalig per Eingabe") - der Standort-Screen ist seitdem nur noch
+    // ueber die Wetterkachel/Wochenansicht erreichbar, siehe
+    // home_page.cpp/week_view_screen.cpp. 7 Eintraege, Zeilenhoehe/
+    // -abstand gleichmaessig auf den verfuegbaren Platz verteilt (mind.
+    // 8px Abstand unten, siehe CLAUDE.md Layout-Regel).
+    constexpr int16_t ROW_GAP = 8;
     constexpr int16_t TOP = 40;
+    constexpr int16_t BOTTOM_MARGIN = 8;
 
     // "?"-Knopf darf im Stift-Menue kleiner sein (ca. 28px statt 32px,
     // siehe CLAUDE.md).
@@ -34,6 +41,9 @@ namespace {
 
     // Um einen neuen Menuepunkt zu ergaenzen: hier eine neue Zeile
     // eintragen und unten im switch(action) einen neuen Fall ergaenzen.
+    // Die Zeilenhoehe wird rechnerisch aus ITEM_COUNT ermittelt (statt
+    // fest verdrahtet), damit das Menue bei einer geaenderten Zeilenzahl
+    // automatisch gleichmaessig verteilt bleibt statt zu ueberlaufen.
     enum class Action { Networks, Account, ColorPicker, Language, YieldValues, Reset, Back };
     struct MenuItem {
         I18n::Str labelKey;
@@ -50,21 +60,36 @@ namespace {
     };
     constexpr uint8_t ITEM_COUNT = sizeof(ITEMS) / sizeof(ITEMS[0]);
 
+    int16_t rowHeight() {
+        int16_t available = (int16_t)(Config::SCREEN_HEIGHT - TOP - BOTTOM_MARGIN);
+        int16_t totalGaps = (int16_t)((ITEM_COUNT - 1) * ROW_GAP);
+        return (int16_t)((available - totalGaps) / ITEM_COUNT);
+    }
+
     Rect rowRect(uint8_t index) {
-        return {10, (int16_t)(TOP + index * (ROW_H + ROW_GAP)), (int16_t)(Config::SCREEN_WIDTH - 20), ROW_H};
+        int16_t h = rowHeight();
+        return {10, (int16_t)(TOP + index * (h + ROW_GAP)), (int16_t)(Config::SCREEN_WIDTH - 20), h};
     }
 }
 
 void run() {
     bool done = false;
     while (!done) {
+        LayoutCheck::begin("Menue");
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        // Immer explizit setzen, nie vom Aufrufer erben (siehe CLAUDE.md
+        // "Schriftzustand") - menu_screen.cpp rief bisher nie
+        // tft.setTextSize() selbst auf und verliess sich stillschweigend
+        // darauf, dass Size 1 vom vorherigen Bildschirm uebrig blieb.
+        tft.setTextSize(1);
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::MENU_TITLE), Config::SCREEN_WIDTH / 2, 14);
         tft.setTextDatum(TL_DATUM);
         HelpPopup::drawButton(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
+        LayoutCheck::rect("Titel", 0, 4, (int16_t)(Config::SCREEN_WIDTH - 36), 24);
+        LayoutCheck::rect("Hilfe-Knopf", HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
 
         Rect rects[ITEM_COUNT];
         for (uint8_t i = 0; i < ITEM_COUNT; i++) {
@@ -74,7 +99,9 @@ void run() {
             tft.setTextDatum(MC_DATUM);
             tft.drawString(I18n::t(ITEMS[i].labelKey), r.x + r.w / 2, r.y + r.h / 2);
             tft.setTextDatum(TL_DATUM);
+            LayoutCheck::rect("Menuzeile", r.x, r.y, r.w, r.h);
         }
+        LayoutCheck::finish();
 
         TouchInput::Point tap;
         while (true) {

@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 namespace YieldPage {
-    void draw(int16_t areaTop, int16_t areaHeight);
+    void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw);
     // true = seit dem letzten Aufruf hat sich etwas geaendert (SolarData-
     // Aenderungszaehler oder die angezeigte Minute) - Core 1 zeichnet dann
     // neu, sonst nicht (kein Flackern, siehe CLAUDE.md).

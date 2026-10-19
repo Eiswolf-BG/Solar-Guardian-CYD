@@ -49,4 +49,30 @@ void finish() {
     }
 }
 
+void containedRect(const char* label, int16_t frameX, int16_t frameY, int16_t frameW, int16_t frameH,
+                    int16_t childX, int16_t childY, int16_t childW, int16_t childH) {
+    if (!ENABLED) return;
+    constexpr int16_t MARGIN = 4;
+    int16_t innerX = (int16_t)(frameX + MARGIN);
+    int16_t innerY = (int16_t)(frameY + MARGIN);
+    int16_t innerRight = (int16_t)(frameX + frameW - MARGIN);
+    int16_t innerBottom = (int16_t)(frameY + frameH - MARGIN);
+    bool fits = childX >= innerX && childY >= innerY &&
+                (childX + childW) <= innerRight && (childY + childH) <= innerBottom;
+    if (!fits) {
+        Serial.printf("[layout] Konflikt in %s: %s beruehrt/ueberragt den eigenen Rahmen "
+                      "(Rahmen x=%d y=%d w=%d h=%d, Text x=%d y=%d w=%d h=%d)\n",
+                      currentScreen, label, frameX, frameY, frameW, frameH, childX, childY, childW, childH);
+    }
+}
+
+void bufferRect(const char* label, int16_t bufferW, int16_t bufferH, int16_t textW, int16_t textH) {
+    if (!ENABLED) return;
+    if (textW > bufferW || textH > bufferH) {
+        Serial.printf("[layout] Konflikt in %s: %s ist groesser als sein Off-Screen-Puffer "
+                      "(Puffer w=%d h=%d, Text w=%d h=%d) - wird abgeschnitten\n",
+                      currentScreen, label, bufferW, bufferH, textW, textH);
+    }
+}
+
 }

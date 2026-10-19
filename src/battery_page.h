@@ -5,7 +5,7 @@
 #include <Arduino.h>
 
 namespace BatteryPage {
-    void draw(int16_t areaTop, int16_t areaHeight);
+    void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw);
     bool update();
     bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight);
 }

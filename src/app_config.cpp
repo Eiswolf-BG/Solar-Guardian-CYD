@@ -79,6 +79,17 @@ bool load() {
         appConfig.deviceNo = dn.length() > 0 ? dn : String(Config::DEFAULT_DEVICE_NO);
     }
 
+    // Optionale Standort-Felder (Auftrag "Standort automatisch, notfalls
+    // einmalig per Eingabe") - bewusst OHNE formatVersion-Abfrage, einfach
+    // mit Default lesen: bestehende Configs ohne diese Felder laufen so
+    // unveraendert weiter (Wetterkachel zeigt "Standort waehlen"), bis die
+    // automatische Ermittlung oder eine manuelle Eingabe sie befuellt.
+    appConfig.locationName = String((const char*)(doc["location_name"] | ""));
+    appConfig.locationLat = doc["location_lat"] | 0.0f;
+    appConfig.locationLon = doc["location_lon"] | 0.0f;
+    appConfig.locationSet = doc["location_set"] | false;
+    appConfig.locationManual = doc["location_manual"] | false;
+
     appConfig.formatVersion = Config::CONFIG_FORMAT_VERSION; // nach dem Laden immer auf dem aktuellen Stand
     appConfig.setupComplete = doc["setup_complete"] | false;
 
@@ -119,6 +130,11 @@ bool save() {
     doc["system_color_index"] = appConfig.systemColorIndex;
     doc["language"] = (appConfig.language == 1) ? "en" : "de";
     doc["device_no"] = appConfig.deviceNo;
+    doc["location_name"] = appConfig.locationName;
+    doc["location_lat"] = appConfig.locationLat;
+    doc["location_lon"] = appConfig.locationLon;
+    doc["location_set"] = appConfig.locationSet;
+    doc["location_manual"] = appConfig.locationManual;
     doc["format_version"] = Config::CONFIG_FORMAT_VERSION;
     doc["setup_complete"] = appConfig.setupComplete;
 

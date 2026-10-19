@@ -23,14 +23,12 @@ namespace {
     constexpr Rect HELP_BTN = {(int16_t)(Config::SCREEN_WIDTH - 36), 4, 32, 32};
 }
 
-void run() {
-    appConfig.portalEmail = "";
-    appConfig.portalPassword = "";
-
+void run(bool isLastStep) {
     bool done = false;
     while (!done) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::CREDENTIALS_TITLE), Config::SCREEN_WIDTH / 2, 14);
@@ -58,7 +56,7 @@ void run() {
         if (canGo) tft.fillRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, accent);
         tft.setTextColor(canGo ? TFT_BLACK : TFT_DARKGREY, canGo ? accent : TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString(I18n::t(I18n::Str::GO_BUTTON), goBtn.x + goBtn.w / 2, goBtn.y + goBtn.h / 2);
+        tft.drawString(I18n::t(isLastStep ? I18n::Str::GO_BUTTON : I18n::Str::NEXT_BUTTON), goBtn.x + goBtn.w / 2, goBtn.y + goBtn.h / 2);
         tft.setTextDatum(TL_DATUM);
 
         TouchInput::Point tap;
@@ -78,27 +76,32 @@ void run() {
             String v = Keypad::run(I18n::t(I18n::Str::PASSWORD_PROMPT), appConfig.portalPassword, confirmed);
             if (confirmed) appConfig.portalPassword = v;
         } else if (canGo && goBtn.contains(tap.x, tap.y)) {
-            SdStorage::ensureRootDir();
-            appConfig.setupComplete = true;
-            AppConfigStore::save();
-
-            tft.fillScreen(TFT_BLACK);
-            tft.setTextColor(accent, TFT_BLACK);
-            tft.setTextDatum(MC_DATUM);
-            tft.drawString(I18n::t(I18n::Str::FETCHING_TIME), Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
-            tft.setTextDatum(TL_DATUM);
-            configTzTime(Config::TIMEZONE_POSIX, Config::NTP_SERVER);
-            // Kurz auf eine gueltige Zeit warten, aber nicht endlos -
-            // main_screen.cpp zeigt "--:--" an, falls es bis hierher nicht
-            // geklappt hat, und die Zeit kommt dann spaeter im Hintergrund.
-            struct tm timeinfo;
-            uint32_t startMs = millis();
-            while (!getLocalTime(&timeinfo, 100) && millis() - startMs < 5000) {
-                delay(100);
-            }
-
+            if (isLastStep) finalizeSetup();
             done = true;
         }
+    }
+}
+
+void finalizeSetup() {
+    uint16_t accent = Display::systemColor();
+    SdStorage::ensureRootDir();
+    appConfig.setupComplete = true;
+    AppConfigStore::save();
+
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
+    tft.setTextColor(accent, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString(I18n::t(I18n::Str::FETCHING_TIME), Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
+    tft.setTextDatum(TL_DATUM);
+    configTzTime(Config::TIMEZONE_POSIX, Config::NTP_SERVER);
+    // Kurz auf eine gueltige Zeit warten, aber nicht endlos - main_screen.cpp
+    // zeigt "--:--" an, falls es bis hierher nicht geklappt hat, und die
+    // Zeit kommt dann spaeter im Hintergrund.
+    struct tm timeinfo;
+    uint32_t startMs = millis();
+    while (!getLocalTime(&timeinfo, 100) && millis() - startMs < 5000) {
+        delay(100);
     }
 }
 

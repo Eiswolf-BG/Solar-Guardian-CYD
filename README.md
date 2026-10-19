@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-1.1-blue)
+![version](https://img.shields.io/badge/version-1.2-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -23,19 +23,33 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 
 ### Funktionen
 
+- **Übersicht** (erste Seite nach dem Booten): vier Kacheln auf einen
+  Blick - Wetter (Symbol + aktuelle Temperatur, antippen öffnet die
+  [Wochenansicht](#standort-und-wetter)), aktuelle Leistung, heutiger
+  Ertrag und Batterie-Ladezustand (mit Füllstandssymbol, grün/gelb/rot).
+  Leistung/Ertrag/Batterie antippen springt zur jeweiligen Wisch-Seite.
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
   -Strom als Kacheln, Kurve der letzten 3 Stunden), Ertrag (Heute, Woche
   als gleitendes 7-Tage-Fenster, Monat, Jahr), Jahre (Balkengrafik der
   letzten Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
   Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
 - **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
-  haben bekanntermaßen Lücken), mit täglichem Backup und manueller
-  Korrekturmöglichkeit.
-- **Menü**: Konto, Netzwerke (bis zu 3 WLANs), Systemfarbe, Sprache
-  (Deutsch/Englisch), Ertragswerte (Monat/Jahr manuell korrigieren),
-  Zurücksetzen.
+  haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
+  `/SolarHistory` im SD-Karten-Root, manueller Korrekturmöglichkeit und
+  Import alter Werte bei der Ersteinrichtung.
+- **Empfindliche, zuverlässige Bedienung**: flackerfreie Anzeige, keine
+  abgeschnittenen Texte, feinfühlige Wisch-Gesten zwischen den Seiten.
+- **Absicherung**: Zeitlimit für jede Netzwerk-Abfrage, ein Wächter gegen
+  hängenbleibende Hintergrund-Abgleiche mit kontrolliertem Neustart (gibt
+  danach nicht für immer auf, sondern versucht es nötigenfalls stündlich
+  weiter), sichere Schreibzugriffe auf die SD-Karte.
+- **Menü**: Konto (Benutzername, Passwort, Geräte-Seriennummer),
+  Netzwerke (bis zu 3 WLANs), Systemfarbe, Sprache (Deutsch/Englisch),
+  Ertragswerte (Monat/Jahr manuell korrigieren), Zurücksetzen. Der
+  Standort für die Wetterkachel
+  wird automatisch ermittelt und hat deshalb keinen eigenen Menüpunkt.
 - **Ersteinrichtung** direkt am Gerät: Touch-Kalibrierung, WLAN-Auswahl,
-  Solar-Guardian-Zugangsdaten.
+  Solar-Guardian-Zugangsdaten, Geräte-Seriennummer.
 
 ### Installation
 
@@ -60,17 +74,51 @@ Schnittstelle kann sich jederzeit ändern. Die Zugangsdaten liegen im
 Klartext auf der SD-Karte (`/SolarGuardian/config.json`), wie es für ein
 privates Gerät ohne weitere Absicherung üblich ist.
 
+Das Gerät ist gegen hängende Netzwerkabfragen abgesichert: Jede HTTPS-
+Abfrage bricht spätestens nach 20 Sekunden insgesamt ab (nicht erst nach
+einer möglicherweise viel längeren Zeit), und ein eigener Wächter
+erkennt, falls der Hintergrund-Abgleich trotzdem einmal länger als 10-15
+Minuten steht, und startet das Gerät dann selbstständig neu (gesicherte
+Ertragsdaten gehen dabei nie verloren). Hilft das mehrfach hintereinander
+nicht, versucht es das Gerät höchstens noch einmal pro Stunde weiter,
+statt für immer aufzugeben - die Anzeige selbst bleibt davon immer
+unberührt und bedienbar.
+
 ### Anpassen
 
-Die Geräte-Seriennummer (`device_no`) steht in
-`/SolarGuardian/config.json` auf der SD-Karte. Der in der Firmware
-eingebaute Standardwert gehört zu einer bestimmten Anlage und muss für
-jede andere Anlage auf die eigene Seriennummer geändert werden - sonst
-meldet die Batterie-Abfrage einen Berechtigungsfehler. Die Seriennummer
-findet man im Solar-Guardian-Portal auf der Geräteseite; die Adresszeile
-dort enthält `devid=` gefolgt von der Seriennummer. Die Startwerte für
-die Seite "Jahre" (Vorjahresertrag) stehen in `years.json` auf der SD-
-Karte und können dort direkt angepasst werden.
+Die Geräte-Seriennummer wird direkt am Gerät eingegeben: bei der
+Ersteinrichtung auf einem eigenen Bildschirm, oder später jederzeit im
+Menü unter "Konto", dort auf das Feld "Seriennummer" tippen. Sie landet
+in `device_no` in
+`/SolarGuardian/config.json` auf der SD-Karte. Man findet sie im
+Solar-Guardian-Portal auf der Geräteseite; die Adresszeile dort enthält
+`devid=` gefolgt von der Seriennummer. Die Startwerte für die Seite
+"Jahre" (Vorjahresertrag) stehen in `years.json` auf der SD-Karte und
+können dort direkt angepasst werden.
+
+Das tägliche Ertrags-Backup liegt im Ordner `/SolarHistory` - bewusst
+ausserhalb von `/SolarGuardian`, damit ein "Zurücksetzen" im Menü diese
+Sicherung nicht mit löscht und der heutige Tagesertrag danach automatisch
+wiederhergestellt wird.
+
+### Standort und Wetter
+
+Wetterdaten von [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) -
+kostenlos, ohne Zugangsschlüssel. Der Standort wird automatisch über die
+öffentliche IP-Adresse des Geräts ermittelt (dabei geht die IP-Adresse an
+den jeweiligen Ermittlungsdienst; die Genauigkeit liegt nur auf
+Stadt-Ebene, nicht auf die genaue Adresse). Ohne erkannten Standort oder
+für einen anderen Ort: auf die Wetterkachel auf der Übersicht tippen -
+dort lässt sich der Standort einmalig von Hand per Ortsname oder
+Postleitzahl setzen (liefert die Suche genau einen Treffer, wird er
+automatisch übernommen, sonst zur Auswahl eine Liste gezeigt) oder die
+automatische Ermittlung erneut anstoßen; ein von Hand gesetzter Standort
+wird danach nicht mehr automatisch überschrieben. Wer lieber direkt
+Koordinaten eintragen möchte, kann `location_lat`/`location_lon` auch
+direkt in `/SolarGuardian/config.json` setzen. Ohne erkannten Standort
+zeigt die Wetterkachel "Standort wählen" statt eines Symbols. Das Wetter
+aktualisiert sich alle 30 Minuten, dazu sofort nach dem WLAN-Verbinden und
+nach einer Standortänderung.
 
 ### Galerie
 
@@ -95,6 +143,11 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 
 ### Features
 
+- **Overview** (first page after boot): four tiles at a glance - weather
+  (icon + current temperature, tap for the [week view](#location-and-weather)),
+  current power output, today's yield, and battery charge level (with a
+  fill-level icon, green/yellow/red). Tap Power/Yield/Battery to jump to
+  that swipe page.
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
   current as tiles, a chart of the last 3 hours), Yield (Today, Week as a
   rolling 7-day window, Month, Year), Years (bar chart of the last
@@ -102,12 +155,22 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   temperature, charging status with a short explanation of all four
   states).
 - **Yield log**: counts week/month/year itself (the portal's own totals
-  are known to have gaps), with a daily backup and manual correction.
-- **Menu**: Account, Networks (up to 3 WiFi networks), Theme color,
-  Language (German/English), Yield values (manually correct month/year),
-  Factory reset.
+  are known to have gaps), with a daily backup in the `/SolarHistory`
+  folder on the SD card root, manual correction, and an import of older
+  values during first-time setup.
+- **Sensitive, reliable operation**: flicker-free display, no clipped
+  text, sensitive swipe gestures between pages.
+- **Hardening**: a timeout on every network request, a watchdog against a
+  stuck background sync with a controlled restart (doesn't give up
+  forever afterward, falls back to trying hourly if needed), safe SD card
+  writes.
+- **Menu**: Account (username, password, device serial number), Networks
+  (up to 3 WiFi networks), Theme color, Language (German/English), Yield
+  values (manually correct month/year), Factory reset. The location used
+  for the weather tile is detected automatically and has no menu entry of
+  its own.
 - **First-time setup** directly on the device: touch calibration, WiFi
-  selection, Solar Guardian account details.
+  selection, Solar Guardian account details, device serial number.
 
 ### Installation
 
@@ -132,17 +195,48 @@ may change at any time. Account details are stored in plain text on the
 SD card (`/SolarGuardian/config.json`), as is typical for a private
 device without further hardening.
 
+The device is hardened against hanging network requests: every HTTPS
+request aborts after 20 seconds total at the latest (not after a
+possibly much longer stall), and a separate watchdog detects if the
+background sync still stays stuck for more than 10-15 minutes and
+restarts the device on its own (saved yield data is never lost in the
+process). If that doesn't help after a few tries, the device falls back
+to trying at most once an hour instead of giving up forever - the
+display itself is never affected and stays fully usable.
+
 ### Customizing
 
-The device serial number (`device_no`) lives in
-`/SolarGuardian/config.json` on the SD card. The default baked into the
-firmware belongs to one specific installation and must be changed to
-your own serial number for any other installation - otherwise the
-battery query fails with a permission error. You can find the serial
-number on the device page in the Solar Guardian portal; its address bar
-contains `devid=` followed by the serial number. The seed values for the
-"Years" page (previous years' yield) live in `years.json` on the SD card
-and can be edited there directly.
+The device serial number is entered directly on the device: on its own
+screen during first-time setup, or any time afterward under Menu →
+"Account", tap the "Serial number" field there. It ends up in
+`device_no` in `/SolarGuardian/
+config.json` on the SD card. You can find it on the device page in the
+Solar Guardian portal; its address bar contains `devid=` followed by the
+serial number. The seed values for the "Years" page (previous years'
+yield) live in `years.json` on the SD card and can be edited there
+directly.
+
+The daily yield backup lives in the `/SolarHistory` folder - deliberately
+outside `/SolarGuardian`, so a "Factory reset" in the menu never deletes
+it and today's yield is automatically restored afterward.
+
+### Location and weather
+
+Weather data from [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) -
+free, no API key required. The location is detected automatically from
+the device's public IP address (this sends the IP address to the
+detection service; accuracy is only city-level, not an exact address).
+Without a detected location, or to use a different one: tap the weather
+tile on the Overview - there you can set the location by hand once (place
+name or postal code; if the search returns exactly one match it's used
+automatically, otherwise you pick from a list) or trigger automatic
+detection again; a manually set location is never overwritten
+automatically afterward. If you'd rather enter coordinates directly, you
+can also set `location_lat`/`location_lon` straight in
+`/SolarGuardian/config.json`. Without a detected location, the weather
+tile shows "Set location" instead of an icon. The weather refreshes every
+30 minutes, plus immediately after connecting to WiFi and after a
+location change.
 
 ### Gallery
 

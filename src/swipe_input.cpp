@@ -26,15 +26,26 @@ bool poll(Direction& dir, TouchInput::Point& outPoint) {
     int16_t adx = (int16_t)abs(dx);
     int16_t ady = (int16_t)abs(dy);
 
-    // Nur eine ueberwiegend waagerechte Bewegung ab der Schwelle gilt als
-    // Wisch - ein normaler (auch leicht zittriger) Tap darf nie
-    // versehentlich die Seite wechseln.
-    if (adx >= Config::SWIPE_THRESHOLD_PX && adx > ady) {
-        dir = (dx < 0) ? Direction::Left : Direction::Right;
-    } else {
+    // Klarer Tap: Finger ist praktisch nicht gewandert (Auftrag
+    // "Wischgeste empfindlicher").
+    if (adx <= Config::TAP_MAX_DRIFT_PX && ady <= Config::TAP_MAX_DRIFT_PX) {
         dir = Direction::None;
+        return true;
     }
-    return true;
+
+    // Klarer Wisch: genug Weg UND ueberwiegend waagerecht (waagerecht
+    // mindestens SWIPE_HORIZONTAL_RATIO-mal so gross wie senkrecht -
+    // leicht schraege Wischer bleiben damit erlaubt, ohne komplett
+    // waagerecht sein zu muessen).
+    if (adx >= Config::SWIPE_MIN_DISTANCE_PX && adx >= ady * Config::SWIPE_HORIZONTAL_RATIO) {
+        dir = (dx < 0) ? Direction::Left : Direction::Right;
+        return true;
+    }
+
+    // Weder eindeutiger Tap noch eindeutiger Wisch (z.B. zu weit fuer
+    // einen Tap, aber zu schraeg/zu kurz fuer einen Wisch) - verwerfen,
+    // statt versehentlich einen Knopf/eine Kachel auszuloesen.
+    return false;
 }
 
 }

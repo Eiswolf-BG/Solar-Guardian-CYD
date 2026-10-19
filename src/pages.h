@@ -13,8 +13,17 @@ namespace Pages {
     struct Page {
         I18n::Str titleKey;
         // areaTop/areaHeight = der Bereich UNTER der festen Kopfzeile, in
-        // den die Seite zeichnen darf (siehe main_screen.cpp).
-        void (*draw)(int16_t areaTop, int16_t areaHeight);
+        // den die Seite zeichnen darf (siehe main_screen.cpp). forceRedraw
+        // = true bei einem Seiteneintritt (Wisch/Menue-Rueckkehr/Popup-
+        // Rueckkehr - main_screen.cpp hat den Bereich davor komplett
+        // schwarz geloescht) - Seiten mit eigenem Inhalts-Diff-Cache
+        // (Auftrag "Flackern, Teil 2") MUESSEN ihren Cache dann
+        // zuruecksetzen, sonst bleibt die Seite nach einem Seitenwechsel
+        // leer (der Cache wuerde einen unveraenderten Inhalt faelschlich
+        // als "schon gezeichnet" ansehen). false = reine Inhalts-
+        // aktualisierung auf der GLEICHEN, bereits sichtbaren Seite
+        // (ausgeloest durch update()==true, kein Schwarz-Wisch davor).
+        void (*draw)(int16_t areaTop, int16_t areaHeight, bool forceRedraw);
         // nullptr = keine wiederkehrende Aktualisierung noetig (reine
         // Platzhalterseiten). Sonst: wird jede loop()-Iteration
         // aufgerufen, true = seit dem letzten Aufruf hat sich etwas

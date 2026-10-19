@@ -1,6 +1,8 @@
 #include "solar_data.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <math.h>
+#include <string.h>
 
 namespace SolarData {
 
@@ -9,15 +11,33 @@ namespace {
     SemaphoreHandle_t mutex = nullptr;
 
     // Kleiner Helfer fuer alle Setter unten: sperren, Lambda ausfuehren,
-    // changeCounter erhoehen, entsperren.
+    // changeCounter NUR erhoehen, wenn das Lambda eine echte Aenderung
+    // meldet (true zurueckgibt), entsperren. Root-Fix gegen Flackern
+    // (Auftrag "Ursachen suchen, nicht raten"): vorher erhoehte JEDER
+    // Setter den Zaehler bedingungslos, auch wenn der neu geschriebene
+    // Wert mit dem alten identisch war - ein Aufrufer, der einen Wert
+    // bei jedem Schleifendurchlauf setzt, erzeugte dadurch eine
+    // Endlosschleife aus Scheinaenderungen. Siehe CLAUDE.md
+    // "Dual-Core-Architektur".
     template <typename F>
     void mutate(F fn) {
         if (!mutex) return;
         xSemaphoreTake(mutex, portMAX_DELAY);
-        fn(data);
-        data.changeCounter++;
+        bool changed = fn(data);
+        if (changed) data.changeCounter++;
         xSemaphoreGive(mutex);
     }
+
+    // Toleranz an der tatsaechlichen Anzeige-Genauigkeit ausgerichtet
+    // (siehe jeweilige *_page.cpp-Formatierung) - eine Aenderung UNTER
+    // dieser Schwelle wuerde auf dem Display ohnehin identisch aussehen,
+    // ist also keine "echte" Aenderung im Sinne des Auftrags.
+    bool floatChanged(float a, float b, float eps) { return fabsf(a - b) > eps; }
+
+    // Zeiten werden nur auf die ANGEZEIGTE MINUTE verglichen (Auftrag),
+    // nicht auf die Sekunde - alle Uhrzeiten auf den Seiten zeigen nur
+    // HH:MM.
+    bool minuteChanged(time_t a, time_t b) { return (a / 60) != (b / 60); }
 }
 
 void init() {
@@ -35,102 +55,191 @@ Data snapshot() {
 
 void setPower(float watts, time_t measuredAt) {
     mutate([&](Data& d) {
+        bool changed = !d.powerValid || floatChanged(d.currentPowerW, watts, 0.5f) ||
+                       minuteChanged(d.powerMeasuredAt, measuredAt);
         d.currentPowerW = watts;
         d.powerMeasuredAt = measuredAt;
         d.powerValid = true;
+        return changed;
     });
 }
 
 void pushHistoryPoint(time_t epoch, float watts) {
+    // Fuegt immer einen neuen, echten Messpunkt mit eigenem Zeitstempel
+    // hinzu (kein Wiederholungsfall wie die skalaren Setter) - die Kurve
+    // AENDERT sich dadurch per Definition, Zaehler bleibt hier bewusst
+    // unbedingt.
     mutate([&](Data& d) {
         d.history[d.historyHead].epoch = epoch;
         d.history[d.historyHead].valueW = watts;
         d.historyHead = (uint8_t)((d.historyHead + 1) % HISTORY_MAX_POINTS);
         if (d.historyCount < HISTORY_MAX_POINTS) d.historyCount++;
         d.historyValid = true;
+        return true;
     });
 }
 
 void setHistory(const HistoryPoint* points, uint8_t count) {
     mutate([&](Data& d) {
         uint8_t n = count > HISTORY_MAX_POINTS ? HISTORY_MAX_POINTS : count;
+        bool changed = !d.historyValid || d.historyCount != n;
+        if (!changed) {
+            for (uint8_t i = 0; i < n; i++) {
+                if (floatChanged(d.history[i].valueW, points[i].valueW, 0.5f) ||
+                    minuteChanged(d.history[i].epoch, points[i].epoch)) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
         for (uint8_t i = 0; i < n; i++) d.history[i] = points[i];
         d.historyCount = n;
         d.historyHead = (uint8_t)(n % HISTORY_MAX_POINTS);
         d.historyValid = true;
+        return changed;
     });
 }
 
 void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh) {
     mutate([&](Data& d) {
+        bool changed = !d.energyValid || floatChanged(d.energyTodayKwh, todayKwh, 0.005f) ||
+                       floatChanged(d.energyMonthKwh, monthKwh, 0.005f) ||
+                       floatChanged(d.energyYearKwh, yearKwh, 0.005f) ||
+                       floatChanged(d.energyTotalKwh, totalKwh, 0.005f);
         d.energyTodayKwh = todayKwh;
         d.energyMonthKwh = monthKwh;
         d.energyYearKwh = yearKwh;
         d.energyTotalKwh = totalKwh;
         d.energyValid = true;
+        return changed;
     });
 }
 
 void setBattery(float voltage, float current, float socPercent, float tempC, time_t measuredAt) {
     mutate([&](Data& d) {
+        bool changed = !d.batteryValid || floatChanged(d.batteryVoltage, voltage, 0.005f) ||
+                       floatChanged(d.batteryCurrent, current, 0.005f) ||
+                       floatChanged(d.batterySocPercent, socPercent, 0.5f) ||
+                       floatChanged(d.batteryTempC, tempC, 0.05f) ||
+                       minuteChanged(d.batteryMeasuredAt, measuredAt);
         d.batteryVoltage = voltage;
         d.batteryCurrent = current;
         d.batterySocPercent = socPercent;
         d.batteryTempC = tempC;
         d.batteryValid = true;
         d.batteryMeasuredAt = measuredAt;
+        return changed;
     });
 }
 
 void setPv(float voltage, float current, time_t measuredAt) {
     mutate([&](Data& d) {
+        bool changed = !d.pvValid || floatChanged(d.pvVoltage, voltage, 0.05f) ||
+                       floatChanged(d.pvCurrent, current, 0.005f) ||
+                       minuteChanged(d.pvMeasuredAt, measuredAt);
         d.pvVoltage = voltage;
         d.pvCurrent = current;
         d.pvValid = true;
         d.pvMeasuredAt = measuredAt;
+        return changed;
+    });
+}
+
+void resetForDeviceChange() {
+    // Seltener, einschneidender Vorgang (Geraete-Seriennummer geaendert)
+    // - bleibt bewusst unbedingt, Vergleich waere hier unnoetiger
+    // Aufwand fuer einen Fall, der ohnehin fast immer eine echte
+    // Aenderung ist.
+    mutate([&](Data& d) {
+        d.currentPowerW = 0.0f; d.powerMeasuredAt = 0; d.powerValid = false;
+        d.historyCount = 0; d.historyHead = 0; d.historyValid = false;
+        d.energyTodayKwh = d.energyMonthKwh = d.energyYearKwh = d.energyTotalKwh = 0.0f;
+        d.energyValid = false;
+        d.batteryVoltage = d.batteryCurrent = d.batterySocPercent = d.batteryTempC = 0.0f;
+        d.batteryValid = false; d.batteryMeasuredAt = 0;
+        d.chargeStatusCode = -1; d.chargeStatusIsText = false; d.chargeStatusRawText[0] = 0;
+        d.pvVoltage = d.pvCurrent = 0.0f; d.pvValid = false; d.pvMeasuredAt = 0;
+        d.dailySourceKwh = 0.0f; d.dailySourceMeasuredAt = 0; d.dailySourceValid = false;
+        d.dailySourceFromDatapoint = false;
+        d.lastSuccessfulFetch = 0;
+        return true;
     });
 }
 
 void setChargeStatusCode(int16_t code) {
     mutate([&](Data& d) {
+        bool changed = d.chargeStatusIsText || d.chargeStatusCode != code;
         d.chargeStatusCode = code;
         d.chargeStatusIsText = false;
         d.chargeStatusRawText[0] = 0;
+        return changed;
     });
 }
 
 void setChargeStatusText(const char* text) {
     mutate([&](Data& d) {
+        bool changed = !d.chargeStatusIsText || strncmp(d.chargeStatusRawText, text, sizeof(d.chargeStatusRawText) - 1) != 0;
         d.chargeStatusIsText = true;
         d.chargeStatusCode = -1;
         strncpy(d.chargeStatusRawText, text, sizeof(d.chargeStatusRawText) - 1);
         d.chargeStatusRawText[sizeof(d.chargeStatusRawText) - 1] = 0;
+        return changed;
     });
 }
 
 void setDailySource(float kwh, time_t measuredAt, bool fromDatapoint) {
     mutate([&](Data& d) {
+        // dayFetchSeq steigt bewusst IMMER (YieldLedger braucht jeden
+        // Abfrageversuch, siehe Header-Kommentar) - der Anzeige-
+        // Aenderungszaehler aber nur bei echter Wertaenderung.
+        bool changed = !d.dailySourceValid || floatChanged(d.dailySourceKwh, kwh, 0.005f) ||
+                       minuteChanged(d.dailySourceMeasuredAt, measuredAt) ||
+                       d.dailySourceFromDatapoint != fromDatapoint;
         d.dailySourceKwh = kwh;
         d.dailySourceMeasuredAt = measuredAt;
         d.dailySourceValid = true;
         d.dailySourceFromDatapoint = fromDatapoint;
         d.dayFetchSeq++;
+        return changed;
     });
 }
 
 void setLastSuccessfulFetch(time_t epoch) {
-    mutate([&](Data& d) { d.lastSuccessfulFetch = epoch; });
+    mutate([&](Data& d) {
+        bool changed = minuteChanged(d.lastSuccessfulFetch, epoch);
+        d.lastSuccessfulFetch = epoch;
+        // Unbedingt, unabhaengig von "changed" oben (siehe solar_data.h-
+        // Kommentar) - der Fetch-Watchdog muss jeden einzelnen
+        // erfolgreichen Zyklus zaehlen, nicht nur die, die auch eine
+        // neue Anzeige-Minute auslösen.
+        d.successfulFetchCount++;
+        return changed;
+    });
+}
+
+void setNextFetchAt(time_t epoch) {
+    mutate([&](Data& d) {
+        bool changed = minuteChanged(d.nextFetchAt, epoch);
+        d.nextFetchAt = epoch;
+        return changed;
+    });
 }
 
 void setStatusText(const char* text) {
     mutate([&](Data& d) {
+        bool changed = strncmp(d.statusText, text, sizeof(d.statusText) - 1) != 0;
         strncpy(d.statusText, text, sizeof(d.statusText) - 1);
         d.statusText[sizeof(d.statusText) - 1] = 0;
+        return changed;
     });
 }
 
 void setFetchStatus(FetchStatus status) {
-    mutate([&](Data& d) { d.fetchStatus = status; });
+    mutate([&](Data& d) {
+        bool changed = d.fetchStatus != status;
+        d.fetchStatus = status;
+        return changed;
+    });
 }
 
 }

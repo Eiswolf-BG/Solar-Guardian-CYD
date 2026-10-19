@@ -20,6 +20,10 @@ namespace FetchTask {
         // nach jeder Aenderung senden.
         AccountChanged,
         LanguageChanged,
+        // Standort fuer die Wetterabfrage geaendert (siehe
+        // location_screen.cpp) - loest sofort eine neue Wetterabfrage aus,
+        // statt auf den naechsten 30-Minuten-Takt zu warten.
+        LocationChanged,
         // "Jetzt aktualisieren" (siehe pages.cpp, Seite "Ertrag") - fuehrt
         // sofort eine Ertragsabfrage aus, aber hoechstens alle
         // Config::EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS.

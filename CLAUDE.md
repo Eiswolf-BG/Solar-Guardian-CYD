@@ -11,27 +11,27 @@ irgendeine Veröffentlichung gedacht**.
 
 ## Wer nutzt das?
 
-Die Nutzerin — Anfängerin bei Arduino/ESP32. Bitte verständlich und knapp erklären,
+Alex — Anfänger bei Arduino/ESP32. Bitte verständlich und knapp erklären,
 was gebaut wurde, nicht von Fachbegriffen ausgehen, die als bekannt
 vorausgesetzt werden.
 
 ## Arbeitsweise
 
 - Wir bauen ein Feature nach dem anderen und warten nach jedem Feature auf
-  ihr OK, bevor das nächste angefangen wird.
+  Alex' OK, bevor das nächste angefangen wird.
 - Bei Unklarheiten nachfragen statt zu raten.
 
 ## Pflichtregeln
 
 - **Nur bauen und flashen.** Niemals committen, taggen oder pushen, außer
-  die Nutzerin fordert das in ihrer aktuellen Nachricht ausdrücklich an. Seit
+  Alex fordert das in ihrer aktuellen Nachricht ausdrücklich an. Seit
   V1.0 liegt das Projekt öffentlich auf GitHub
   (`Eiswolf-BG/Solar-Guardian-CYD`, MIT-Lizenz, Web-Flasher via GitHub
   Pages) — das ändert nichts an dieser Regel, jeder Push/Tag/Release
   bleibt an eine ausdrückliche Aufforderung in der jeweiligen Nachricht
   gebunden.
 - **Release-Notes sind IMMER zweisprachig**, erst Deutsch, dann
-  Englisch (fester Wunsch der Projektinhaberin für dieses Repo: ein Nutzer des Geräts
+  Englisch (Alex' fester Wunsch für dieses Repo: ein Nutzer des Geräts
   spricht nur wenig Englisch) — gilt für jedes GitHub-Release, ohne
   Ausnahme, auch bei kleinen Patch-Versionen.
 - **Keine Geheimnisse im Log.** E-Mail-Adresse, Passwort, WLAN-Passwort,
@@ -60,7 +60,7 @@ vorausgesetzt werden.
     kann (SSIDs, E-Mail-Adressen, übersetzte Texte) — nie ein fester
     `drawString()`/`print()` ohne Breitenprüfung.
   - **Ausnahme von der "…"-Kürzung: Zahlen und Jahreszahlen werden NIE
-    gekürzt** (ihr Wunsch, nach einem Bug auf der Seite "Jahre", wo
+    gekürzt** (Alex' Wunsch, nach einem Bug auf der Seite "Jahre", wo
     Werte wie "4452" zu "4452…" wurden, weil die Höhen-Zone für die
     Schrift zu knapp bemessen war — bei dieser Schriftart
     (`AppFont11pt`, `yAdvance`=17) braucht selbst Size 1 mind.
@@ -102,7 +102,7 @@ vorausgesetzt werden.
 - TFT: ILI9341-Treiber, Pins/Timing siehe `platformio.ini` `build_flags`
   (übernommen aus eiswolfs-flightradar-CYD, dort am echten Gerät
   bestätigt). `tft.setRotation(0)` für Hochformat (native Panel-
-  Ausrichtung, ihr Wunsch), `tft.invertDisplay(true)` nötig für korrekte
+  Ausrichtung, Alex' Wunsch), `tft.invertDisplay(true)` nötig für korrekte
   Farben auf diesem Board.
 - Touch: XPT2046 über eigenen SPI-Bus (VSPI), Pins in `config.h`
   (`TOUCH_*_PIN`). Der Touch-Chip ist an die PHYSISCHE Panel-Ausrichtung
@@ -116,7 +116,7 @@ vorausgesetzt werden.
   (ä/ö/ü/ß) korrekt darstellt — bestätigt und im Code genutzt. Wird global
   per `tft.setFreeFont(&AppFont11pt)` aktiviert (siehe
   `display.cpp::begin()`), gilt danach für jeden Text.
-- **Partitionierung: Single-App, kein OTA** (ihre bewusste Entscheidung,
+- **Partitionierung: Single-App, kein OTA** (Alex' bewusste Entscheidung,
   OTA ist für dieses private Projekt nicht geplant). `platformio.ini`:
   `board_build.partitions = huge_app.csv` — ein großer App-Slot (3MB)
   statt der zwei kleineren OTA-Slots im Standard-Schema. NVS bleibt
@@ -142,7 +142,25 @@ Feste Grundregel für das ganze Projekt, gilt für jedes neue Feature:
   Mutex. Core 1 holt sich mit `SolarData::snapshot()` eine Momentaufnahme
   und zeichnet danach OHNE Mutex weiter. Ein `changeCounter` steigt bei
   jeder Aktualisierung, damit Core 1 nur bei echter Änderung neu
-  zeichnet.
+  zeichnet. **Falle (bereits aufgetreten, siehe Git-Historie "Flackern"):**
+  der Setter hinter `changeCounter` erhöht ihn IMMER, auch wenn der neu
+  geschriebene Wert mit dem alten identisch ist - ein Aufrufer, der einen
+  Wert unbedingt bei JEDEM Schleifendurchlauf setzt (z.B.
+  `fetch_task.cpp`s nächster Abfragezeitpunkt, alle 200ms), erzeugt damit
+  eine SPURIOUS Änderungsmeldung an alle lesenden Seiten, auch wenn sich
+  visuell nichts geändert hat - sichtbar als Flackern aller Kacheln im
+  Takt dieser Schleife. Fix: der Aufrufer selbst merkt sich den zuletzt
+  tatsächlich gesendeten Wert und ruft den Setter nur auf, wenn er sich
+  wirklich geändert hat (siehe `fetch_task.cpp`s `lastSentNextFetchAt`) -
+  NICHT den Setter selbst ändern (der muss für andere, tatsächlich immer
+  wertändernde Aufrufer unbedingt bleiben). Zusätzlich zeichnen die Seiten
+  (`home_page.cpp`/`power_page.cpp`/`yield_page.cpp`/`battery_page.cpp`)
+  dynamische Kachelinhalte nicht mehr per Vollbild-Löschen, sondern
+  überzeichnen nur die betroffene Teilzone mit `fillRect(..., TFT_BLACK)`
+  direkt vor dem neuen Text - verhindert zusätzliches Flackern selbst bei
+  einer echten, aber für das Auge irrelevanten Änderung. `main_screen.cpp`
+  zählt zur Diagnose Neuzeichnungen pro Seite und loggt sie einmal pro
+  Minute (`[redraw] Neuzeichnungen/Minute: ...`).
 - **Zugangsdaten an den Fetch-Task**: `AccountBridge` (siehe
   `account_bridge.h/.cpp`) — eigener kleiner Mutex, Core 1 schreibt dort
   die E-Mail/Passwort-Kopie (beim Start und nach jeder Kontoänderung über
@@ -151,6 +169,14 @@ Feste Grundregel für das ganze Projekt, gilt für jedes neue Feature:
   direkt auf `appConfig` zu.** Das Portal-Token lebt ausschließlich im
   RAM des Fetch-Tasks (task-lokale `String`), wird NIE auf die SD-Karte
   geschrieben, und wird bei jeder Kontoänderung verworfen (neu einloggen).
+- **Wetter-Standort an den Fetch-Task**: `LocationBridge` (siehe
+  `location_bridge.h/.cpp`) — gleiches Prinzip wie `AccountBridge`, Core 1
+  schreibt dort Breite/Länge (beim Start und nach jeder Standortänderung
+  über `location_screen.cpp`), der Fetch-Task liest beim eigenen Start
+  und wenn `Command::LocationChanged` ankommt. `WeatherData` (siehe
+  `weather_data.h/.cpp`) läuft umgekehrt wie `SolarData` (Fetch-Task
+  schreibt, Core 1 liest per `snapshot()`) und ist unabhängig vom
+  Solar-Guardian-Konto.
 - **WLAN-Verbindungsstatus zurück an Core 1**: `WifiStatus` (siehe
   `wifi_status.h/.cpp`) — der Fetch-Task meldet dort, welcher gespeicherte
   Platz aktuell verbunden ist. Core 1 übernimmt daraus
@@ -160,7 +186,7 @@ Feste Grundregel für das ganze Projekt, gilt für jedes neue Feature:
   (`FetchTask::sendCommand()`, siehe `fetch_task.h`), nicht per direktem
   Funktionsaufruf — z.B. `ReconnectNow`, `DisconnectWifi`,
   `ConnectSlot0/1/2`, `AccountChanged`, `LanguageChanged`, `RefreshNow`
-  ("jetzt aktualisieren").
+  ("jetzt aktualisieren"), `LocationChanged`.
 - **WLAN-Scan/Verbindungstest in den Einrichtungs-Dialogen** (`wifi_select_
   screen.cpp`, `networks_screen.cpp`) laufen weiterhin blockierend auf
   Core 1 — der Fetch-Task pausiert währenddessen
@@ -203,12 +229,29 @@ Gemeinsame Header: `Content-Type: application/json`,
   `data.list[]`, ein Eintrag pro `dataPointId`, darin `list[]` mit
   `time`(ms)/`value` — `list[0]` ist wegen `"desc"` der neueste Wert,
   `value` kann Zahl oder Text sein. `deviceNo` steht in `config.json`
-  (Feld `device_no`, Version 4). `Config::DEFAULT_DEVICE_NO` in
-  `config.h` ist die echte Seriennummer des eigenen Reglers
-  (`04510146093XRJTQ-00918`), kein Platzhalter — `AppConfigStore::
-  load()` übernimmt diesen Standardwert beim Laden, wenn `device_no` in
-  der `config.json` leer ist. `main.cpp` loggt beim Start nur
-  `[core] device_no gesetzt: ja/nein` (nie den Wert selbst im Klartext).
+  (Feld `device_no`, Version 4) und wird seit `serial_number_screen.h/
+  .cpp` DIREKT AM GERÄT eingegeben — eigener Screen in der
+  Ersteinrichtung (zwischen Konto und "Los geht's") und jederzeit im
+  Menü unter "Konto", dort auf das Feld "Seriennummer" tippen (siehe
+  "Bisher fertige Features" unten). Bei einer
+  frischen Ersteinrichtung ist das Feld bewusst LEER (`main.cpp`
+  überschreibt `AppConfig::deviceNo`s Default), nicht der in
+  `Config::DEFAULT_DEVICE_NO` eingebaute Standardwert
+  (`04510146093XRJTQ-00918`, gehört zu einer bestimmten Anlage) — der
+  bleibt nur als Rückfall für bestehende Geräte, bei denen `device_no`
+  bereits in der Config steht (`AppConfigStore::load()` übernimmt ihn
+  weiterhin, wenn das Feld dort leer ist). Validierung (beide Screens,
+  `serial_number_screen.cpp::isValidSerial()`): mind. 8 Zeichen, nur
+  A-Z/0-9/"-" (Eingabe wird nach dem Tastatur-Schließen automatisch auf
+  Großbuchstaben normalisiert). Ändern im Menü löst `Command::
+  AccountChanged` aus; `fetch_task.cpp::applyAccountSnapshot()` erkennt
+  eine GEÄNDERTE (nicht die erste) Seriennummer und ruft dafür
+  `SolarData::resetForDeviceChange()` auf (verwirft Leistung/Batterie/
+  PV/Verlauf/Ertrag, damit nie veraltete Zahlen der alten Anlage
+  angezeigt werden) — das Ertragsbuch selbst bleibt dabei bewusst
+  unangetastet (nur ein Hinweis vor dem Speichern, kein Zwang). Weder
+  `main.cpp` noch die neuen Screens loggen den vollen Wert — nur
+  `[core] device_no gesetzt: ja/nein`.
   **Authentifizierung (per Browser-Netzwerk-Tab bestätigt, löste den
   vorher dauerhaften `status 5004 "Insufficient permissions"`)**: KEIN
   `Appid`-Header, KEIN `"token"` im Body — der rohe JWT (ohne "Bearer")
@@ -260,7 +303,7 @@ bleibt stehen.
 Die Portal-Summen für Monat/Jahr/Gesamt sind bekanntermaßen unzuverlässig
 (Lücken, "Gesamt" ohne echten Bezug zum tatsächlichen Anlagenstart) — das
 Gerät zählt Woche/Monat/Jahr deshalb selbst, siehe `yield_ledger.h/.cpp`.
-**"Gesamt" gibt es bewusst nicht mehr** (ihr Wunsch, nicht gebraucht) —
+**"Gesamt" gibt es bewusst nicht mehr** (Alex' Wunsch, nicht gebraucht) —
 die Seite "Ertrag" zeigt Heute/Woche/Monat/Jahr.
 
 - Läuft auf **Core 1** (benutzt die SD-Karte), wird aus `main.cpp::loop()`
@@ -306,8 +349,8 @@ die Seite "Ertrag" zeigt Heute/Woche/Monat/Jahr.
   Erstinbetriebnahme (Monat/Jahr aus der ersten `getGeneratedEnergy`-
   Antwort als Startwert, Woche ergibt sich automatisch aus den
   Tageswerten).
-- **History-Backup-Ordner** (`/SolarGuardian/History/tagesertrag.json`,
-  siehe `Config::SD_HISTORY_*` in `config.h`): bei JEDER erfolgreichen
+- **History-Backup-Ordner** (`/SolarHistory/tagesertrag.json`, siehe
+  `Config::SD_HISTORY_*` in `config.h`): bei JEDER erfolgreichen
   Tagesertrag-Abfrage (alle 5 Minuten, über `SolarData::dayFetchSeq` als
   Änderungszähler erkannt) überschreibt Core 1 genau eine Datei mit
   `{"datum","zeit","kwh"}` — gespeichert wird `today_max` (der Tages-
@@ -317,7 +360,27 @@ die Seite "Ertrag" zeigt Heute/Woche/Monat/Jahr.
   beim Start wird, falls das Datum der Backup-Datei dem heutigen Tag
   entspricht und ihr Wert größer als `today_max` ist, dieser Wert
   übernommen (geloggt als Datum+kWh); fehlt/ist defekt `yield.json`, wird
-  `today_max` direkt aus der Backup-Datei gespeist.
+  `today_max` direkt aus der Backup-Datei gespeist. **Liegt bewusst
+  AUSSERHALB von `/SolarGuardian`** (eigener Wurzelordner, früher
+  `/SolarGuardian/History`) — "Zurücksetzen" löscht nur `/SolarGuardian`
+  rekursiv (siehe `reset_screen.cpp`), `/SolarHistory` bleibt dadurch
+  nach einem Reset erhalten und der heutige Tagesertrag stellt sich
+  automatisch wieder her. Einmalige Migration beim Start
+  (`sd_storage.cpp::migrateHistoryFolder()`): existiert noch der alte
+  Ordner und der neue nicht, wird die eine Backup-Datei kopiert und der
+  alte Ordner gelöscht.
+- **Einmaliger historischer Ertragsimport** (`steffen_import.h`,
+  `yield_ledger.cpp::importHistoricalData()`): site-spezifische
+  Tages-/Monatswerte für die Erstbefüllung eines bestimmten Geräts,
+  läuft einmal (gesteuert über `Config::SD_IMPORT_MARKER`, liegt bewusst
+  in `/SolarHistory` statt `/SolarGuardian`, damit ein Reset den Import
+  NICHT erneut auslöst — nach einem Reset soll sich der Ertrag stattdessen
+  ganz normal aus dem History-Backup oben wiederherstellen). Schreibt
+  Tageswerte in `days.csv` und `letzteTage`, hebt `monat_basis`/
+  `jahr_basis` per `max()` an (verkleinert nie vorhandene Werte), rührt
+  `today_max` nie an. Nur als Vorlage/Beispiel gedacht — site-spezifische
+  Zahlen gehören in diese eigene Datei, nicht in `yield_ledger.cpp`
+  selbst (gleiches Prinzip wie `seed_years.h`).
 - **Jahresübersicht** (`/SolarGuardian/years.json`, flache Map
   `{"YYYY": kwh}`): bei Jahreswechsel wird der abgeschlossene Jahreswert
   hier eingetragen. Fehlt die Datei, wird sie mit den Startwerten aus
@@ -416,18 +479,79 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
 - Kopfzeile: Uhr, "Solar Guardian" und WLAN-Symbol teilen sich eine
   gemeinsame Grundlinie (`HEADER_BASELINE_Y` in `main_screen.cpp`) — der
   Font ist grundlinien-verankert, Text wächst von dieser Y-Position aus
-  nach oben. "Solar Guardian" sitzt 3px darunter (ihr Wunsch nach
+  nach oben. "Solar Guardian" sitzt 3px darunter (Alex' Wunsch nach
   Sichtkontrolle am Gerät).
+
+## Schriftzustand (`tft.setTextSize()`/`setTextDatum()`) nie vom Aufrufer erben
+
+**Echter, auf Fotos beobachteter Bug** (behoben, siehe Git-Historie): Nach
+dem Hinzufügen der Übersicht (`home_page.cpp`, Kacheln nutzen Size 2 für
+große Zahlen) blieb die Textgröße am Ende von `HomePage::draw()` auf 2
+stehen. Die NÄCHSTE Zeichenfunktion — `main_screen.cpp::drawHeader()`,
+die nie selbst `tft.setTextSize()` aufrief — übernahm diesen Zustand
+ungeprüft, wodurch Uhr/Titel/WLAN-Symbol riesig wurden und sich
+überlappten; dasselbe pflanzte sich ins Menü fort (`menu_screen.cpp` rief
+ebenfalls nie `setTextSize()` auf). Das TFT_eSPI-Objekt ist global und
+behält Size/Datum/Font über Funktions- und Screen-Grenzen hinweg bei -
+anders als man es von anderen Grafik-APIs erwarten würde.
+
+**Feste Regel, gilt für JEDE Zeichenfunktion (Kopfzeile, Menü, Seiten,
+Popups, neue wie alte):**
+- Am ANFANG explizit `tft.setTextSize(1)` (oder die tatsächlich benötigte
+  Größe) setzen, nie auf den Zustand des Aufrufers verlassen — auch wenn
+  es "bisher immer zufällig gepasst hat". `setTextDatum()` wird bereits
+  überall unmittelbar vor jedem `drawString()` gesetzt und nach Gebrauch
+  auf `TL_DATUM` zurückgesetzt; das reicht, SOLANGE die Größe stimmt.
+- Ein Screen, der zwischendurch eine andere Größe braucht (Size 2 für
+  große Zahlen etc.), setzt sie am ENDE der eigenen Zeichenfunktion
+  wieder auf 1 zurück (siehe `home_page.cpp::draw()`, letzte Zeilen) -
+  zusätzlich zur obigen Regel, nicht als Ersatz dafür.
+- `help_popup.cpp::drawButton()` (das "?") setzt seit diesem Bugfix
+  ebenfalls selbst `setTextSize(1)` - ein Screen, der vorher mit Size 2
+  endet, ließ das "?" sonst überdimensioniert/ausgefranst wirken.
+- Die Kopfzeile prüft seitdem selbst per `LayoutCheck` (eigenes
+  `begin("Kopfzeile")`/`finish()`, unabhängig von der Seiten-Prüfung in
+  `drawBody()`, da `drawHeader()` auch separat beim Uhr-Tick läuft), dass
+  Uhr/Titel/WLAN-Symbol mit ihrer ECHTEN gemessenen Textbreite in ihre
+  Bereiche passen und sich nicht überlappen.
 
 ## Swipe-Struktur (Hauptbildschirm)
 
 - Die Kopfzeile (Uhr links, WLAN-Balken rechts, "Solar Guardian"-Text
   mittig als Button zum Menü, ohne sichtbaren Rahmen) ist fest und wird
   nie durch einen Seitenwechsel neu gezeichnet.
-- Darunter liegt der Seitenbereich - Wischen (links/rechts, ab ca. 50px
-  überwiegend waagerechter Bewegung, siehe `swipe_input.cpp`, Prinzip
-  übernommen aus eiswolfs-toolbox) wechselt zwischen den Seiten, im
-  Rundlauf (nach der letzten kommt wieder die erste und umgekehrt).
+- Darunter liegt der Seitenbereich - Wischen (links/rechts, siehe
+  `swipe_input.cpp`, Prinzip übernommen aus eiswolfs-toolbox) wechselt
+  zwischen den Seiten, im Rundlauf (nach der letzten kommt wieder die
+  erste und umgekehrt). **Empfindlichkeit** (Auftrag "Wischgeste
+  empfindlicher" - vorher musste man "gewaltig drücken"): drei
+  unabhängige Ursachen gefunden und behoben.
+  1. **Druckschwelle des Touch-Chips** (XPT2046): `touched()`/die X/Y-
+     Rohmessung selbst waren an eine feste `Z_THRESHOLD=300` in der
+     Bibliothek gekoppelt, ohne öffentliche Setter-API. Gelöst über
+     einen lokal gepatchten Fork in `lib/XPT2046_Touchscreen/` (Z auf
+     180 gesenkt, siehe dessen `README_PATCH.md`) - bewusst NICHT mehr
+     über `lib_deps` in `platformio.ini` bezogen, damit der Patch bei
+     einem `pio run` nicht durch das Original-Paket überschrieben wird.
+  2. **Druck-Aussetzer beim Gleiten**: `TouchInput::wasTapped()` wertete
+     bisher JEDE einzelne Abfrage ohne Touch sofort als Loslassen - ein
+     kurzer Abfall unter die Druckschwelle mitten in einer Wisch-
+     Bewegung (bei leichtem Druck häufig) brach die Geste ab und ließ
+     die nächste Berührung wie einen komplett neuen, kurzen Tap
+     aussehen. Jetzt toleriert, bis zu `Config::TOUCH_DROPOUT_TOLERANCE_MS`
+     (80ms) ohne erneuten Touch, bevor wirklich "loslassen" gilt -
+     merkt sich dafür die letzte bekannte Position. Wirkt projektweit
+     (ALLE Screens nutzen `wasTapped()`), nicht nur beim Wischen.
+  3. **Schwellenwerte selbst**: `swipe_input.cpp` unterschied bisher nur
+     "ab 50px überwiegend waagerecht = Wisch, sonst Tap" - dazwischen
+     (z.B. 30px schräg) wurde trotzdem ein Tap ausgelöst. Jetzt drei
+     benannte Konstanten in `config.h`: `SWIPE_MIN_DISTANCE_PX` (22,
+     vorher 50), `SWIPE_HORIZONTAL_RATIO` (2 - waagerecht muss
+     mindestens doppelt so groß wie senkrecht sein), `TAP_MAX_DRIFT_PX`
+     (8 - nur darunter gilt sicher "Tap"). Bewegungen DAZWISCHEN (zu
+     weit für einen Tap, aber zu kurz/schräg für einen Wisch) werden
+     jetzt verworfen (`SwipeInput::poll()` liefert `false`), statt
+     versehentlich einen Knopf/eine Kachel auszulösen.
 - Ein Punkte-Indikator unten im Seitenbereich zeigt die aktuelle Seite
   (Systemfarbe) unter den anderen (gedimmt).
 - Seiten sind in `pages.cpp` als Liste mit `draw()`, optionalem
@@ -453,11 +577,16 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
    Aktionsreihe erreichbar, Einmal-Shift (kein Capslock), Klartext.
 3. **Hauptbildschirm mit Wisch-Seiten** (`main_screen.cpp`, `pages.cpp`,
    `swipe_input.cpp`): feste Kopfzeile, darunter Wisch-Seiten im Rundlauf
-   ("Leistung"/"Ertrag"/"Jahre"/"Batterie", Reihenfolge zentral in
-   `pages.cpp::PAGES[]`) mit Punkte-Indikator.
+   ("Übersicht"/"Leistung"/"Ertrag"/"Jahre"/"Batterie", Reihenfolge
+   zentral in `pages.cpp::PAGES[]`, "Übersicht" ist seit Punkt 21 unten
+   die erste Seite nach dem Booten) mit Punkte-Indikator.
 4. **Menü** (`menu_screen.cpp`, für Stift-Bedienung ausgelegt):
    "Netzwerke", "Konto", "Systemfarbe", "Sprache / Language",
-   "Ertragswerte", "Zurücksetzen", "Zurück".
+   "Ertragswerte", "Zurücksetzen", "Zurück". Die Seriennummer ist seit
+   dem Umzug ins Konto (siehe Punkt 20 unten) kein eigener Menüpunkt
+   mehr, sondern ein antippbares Feld im Konto-Screen; der Standort
+   (Punkt 21 unten) hat nie einen eigenen Menüpunkt bekommen - er wird
+   automatisch ermittelt und nur über die Wetterkachel geändert.
 5. **Netzwerke-Verwaltung** (`networks_screen.cpp`,
    `wifi_connect_manager.cpp`): bis zu 3 gespeicherte WLANs, freier Platz
    → Scan+Passwort+Verbindungstest vor dem Speichern, belegter Platz →
@@ -465,6 +594,7 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
    verbundenes Netz mit Haken markiert. Verbindungsaufbau läuft komplett
    im Hintergrund (Fetch-Task), der Hauptbildschirm erscheint sofort.
 6. **Konto** (`account_screen.cpp`): zeigt E-Mail + maskiertes Passwort,
+   darunter das antippbare Seriennummer-Feld (siehe Punkt 20 unten),
    Benutzername/Passwort ändern, Konto löschen (nur Zugangsdaten, WLANs
    bleiben) → führt direkt in die Zugangsdaten-Ersteinrichtung.
 7. **Zurücksetzen** (`reset_screen.cpp`): Werksreset mit Warn-Bildschirm,
@@ -535,19 +665,335 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
     ein 1-2-5-Schema aufgerundet und beschriftet, Hilfslinien in
     gedimmter Systemfarbe, neuester Punkt als kleiner Kreis, Zeitmarken
     "-3h"/"-2h"/"-1h"/"jetzt" darunter) und eine Statuszeile wie auf der
-    Seite "Ertrag" (Tipp darauf löst "jetzt aktualisieren" aus). Alle
+    Seite "Ertrag" (Tipp darauf löst "jetzt aktualisieren" aus) - zeigt
+    im Erfolgsfall "Nächste Abfrage: HH:MM Uhr" statt einer (gegenüber
+    dem "Stand HH:MM" oben darüber redundanten) zweiten Messzeit; die
+    Uhrzeit kommt aus `SolarData::nextFetchAt` (vom Fetch-Task nach jedem
+    Zyklusversuch neu berechnet, siehe `fetch_task.cpp`), "--:--" falls
+    kein Zeitplan bekannt ist (kein Konto/keine Verbindung). Gleiche
+    Änderung auf der Seite "Batterie". Alle
     Offsets sind rechnerisch verkettet (nicht einzeln fest verdrahtet),
     siehe `power_page.cpp` Kommentar am Konstanten-Block — eine erste
     Fassung reichte mit der Statuszeilen-Tippfläche bis in die
     Seitenpunkte-/"?"-Zone hinein, was der (seit der Seite "Jahre")
     zentral in `main_screen.cpp` verankerte Layout-Prüfer direkt beim
     ersten Testlauf gemeldet hat.
+19. **Ladestrom-Schwelle für "Schnellladen"/"Ausgleich"** (`battery_page.
+    cpp::effectiveStatus()`): ein EPEVER Tracer-AN meldete diese beiden
+    Zustände schon bei wenigen mA Ladestrom, optisch irreführend. Beide
+    werden deshalb nur noch angezeigt, wenn `batteryCurrent > 1,0 A` ist;
+    darunter (Rohwert meldet trotzdem Laden) erscheint neutral "Laden
+    (schwach)" (`CHARGE_STATUS_WEAK`/`BATTERY_EXPLAIN_WEAK`). Bei 0 A
+    immer "Kein Laden", unabhängig vom Rohwert. "Erhaltung" (Kategorie 1)
+    ist von der Schwelle nicht betroffen. Der Rohwert-Ladestatus wird
+    jetzt bei JEDER Abfrage geloggt (zuvor nur bei Änderung), zusammen
+    mit dem Batteriestrom, siehe `fetch_task.cpp`. Die Erklärungszeile
+    für "Ausgleich" wurde dabei bewusst abgeschwächt (kein Hinweis mehr
+    auf "höhere Spannung", nur noch "Der Regler meldet
+    Ausgleichsladung.").
+    **Beim Verketten der Offsets in `computeLayout()` die 14px
+    Aufwärts-Reichweite der Statuszeilen-Tippfläche (`timestampTapZone()`)
+    nicht vergessen** — ein fehlendes `+14` im Abstand zwischen
+    Erklärungszeile und Zeitstempel führte hier zu einem echten, vom
+    Layout-Prüfer gemeldeten Übereinanderliegen (siehe Git-Historie/
+    Bugfix), analog zum `SCREEN_HEIGHT`-vs-`areaTop+areaHeight`-Fehler bei
+    der Fusszonen-Formel (siehe `Config::PAGE_FOOTER_RESERVED_H` oben).
+20. **Seriennummer direkt am Gerät** (`serial_number_screen.h/.cpp`):
+    eigener Ersteinrichtung-Screen zwischen Konto und "Los geht's" (mit
+    "Zurück" zu Konto, ohne Datenverlust — `CredentialsScreen::run()`
+    löscht die Eingabefelder seitdem nicht mehr selbst, das übernimmt nur
+    noch `appConfig = AppConfig()` ganz am Anfang der Ersteinrichtung;
+    `CredentialsScreen::run(false)` zeigt dabei "Weiter" statt "Los
+    geht's" und speichert/holt noch keine NTP-Zeit — das erledigt erst
+    `CredentialsScreen::finalizeSetup()`, nachdem auch die Seriennummer
+    eingegeben wurde) sowie derselbe Screen zum späteren Ändern
+    (`SerialNumberScreen::runFromAccount()`, seit dem Umzug "Seriennummer
+    zu Konto" kein eigener Hauptmenüpunkt mehr: `account_screen.cpp`
+    zeigt ein eigenes, antippbares Feld — Beschriftung oben, aktueller
+    Wert darunter, mit kleinem "Zum Ändern antippen"-Hinweis direkt
+    darüber — das diesen Screen öffnet und nach "Zurück"/Speichern wieder
+    zum Konto-Screen zurückkehrt), mit Hinweis vor dem Speichern, dass
+    bei einer anderen Anlage das Ertragsbuch über "Zurücksetzen" neu
+    begonnen werden sollte (reine Info, kein Zwang — das Ertragsbuch wird
+    beim Ändern NICHT automatisch gelöscht). Die ausführliche Erklärung
+    unter dem Eingabefeld (`I18n::Str::SERIAL_NUMBER_HINT`) ist EIN
+    gemeinsamer i18n-Text für Ersteinrichtung UND Konto-Screen (nicht
+    doppelt formuliert) — in der Ersteinrichtung war sie schon vorhanden,
+    im Konto-Screen stand darunter vorher nichts
+    (`SerialNumberScreen::runFromAccount()` ruft seitdem denselben
+    `drawHint()`-Helper auf wie `runFirstTimeSetup()`). Siehe oben
+    ("Solar Guardian Portal API") für Validierung und das
+    automatische Verwerfen alter Batterie-/Leistungs-/Ertragswerte beim
+    Ändern.
+21. **Hauptscreen "Übersicht" + Wetter + Standort** (`home_page.h/.cpp`,
+    `weather_data.h/.cpp`, `weather_client.h/.cpp`, `weather_icons.h/.cpp`,
+    `geocoding_client.h/.cpp`, `location_bridge.h/.cpp`,
+    `location_screen.h/.cpp`, `week_view_screen.h/.cpp`, `page_nav.h/.cpp`):
+    neue erste Wisch-Seite (`pages.cpp::PAGES[0]`, alle anderen Seiten um
+    eins nach hinten verschoben) mit 2x2 gleich großen Kacheln (Wetter/
+    Leistung/Heute/Batterie), gleichmäßiger Abstand, siehe
+    `home_page.cpp::computeLayout()` — **wichtig**: wie jede andere Seite
+    von `Config::SCREEN_HEIGHT - PAGE_FOOTER_RESERVED_H - 8` ausgehen,
+    nicht von `areaTop+areaHeight` (gleicher Fehler wie bei
+    `years_page.cpp`/`battery_page.cpp`, siehe `Config::
+    PAGE_FOOTER_RESERVED_H` oben) — die untere Kachelreihe ragte sonst
+    hinter den "?"-Knopf (vom Layout-Prüfer gemeldeter echter Konflikt,
+    schon beim ersten Testlauf aufgetreten und behoben).
+    - **Wetter** (Open-Meteo.com, kostenlos, ohne Zugangsschlüssel):
+      Abruf läuft im Fetch-Task (Core 0, `fetch_task.cpp::
+      runWeatherFetch()`), eigener 30-Minuten-Takt
+      (`Config::WEATHER_FETCH_INTERVAL_MS`), sofort nach dem WLAN-Verbinden
+      und nach einer Standortänderung, bei Fehler alle 2 Minuten erneut
+      (`Config::WEATHER_RETRY_INTERVAL_MS`) bis zum nächsten Erfolg.
+      Unabhängig vom Solar-Guardian-Konto (`hasLocation && wifiConnected`,
+      nicht `hasAccount`). `WeatherData` (Fetch-Task → Core 1) und
+      `LocationBridge` (Core 1 → Fetch-Task, Standort-Koordinaten) folgen
+      demselben Mutex/Momentaufnahme-Muster wie `SolarData`/
+      `AccountBridge`. Wettersymbole werden rein mit TFT_eSPI-Grundformen
+      gezeichnet (`weather_icons.cpp`, keine Bilddateien) — Code-Gruppen
+      laut Auftrag (0 klar, 1/2 leicht bewölkt, 3 bewölkt, 45/48 Nebel,
+      51-57/61-67/80-82 Regen, 71-77/85/86 Schnee, 95-99 Gewitter), Tag/
+      Nacht aus `is_day`. Bei Abruffehler bleiben die letzten Werte
+      stehen (nur bei Erfolg schreibt `WeatherClient::fetch()` in
+      `WeatherData`). Ortsname/Koordinaten werden NIE geloggt, nur
+      HTTP-Code und Antwortgröße (`[fetch] Wetter: HTTP-Code=... Antwort
+      größe=... Byte`). Symbole sind knallig-bunt mit hellem Rand (Sonne
+      knallgelb/orange mit abwechselnd langen/kurzen Strahlen, Mond
+      warmgelb mit 2-3 Sternen, Wolken reines Weiß mit nur ganz leichtem
+      neutralem Schatten an der Unterseite - KEIN Blauton mehr, bewusst
+      so geändert, nachdem die ursprüngliche hellblaue Wolkenfarbe sich
+      laut Alex' Fotos nicht von den blauen Regentropfen/Schneeflocken
+      abhob; bedeckt helles Neutralgrau, klar dunkler als die weiße
+      Wolke; Regentropfen kräftiges Blau mit weißem Glanzpunkt;
+      Schneeflocken kräftiges Hellblau/Cyan (bewusst NICHT mehr auch
+      weiß, da eine weiße Flocke auf der jetzt weißen Wolke unsichtbar
+      wäre); Gewitterblitz knallgelb mit orangem Rand auf dunkler Wolke;
+      Nebel kräftiges Türkis/Hellblau - alle Farben zentral in
+      `weather_icon_colors.h`). Sonne/Mond bekommen bei ausreichender
+      Größe (`r >= 14px`, siehe `bigEnoughForFace` in
+      `weather_icons.cpp::draw()`) ein kleines Gesicht (zwei Augen +
+      lächelnder Mund) - in der kleinen Wochenansicht bewusst ohne
+      Gesicht. Gezeichnet mit TFT_eSPI's geglätteten Funktionen
+      (`fillSmoothCircle`/`fillSmoothRoundRect`/`drawWedgeLine`) statt
+      treppiger Grundformen - **Falle**: der jeweilige `bg_color`-
+      Parameter muss die Farbe sein, auf der die Form TATSÄCHLICH
+      sitzt (z.B. die Outline-Farbe bei der inneren Füllung über dem
+      Rand, der Sonnen-Körper bei den Augen des Gesichts), sonst
+      entsteht ein sichtbarer dunkler Spalt an der Kante (bereits
+      einmal so aufgetreten und behoben). **Kein Demo-Modus** (wurde
+      kurz eingeführt, dann auf Alex' ausdrücklichen Wunsch wieder
+      komplett entfernt, siehe Git-Historie - war nur zum einmaligen
+      Durchsehen aller Symbole gedacht, kein dauerhaftes Feature): kein
+      langer Druck auf die Wetterkachel, kein Menüpunkt, kein
+      Namenstext unter dem Symbol - ein Tap auf die Wetterkachel öffnet
+      IMMER direkt die Wochenansicht (bzw. den Standort-Screen ohne
+      Standort), nichts anderes.
+    - **Standort - automatisch, notfalls einmalig per Eingabe** (Alex'
+      Entscheidung nach dem ersten Test: KEIN eigener Menüpunkt und KEIN
+      Schritt in der Ersteinrichtung mehr, siehe Git-Historie):
+      - **Automatische Ermittlung über die öffentliche IP-Adresse**
+        (`ip_geolocation_client.h/.cpp`, `ip_location_data.h/.cpp`):
+        läuft im Fetch-Task (Core 0), Hauptdienst `ipwho.is` (liefert
+        Breite/Länge als echte JSON-Zahlen), bei Fehler Rückfall auf den
+        unabhängigen zweiten Anbieter `get.geojs.io` (liefert sie als
+        Text, deshalb `String::toFloat()` statt des `|`-Operators, siehe
+        unten). Takt: sofort nach dem WLAN-Verbinden, danach einmal pro
+        Tag (`Config::IP_LOCATION_DAILY_INTERVAL_MS`), sofort bei einem
+        WLAN-Netzwechsel, bei Fehler alle 2 Minuten erneut - NIE, wenn
+        `appConfig.locationManual` gesetzt ist. Das Ergebnis geht über
+        `IpLocationData` (Fetch-Task → Core 1, gleiches Mutex/
+        Momentaufnahme-Prinzip wie `WeatherData`) an `main_screen.cpp::
+        tick()`, das es NUR bei `!appConfig.locationManual` in
+        `appConfig` übernimmt, speichert und `FetchTask::Command::
+        LocationChanged` sendet (SD-Zugriff bleibt exklusiv auf Core 1).
+      - **Einmalige Eingabe per Antippen** (`location_screen.cpp`):
+        Suche über Nominatim (OpenStreetMap, siehe unten) ODER Knopf
+        "Automatisch ermitteln" (startet die IP-Ermittlung sofort,
+        blockierend mit `FetchTask::pause()/resume()`, setzt
+        `locationManual=false`). Eine Auswahl aus der Trefferliste setzt
+        `locationManual=true` - danach überschreibt die automatische
+        Ermittlung nichts mehr. Erreichbar NUR über die Wetterkachel
+        (ohne Standort) bzw. die Wochenansicht ("Zum Ändern antippen"
+        über dem Ortsnamen, mit Standort) - siehe `home_page.cpp::
+        onTap()`/`week_view_screen.cpp`. Der "ae/oe/ue statt ä/ö/ü"-
+        Hinweis erscheint einmalig beim ersten Öffnen der Tastatur pro
+        Bildschirmbesuch (die Tastatur hat keine Umlaute, siehe
+        `keypad.cpp`).
+      - **Geocoding-Dienst: Nominatim statt Open-Meteo** (wichtiger
+        Bugfix - "Keine Adresse gefunden" bei Postleitzahlen-Eingabe):
+        ein Live-Test (`curl` gegen beide APIs mit einer echten PLZ)
+        zeigte, dass Open-Meteos Geocoding-API den `name=`-Parameter rein
+        als TEXT-Suche behandelt und bei einer deutschen PLZ (z.B.
+        "10115") eine komplett falsche US-Stadt lieferte (deren
+        `postcodes`-Liste die Ziffernfolge nur zufällig enthält) - keine
+        echte Postleitzahlen-Unterstützung, unabhängig vom Client-Code.
+        `geocoding_client.cpp` nutzt deshalb jetzt Nominatim
+        (OpenStreetMap, kostenlos, verlangt aber einen eindeutigen
+        `User-Agent`-Header, siehe `http_get_json.h`s neuer optionaler
+        Parameter): bei 4-5-stelliger Zifferneingabe `postalcode=` mit
+        Rückfallkette DE→AT→CH, sonst `q=<Suchtext>` - beides im Test
+        zuverlässig für PLZ UND Orts-/Stadtnamen. Nominatim liefert
+        `lat`/`lon` als TEXT, nicht als Zahl - `String::toFloat()` statt
+        des `|`-Operators (der bei einer Zahl-als-Text sonst leise auf
+        den Default zurückfällt). Fehler unterschieden: HTTP-/JSON-Fehler
+        → "Keine Verbindung" (wiederverwendet `STATUS_NETWORK_ERROR`),
+        leere Trefferliste → "Nichts gefunden". **Name-Aufbau** (Bugfix:
+        eine PLZ mit nur einem Nominatim-Treffer lieferte oft einen
+        Nebenort statt der eigentlichen Stadt, plus den langen,
+        unübersichtlichen `display_name`): Anfrage mit
+        `addressdetails=1`, Anzeigename wird selbst aus den
+        strukturierten Adressfeldern gebaut, Priorität
+        city > town > municipality > village > suburb > city_district,
+        Postleitzahl in Klammern dahinter, z.B. aus (erfundenen) Rohdaten
+        `{village: "Kleindorf", town: "Großstadt", postcode: "73312"}`
+        wird `"Großstadt (73312)"` (nicht `"Kleindorf"` und nicht der
+        lange `display_name`). Bei genau einem Treffer wird er automatisch
+        übernommen (kein Listen-Umweg), bei mehreren Treffern zeigt
+        `location_screen.cpp::showResultList()` weiterhin eine Liste
+        (doppelte Namen zusammengefasst, Namen umbrechen statt mit "..."
+        gekürzt zu werden).
+      - `app_config.h`: zusätzliches Feld `locationManual` (Version 5,
+        optional, fehlend = `false`).
+    - **Wochenansicht** (`week_view_screen.cpp`): kein eigener
+      Hauptmenüpunkt, nur über Antippen der Wetterkachel erreichbar (nur
+      wenn ein Standort bekannt ist). Ortsname oben mit "Zum Ändern
+      antippen"-Hinweis darunter (öffnet `location_screen.cpp`). 7 Zeilen
+      (Heute/Morgen/Wochentagskürzel), Wochentag wird aus dem
+      Kalenderdatum der Antwort berechnet (`weather_client.cpp::
+      parseDateNoon()`, lokales Mittags-Epoch gegen DST-Randfälle), NICHT
+      aus der Uhr. Sonnenscheindauer nur, wenn sie tatsächlich in den
+      verbleibenden Platz der Zeile passt (echte Pixelbreite geprüft),
+      sonst weggelassen.
+    - **Seitensprung aus einer Kachel** (`page_nav.h/.cpp`): schmaler
+      Umweg, weil `currentPage` privat in `main_screen.cpp` lebt —
+      `HomePage::onTap()` ruft `PageNav::requestPage(index)`,
+      `main_screen.cpp::tick()` prüft das nach jedem `onTap()` und setzt
+      `currentPage` VOR dem Neuzeichnen (sonst würde noch mit der alten
+      Seite gezeichnet).
+    - `app_config.h` Version 5: neue Felder `locationName`/`locationLat`/
+      `locationLon`/`locationSet`/`locationManual`, alle optional gelesen
+      (fehlend = leer/`false`, kein formatVersion-Zweig nötig, siehe
+      `AppConfigStore::load()`).
+22. **Fetch-Task-Absicherung** (unbeaufsichtigter Betrieb, Alex' Wunsch
+    nach einem beobachteten mehrminütigen Haenger bei der
+    Leistungskurve): zwei unabhängige Schutzschichten.
+    - **Gesamt-Zeitlimit pro HTTPS-Abfrage** (`http_deadline_guard.h/.cpp`,
+      `Config::HTTP_TOTAL_TIMEOUT_MS = 20000`): ein `esp_timer`
+      (Software-Timer, läuft im eigenen Task-Kontext) ruft bei Ablauf
+      `WiFiClientSecure::stop()` auf dem gerade aktiven Client auf - das
+      lässt JEDEN blockierenden Aufruf der HTTPClient-Bibliothek
+      (`connect()`/`getString()`) sofort mit einem Fehler zurückkehren.
+      Deckt die GESAMTE Dauer ab (Verbindungsaufbau+Senden+Lesen), nicht
+      nur einzelne Socket-Lesevorgänge - genau das unterschied sich vom
+      vorher schon gesetzten `http.setConnectTimeout()`/`setTimeout()`
+      (bleiben als 10s-Verbindungsaufbau-Teillimit aktiv), die ein
+      Server, der immer wieder (aber zu selten) ein paar Bytes sendet,
+      einzeln unterschreiten kann. Eingebaut in
+      `epever_client.cpp::httpPostJson()` UND `http_get_json.cpp::fetch()`
+      (Wetter/Geocoding) - deckt damit automatisch jede Abfrage ab, die
+      diese beiden gemeinsamen Helfer benutzt. Bei Auslösung:
+      `httpCode=-2` (eigener Sentinel-Wert) + Log-Zeile, der bestehende
+      Wiederholungs-Ablauf greift danach unverändert. **Live getestet**
+      (Auftrag verlangte das ausdrücklich): `EPEVER_BATTERY_URL`
+      testweise auf `https://httpbin.org/delay/8` (antwortet nach 8s)
+      gesetzt, `HTTP_TOTAL_TIMEOUT_MS` testweise auf 3000 - jede Abfrage
+      brach zuverlässig nach 3s ab (`Gesamt-Zeitlimit (3s) ausgeloest`),
+      kein Hängenbleiben, Gerät blieb durchgehend ansprechbar. Danach
+      beide Werte zurückgesetzt.
+    - **Watchdog fürs komplette Haengenbleiben** (`fetch_heartbeat.h/.cpp`,
+      `fetch_watchdog.h/.cpp`): der Fetch-Task meldet nach JEDEM
+      abgeschlossenen Schleifendurchlauf (auch waehrend `pause()`, z.B.
+      WLAN-Scan - das ist kein Haenger) einen Herzschlag
+      (`FetchHeartbeat::beat()`, Mutex-geschuetzter Zeitstempel, gleiches
+      Prinzip wie `WifiStatus`). `FetchWatchdog::tick()` (Core 1,
+      `main.cpp::loop()`) prueft den Abstand: ab 10 Minuten nur Log-
+      Meldung (die "Stand"-Zeiten auf den Seiten frieren dadurch ohnehin
+      schon von selbst ein, weil `SolarData`/`WeatherData` nur bei
+      Erfolg aktualisiert werden - keine extra Logik dafuer noetig), ab
+      15 Minuten `YieldLedger::flush()` (erzwingt das Speichern trotz
+      des sonst geltenden Mindestintervalls) + `esp_restart()`. Bewusst
+      EIN eigener Mechanismus statt `esp_task_wdt`: nur so laesst sich
+      zuerst eine lange Karenzzeit geben und VOR dem Neustart noch
+      geordnet die SD-Karte sichern - ein ausgeloester `esp_task_wdt`
+      wuerde sofort (ueblicherweise Sekunden, nicht Minuten) einen
+      Panic/Reset ohne Gelegenheit zum Aufraeumen ausloesen, und seine
+      globale Zeitschranke (sdkconfig) wuerde sich mit der des
+      Arduino-`loop()`-Tasks ueberschneiden. **Hoechstens 3 Neustarts
+      HINTEREINANDER** (ohne dazwischen einen echten Herzschlag), sonst
+      bleibt das Geraet liegen (Anzeige bleibt bedienbar) statt sich in
+      einer Schleife totzulaufen - der Zaehler steht in einer winzigen
+      Datei (`/SolarGuardian/watchdog.json`), NICHT in `RTC_DATA_ATTR`
+      oder per `time(nullptr)`-Vergleich: beide wurden in einem Live-
+      Test ausprobiert und griffen dort nie (RTC-Speicher ueberlebte
+      den `esp_restart()` auf diesem Board in der Praxis nicht
+      zuverlaessig; die Systemzeit ist direkt nach einem Haenger-
+      Neustart oft noch nicht per NTP synchronisiert). **Zweite
+      gefundene Falle beim Umsetzen**: `SD.open(pfad, FILE_WRITE)`
+      HAENGT beim ESP32-SD-Treiber an, kuerzt die Datei NICHT - ohne
+      vorheriges `SD.remove()` (gleiches Muster wie
+      `app_config.cpp::save()`) sammelten sich mehrere JSON-Objekte
+      hintereinander in der Datei, `deserializeJson()` las beim
+      naechsten Laden dadurch immer nur das ERSTE (also den
+      allerersten je geschriebenen Wert) zurueck - der Zaehler schien
+      dadurch nie hochzuzaehlen, bis das erkannt und behoben wurde.
+      **Live getestet** (verkuerzte Schwellwerte 8s/16s, Herzschlag
+      testweise auskommentiert): Warnung erschien nach 8s, Neustart nach
+      16s (`Reset-Grund: Software (esp_restart)` im Log des naechsten
+      Boots bestaetigt), Zaehler zaehlte korrekt 1→2→3 ueber drei echte
+      Neustarts hoch, beim vierten Versuch blieb das Geraet wie
+      vorgesehen liegen (kein weiterer Neustart). Danach alle
+      Testaenderungen zurueckgesetzt. **Nachtrag** (Auftrag "Neustart-
+      Zaehler", zweite Runde): der Zaehler wurde vorher NUR zurueckgesetzt,
+      wenn WAEHREND DESSELBEN Boots schon gewarnt worden war und sich der
+      Herzschlag seitdem erholt hatte - ein Geraet, das nach einem
+      Watchdog-Neustart einfach wieder normal lief (kein erneuter Stall in
+      diesem Boot), behielt den alten Zaehlerstand fuer immer, bis
+      irgendwann unabhaengige, zeitlich weit auseinanderliegende Vorfaelle
+      sich zu `FETCH_WATCHDOG_MAX_CONSECUTIVE_REBOOTS` aufsummierten. Fix:
+      `SolarData::successfulFetchCount` (steigt bei JEDEM erfolgreichen
+      Ertrags-/Batterie-Zyklus unbedingt, anders als `changeCounter`) wird
+      bei Boot als Basislinie genommen - nach
+      `Config::FETCH_WATCHDOG_RESET_AFTER_SUCCESSFUL_CYCLES` (2) neuen
+      erfolgreichen Zyklen seit dem Boot wird der Zaehler erst zurueckgesetzt.
+      Zusaetzlich gibt das Geraet nach Erreichen der maximalen Neustarts
+      NICHT mehr fuer immer auf: hoechstens ein weiterer Neustart-Versuch
+      pro Stunde (`Config::FETCH_WATCHDOG_HOURLY_RETRY_MS`, millis()-
+      basiert - in diesem Zustand finden ja keine Neustarts im bisherigen
+      Takt mehr statt, millis() laeuft also ungestoert durch), bedienbar
+      bleibt es in der Zwischenzeit durchgehend.
+    - **SD-Schreibfehler-Audit** (Auftrag, nach obigem Fund): JEDE
+      `SD.open(pfad, FILE_WRITE)`-Stelle im Projekt geprueft. Fast alle
+      folgten bereits dem korrekten Tmp-Datei+Umbenennen-Muster
+      (`app_config.cpp`, `yield_ledger.cpp`s `save()`/`ensureYearsFileExists()`/
+      `writeYearToYearsFile()`/`writeHistoryBackup()`, `fetch_watchdog.cpp`).
+      Zwei Stellen OHNE Risiko fuer falsche Werte, aber defensiv ergaenzt:
+      `sd_storage.cpp::migrateHistoryFolder()` (schreibt praktisch nie auf
+      eine bereits existierende Datei, da vorher explizit geprueft) und
+      `yield_ledger.cpp`s Import-Marker-Datei (nur per `SD.exists()`
+      abgefragt, Inhalt wird nie gelesen) - beide bekamen trotzdem ein
+      `SD.remove()` vor dem `FILE_WRITE`, rein zur Konsistenz mit der
+      Projekt-Regel unten. `days.csv` nutzt bewusst `FILE_APPEND` (jede
+      Zeile ist ein neuer Tag, Anhaengen ist hier das gewuenschte
+      Verhalten). **Regel fuer neue SD-Schreibstellen**: wer eine Datei
+      komplett ersetzen will, MUSS sie vorher per `SD.remove()` entfernen
+      (oder ueber eine Tmp-Datei + `SD.rename()` schreiben) - `FILE_WRITE`
+      haengt beim ESP32-SD-Treiber IMMER an, kuerzt nie.
+    - **Reset-Grund-Log** (`main.cpp::logResetReason()`, `esp_reset_reason()`):
+      bei JEDEM Start, nicht nur nach einem Watchdog-Neustart - damit
+      sich im Serial-Log nachvollziehen laesst, ob ein Neustart vom
+      Watchdog, einem Stromausfall, einem Absturz o.ae. kam.
+    - Core 1 (Anzeige/Touch) wartet nie auf den Fetch-Task - beide
+      Schutzschichten leben vollstaendig auf/fuer Core 0, Core 1 liest
+      nur einen Mutex-geschuetzten Zeitstempel (`FetchHeartbeat::
+      msSinceLastBeat()`, nicht-blockierend) und schreibt im Ernstfall
+      selbst (wie ohnehin schon ueblich) auf die SD-Karte.
 
 ## Code-Struktur
 
 - `config.h` — alle Konstanten (Pins, Größen, Zeiten, Farbpalette, API-URLs)
 - `app_config.h/.cpp` — Konfigurationsstruktur (3 WLAN-Plätze, Sprache,
-  Geräte-Seriennummer) + SD-Laden/Speichern + Versionsmigration (1→2→3→4)
+  Geräte-Seriennummer, Wetter-Standort) + SD-Laden/Speichern +
+  Versionsmigration (1→2→3→4→5)
 - `display.h/.cpp` — TFT-Objekt, Init, Systemfarbe
 - `touch_input.h/.cpp` — Touch-Rohwerte, Kalibrierung, Tap-Erkennung
 - `swipe_input.h/.cpp` — Wisch-Gesten-Erkennung (links/rechts)
@@ -563,11 +1009,36 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
   über die 3 gespeicherten Plätze, läuft NUR im Fetch-Task (Core 0)
 - `wifi_status.h/.cpp` — Fetch-Task → Core 1: aktuell verbundener Platz
 - `account_bridge.h/.cpp` — Core 1 → Fetch-Task: Zugangsdaten-Kopie
+- `location_bridge.h/.cpp` — Core 1 → Fetch-Task: Wetter-Standort-Kopie
+  (Breite/Länge), gleiches Prinzip wie `account_bridge.h`
 - `solar_data.h/.cpp` — Fetch-Task → Core 1: Solaranlagen-Daten + Status
+- `weather_data.h/.cpp` — Fetch-Task → Core 1: Wetterdaten (aktuell + 7
+  Tage Vorhersage), gleiches Mutex/Momentaufnahme-Prinzip wie
+  `solar_data.h`
 - `fetch_task.h/.cpp` — der Fetch-Task selbst (Core 0), Befehls-Queue,
-  Pause/Resume, Ertrags-/Batterie-Zeitplan
+  Pause/Resume, Ertrags-/Batterie-/Wetter-Zeitplan
 - `epever_client.h/.cpp` — HTTPS-Zugriff auf das Solar Guardian Portal
   (Login, Ertrag, Batterie/Verlauf)
+- `http_get_json.h/.cpp` — gemeinsamer HTTPS-GET-Helfer fürs Wetter/
+  Geocoding (gleiches Grundprinzip wie `epever_client.cpp`s POST-Helfer,
+  aber GET und ohne Appid/Zugangsdaten-Header)
+- `weather_client.h/.cpp` — Open-Meteo-Wetterabfrage (aktuell + 7-Tage-
+  Vorhersage), schreibt in `weather_data.h`
+- `weather_icons.h/.cpp` — zeichnet Wettersymbole rein mit TFT_eSPI-
+  Grundformen (keine Bilddateien), Größe als Parameter
+- `geocoding_client.h/.cpp` — Orts-/Postleitzahlensuche ueber Nominatim
+  (bis zu 5 Treffer) - NICHT Open-Meteo, siehe "Fetch-Task-Absicherung"/
+  Punkt 21 oben
+- `ip_geolocation_client.h/.cpp` — automatische Standort-Ermittlung ueber
+  die oeffentliche IP-Adresse (ipwho.is, Rueckfall geojs.io)
+- `ip_location_data.h/.cpp` — Fetch-Task → Core 1: Ergebnis der
+  automatischen IP-Standort-Ermittlung
+- `http_deadline_guard.h/.cpp` — Gesamt-Zeitlimit (20s) fuer jede HTTPS-
+  Abfrage im Fetch-Task, unabhaengig von Pro-Socket-Timeouts
+- `fetch_heartbeat.h/.cpp` — Lebenszeichen des Fetch-Tasks fuer Core 1
+  (Mutex-geschuetzter Zeitstempel)
+- `fetch_watchdog.h/.cpp` — Core 1: ueberwacht den Herzschlag, loggt/
+  startet notfalls kontrolliert neu (siehe "Fetch-Task-Absicherung" oben)
 - `epever_datapoints.h` — Datenpunkt-IDs der Port-7002-Abfrage
 - `epever_auth_headers.h` — noch unbekannte, standardmäßig leere
   Zusatz-Header für Port 7002 (`languagetype`/`sdk-version`/
@@ -575,13 +1046,20 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
 - `yield_ledger.h/.cpp` — das Ertragsbuch (Core 1, SD-gestützt), schreibt
   auch das History-Backup und `years.json`
 - `seed_years.h` — Startwerte für `years.json`, falls die Datei fehlt
+- `steffen_import.h` — einmaliger historischer Ertragsimport für ein
+  bestimmtes Gerät, siehe "Ertragsbuch" oben
 - `calibration_screen.h/.cpp`, `wifi_select_screen.h/.cpp`,
-  `credentials_screen.h/.cpp` — Ersteinrichtung-Bildschirme
-  (`wifi_select_screen`/`credentials_screen` werden auch von
-  Netzwerke/Konto wiederverwendet)
-- `pages.h/.cpp`, `power_page.h/.cpp`, `yield_page.h/.cpp`,
-  `years_page.h/.cpp`, `battery_page.h/.cpp` — die per Wisch-Geste
-  erreichbaren Hauptseiten
+  `credentials_screen.h/.cpp`, `serial_number_screen.h/.cpp`,
+  `location_screen.h/.cpp` — Ersteinrichtung-Bildschirme
+  (`wifi_select_screen`/`credentials_screen`/`serial_number_screen`/
+  `location_screen` werden auch von Netzwerke/Konto/Menü wiederverwendet)
+- `pages.h/.cpp`, `home_page.h/.cpp`, `power_page.h/.cpp`,
+  `yield_page.h/.cpp`, `years_page.h/.cpp`, `battery_page.h/.cpp` — die
+  per Wisch-Geste erreichbaren Hauptseiten (`home_page` ist Seite 1)
+- `page_nav.h/.cpp` — schmaler Umweg, damit eine Seite (z.B. `home_page`)
+  zu einer anderen Wisch-Seite springen kann
+- `week_view_screen.h/.cpp` — Wochenansicht (kein Hauptmenüpunkt, nur
+  über die Wetterkachel erreichbar)
 - `main_screen.h/.cpp`, `menu_screen.h/.cpp`, `networks_screen.h/.cpp`,
   `account_screen.h/.cpp`, `color_picker_screen.h/.cpp`,
   `language_screen.h/.cpp`, `reset_screen.h/.cpp`,

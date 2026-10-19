@@ -21,6 +21,7 @@ namespace {
 
     void showMessage(const char* msg, uint16_t color) {
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(color, TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(msg, Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
@@ -59,6 +60,7 @@ void run() {
     bool done = false;
     while (!done) {
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(TFT_RED, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::RESET_WARNING_TITLE), Config::SCREEN_WIDTH / 2, 20);

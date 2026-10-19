@@ -19,6 +19,13 @@ namespace YieldLedger {
     // die Seite "Ertrag" gerade angezeigt wird.
     void tick();
 
+    // Schreibt sofort auf die SD-Karte, falls ungespeicherte Aenderungen
+    // anstehen (umgeht das normale Mindestintervall, siehe
+    // Config::YIELD_SAVE_MIN_INTERVAL_MS) - vor einem erzwungenen Neustart
+    // aufrufen (siehe fetch_watchdog.h), damit kein Tagesertrag verloren
+    // geht. NUR von Core 1 aufrufen (wie tick(), benutzt die SD-Karte).
+    void flush();
+
     struct Values {
         float todayKwh = 0.0f;
         float weekKwh = 0.0f;  // gleitendes 7-Tage-Fenster (heute + 6 Vortage)

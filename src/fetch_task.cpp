@@ -3,7 +3,14 @@
 #include "wifi_status.h"
 #include "solar_data.h"
 #include "account_bridge.h"
+#include "location_bridge.h"
 #include "epever_client.h"
+#include "weather_client.h"
+#include "weather_data.h"
+#include "ip_geolocation_client.h"
+#include "ip_location_data.h"
+#include "fetch_heartbeat.h"
+#include "http_deadline_guard.h"
 #include "config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -37,15 +44,37 @@ namespace {
     String currentDeviceNo;
     String currentToken;
     bool hasAccount = false;
+    bool accountInitialized = false; // false bis zum ersten applyAccountSnapshot()-Aufruf
     bool needsLogin = false;
     uint8_t consecutiveFailures = 0;
     uint32_t lastFetchAttemptMs = 0;
+    time_t lastSentNextFetchAt = -1; // siehe runFetchCycle()-Aufrufstelle, Anti-Flacker-Bremse
     uint32_t lastManualRefreshMs = 0;
     bool forceFetchNow = false;
     bool firstFetchHeapLogged = false;
     bool firstBatteryHeapLogged = false;
     bool firstPowerCurveHeapLogged = false;
     bool wifiWasConnected = false;
+
+    // Wetter-Standort (siehe location_bridge.h) - unabhaengig vom
+    // Solar-Guardian-Konto, deshalb eigene Felder statt in
+    // currentEmail/currentPassword/currentDeviceNo mitgefuehrt.
+    float currentLat = 0.0f;
+    float currentLon = 0.0f;
+    bool hasLocation = false;
+    bool locationIsManual = false;
+    uint32_t lastWeatherFetchAttemptMs = 0;
+    bool forceWeatherFetchNow = false;
+    uint8_t weatherConsecutiveFailures = 0;
+
+    // Automatische IP-Standort-Ermittlung (siehe ip_geolocation_client.h) -
+    // eigener Zeitplan, unabhaengig vom Wetter-Takt: direkt nach dem
+    // WLAN-Verbinden (erster Versuch), danach einmal pro Tag, bei jedem
+    // WLAN-Netzwechsel sofort, bei Fehler alle 2 Minuten erneut - immer
+    // NUR, wenn der Standort nicht von Hand gesetzt wurde.
+    uint32_t lastIpLocationAttemptMs = 0;
+    uint8_t ipLocationConsecutiveFailures = 0;
+    uint8_t lastWifiSlotForLocation = 255;
 
     // Port-7002 (Batterie/History) - chargeStatus-Logging nur bei
     // Aenderung.
@@ -56,6 +85,18 @@ namespace {
 
     void applyAccountSnapshot() {
         AccountBridge::Snapshot snap = AccountBridge::get();
+
+        // Geaenderte Seriennummer (nicht beim allerersten Aufruf beim
+        // Taskstart) verwirft die bisherigen Batterie-/Leistungs-/
+        // Ertragswerte - sonst wuerden kurz noch die Zahlen der alten
+        // Anlage angezeigt, waehrend die erste Abfrage mit der neuen
+        // Nummer laeuft (siehe Auftrag "Seriennummer am Geraet aendern").
+        if (accountInitialized && snap.deviceNo != currentDeviceNo) {
+            SolarData::resetForDeviceChange();
+            Serial.println("[fetch] Geraete-Seriennummer geaendert - alte Werte verworfen, neue Abfrage laeuft");
+        }
+        accountInitialized = true;
+
         currentEmail = snap.email;
         currentPassword = snap.password;
         currentDeviceNo = snap.deviceNo;
@@ -66,6 +107,49 @@ namespace {
         lastFetchAttemptMs = 0; // beim naechsten Tick (mit WLAN) sofort faellig
         SolarData::setFetchStatus(hasAccount ? SolarData::FetchStatus::LoggingIn
                                               : SolarData::FetchStatus::NoAccount);
+    }
+
+    // Wetter-Standort (siehe location_bridge.h) - unabhaengig vom
+    // Solar-Guardian-Konto, deshalb eigene kleine Snapshot-Funktion statt
+    // in applyAccountSnapshot() mitgefuehrt. Loest bei einer Aenderung
+    // sofort eine neue Wetterabfrage aus (naechster Tick), statt auf den
+    // 30-Minuten-Takt zu warten.
+    void applyLocationSnapshot() {
+        LocationBridge::Snapshot snap = LocationBridge::get();
+        currentLat = snap.lat;
+        currentLon = snap.lon;
+        hasLocation = snap.valid;
+        locationIsManual = snap.manual;
+        WeatherData::setLocationSet(hasLocation);
+        weatherConsecutiveFailures = 0;
+        lastWeatherFetchAttemptMs = 0; // beim naechsten Tick (mit WLAN) sofort faellig
+    }
+
+    // Automatische IP-Standort-Ermittlung - Ortsname/Koordinaten werden
+    // NIE geloggt (Auftrag), nur HTTP-Code und Erfolg/Fehlschlag.
+    void runIpLocationDetect() {
+        IpGeolocationClient::Result result;
+        int httpCode = -1;
+        bool ok = IpGeolocationClient::detect(result, &httpCode);
+        Serial.printf("[fetch] IP-Standort-Ermittlung: HTTP-Code=%d erfolgreich=%s\n", httpCode, ok ? "ja" : "nein");
+        if (ok) {
+            IpLocationData::setResult(result.lat, result.lon, result.name, true);
+            ipLocationConsecutiveFailures = 0;
+        } else {
+            ipLocationConsecutiveFailures++;
+        }
+    }
+
+    // Wetterabfrage (Open-Meteo, siehe weather_client.h) - unabhaengig vom
+    // Solar-Guardian-Konto, laeuft auch ohne eingerichtetes Portal-Konto.
+    // Ortsname/Koordinaten werden NIE geloggt (Auftrag), nur HTTP-Code und
+    // Antwortgroesse.
+    void runWeatherFetch() {
+        int httpCode = -1;
+        size_t responseBytes = 0;
+        bool ok = WeatherClient::fetch(currentLat, currentLon, &httpCode, &responseBytes);
+        Serial.printf("[fetch] Wetter: HTTP-Code=%d Antwortgroesse=%u Byte\n", httpCode, (unsigned)responseBytes);
+        weatherConsecutiveFailures = ok ? 0 : (uint8_t)(weatherConsecutiveFailures + 1);
     }
 
     // Batterie-/History-Abfrage (Port 7002) - Authentifizierung ueber den
@@ -118,6 +202,16 @@ namespace {
                     Serial.printf("[fetch] ladestatus raw=%.0f\n", result.chargeStatus.value);
                 }
             }
+            // Zusaetzlich zum Nur-bei-Aenderung-Log oben: Rohwert +
+            // Batteriestrom bei JEDER Abfrage, damit sich Faelle wie
+            // "Ausgleich bei 50mA" im Log nachvollziehen lassen (siehe
+            // battery_page.cpp effectiveStatus() - ab 1,0A gilt
+            // Schnellladen/Ausgleich erst als bestaetigt).
+            if (!result.chargeStatus.isText) {
+                Serial.printf("[fetch] ladestatus raw=%.0f I=%.2fA\n",
+                              result.chargeStatus.value,
+                              result.current.valid ? result.current.value : 0.0f);
+            }
             if (result.chargeStatus.isText) {
                 SolarData::setChargeStatusText(result.chargeStatus.text.c_str());
             } else {
@@ -169,6 +263,17 @@ namespace {
         }
 
         Serial.printf("[fetch] Leistungskurve: HTTP-Code=%d status=%d Punkte=%u\n", httpCode, apiStatus, (unsigned)count);
+        if (count > 0) {
+            // points[] ist neuester zuerst (API-Reihenfolge) - points[0]
+            // ist damit der juengste, points[count-1] der aelteste
+            // Zeitstempel im 3-Stunden-Fenster (Auftrag: erster/letzter
+            // Zeitstempel der Kurve mitloggen).
+            struct tm tOld, tNew;
+            localtime_r(&points[count - 1].time, &tOld);
+            localtime_r(&points[0].time, &tNew);
+            Serial.printf("[fetch] Leistungskurve Zeitfenster: %02d:%02d bis %02d:%02d (%u Punkte)\n",
+                          tOld.tm_hour, tOld.tm_min, tNew.tm_hour, tNew.tm_min, (unsigned)count);
+        }
 
         if (!ok) return false;
 
@@ -247,6 +352,14 @@ namespace {
         runBatteryFetch(dailyFromDatapoint, dailyFromDatapointValid);
         runPowerCurveFetch();
 
+        // Rohwerte dieser Abfrage gesammelt loggen (Auftrag "Seite
+        // Leistung" Teil D) - keine Zugangsdaten, nur Messwerte.
+        {
+            SolarData::Data snap = SolarData::snapshot();
+            Serial.printf("[fetch] Rohwerte: Leistung=%.0fW Spannung=%.1fV Strom=%.2fA\n",
+                          (double)snap.currentPowerW, (double)snap.pvVoltage, (double)snap.pvCurrent);
+        }
+
         if (dailyFromDatapointValid) {
             SolarData::setDailySource(dailyFromDatapoint, time(nullptr), true);
         } else {
@@ -280,6 +393,9 @@ namespace {
             case Command::AccountChanged:
                 applyAccountSnapshot();
                 break;
+            case Command::LocationChanged:
+                applyLocationSnapshot();
+                break;
             case Command::LanguageChanged:
                 // Noch kein Effekt (betrifft nur Core 1, Sprache steckt
                 // nicht in den API-Antworten) - Befehl bleibt fuer
@@ -301,12 +417,19 @@ namespace {
 
         WifiConnectManager::begin();
         applyAccountSnapshot();
+        applyLocationSnapshot();
 
         uint32_t lastHeapLogMs = millis();
 
         for (;;) {
             if (pauseRequested) {
                 pausedAck = true;
+                // Absichtlich pausiert (z.B. WLAN-Scan/Verbindungstest auf
+                // Core 1, siehe FetchTask::pause()) ist kein Haengenbleiben
+                // - Herzschlag trotzdem weitergeben, sonst koennte der
+                // Watchdog einen laengeren, ganz normalen Scan faelschlich
+                // als Haenger werten.
+                FetchHeartbeat::beat();
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
@@ -320,9 +443,9 @@ namespace {
             if (!manualDisconnect) WifiConnectManager::tick();
 
             bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+            bool justConnected = wifiConnected && !wifiWasConnected;
             if (hasAccount && wifiConnected) {
                 uint32_t now = millis();
-                bool justConnected = !wifiWasConnected;
                 uint32_t interval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
                                      ? Config::EPEVER_RETRY_INTERVAL_MS
                                      : Config::EPEVER_FETCH_INTERVAL_MS;
@@ -333,8 +456,87 @@ namespace {
                     forceFetchNow = false;
                     runFetchCycle();
                 }
+                // Geplante naechste Abfrage fuer die Anzeige (Auftrag
+                // "Naechste Abfrage" statt der doppelten "Messung"-Zeile,
+                // siehe power_page.cpp/battery_page.cpp) - NACH dem
+                // eigentlichen Versuch neu berechnen, da runFetchCycle()
+                // consecutiveFailures aendern kann (Normal-/Retry-Takt).
+                // lastFetchAttemptMs steht zu diesem Zeitpunkt schon auf
+                // dem Stand des (ggf. gerade eben erfolgten) letzten
+                // Versuchs - die Formel gilt damit fuer beide Faelle
+                // (gerade abgefragt oder noch wartend) gleich.
+                {
+                    uint32_t nextInterval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
+                                             ? Config::EPEVER_RETRY_INTERVAL_MS
+                                             : Config::EPEVER_FETCH_INTERVAL_MS;
+                    int32_t msUntilNext = (int32_t)(lastFetchAttemptMs + nextInterval - now);
+                    if (msUntilNext < 0) msUntilNext = 0;
+                    time_t candidateNextAt = time(nullptr) + (time_t)(msUntilNext / 1000);
+                    // NUR bei echter Aenderung schreiben - SolarData::
+                    // setNextFetchAt() erhoeht IMMER changeCounter, auch
+                    // wenn der Wert gleich bleibt. Ohne diese Bremse lief
+                    // das bei JEDEM Tick (alle ~200ms), liess alle Seiten,
+                    // die SolarData lesen, im selben Takt flackern - war
+                    // die Hauptursache des gemeldeten Flackerns (siehe
+                    // CLAUDE.md "Nur bei echter Aenderung neu zeichnen").
+                    if (candidateNextAt != lastSentNextFetchAt) {
+                        lastSentNextFetchAt = candidateNextAt;
+                        SolarData::setNextFetchAt(candidateNextAt);
+                    }
+                }
+            }
+
+            // Wetter: unabhaengig vom Solar-Guardian-Konto, laeuft sobald
+            // ein Standort gewaehlt ist und WLAN steht. Eigener Takt (alle
+            // 30 Minuten, siehe Config::WEATHER_FETCH_INTERVAL_MS), sofort
+            // nach dem Verbinden und nach einer Standort-Aenderung
+            // (lastWeatherFetchAttemptMs wird dafuer in
+            // applyLocationSnapshot() auf 0 gesetzt).
+            if (hasLocation && wifiConnected) {
+                uint32_t now = millis();
+                uint32_t interval = (weatherConsecutiveFailures >= 1)
+                                     ? Config::WEATHER_RETRY_INTERVAL_MS
+                                     : Config::WEATHER_FETCH_INTERVAL_MS;
+                bool due = forceWeatherFetchNow || justConnected || lastWeatherFetchAttemptMs == 0 ||
+                           (now - lastWeatherFetchAttemptMs >= interval);
+                if (due) {
+                    lastWeatherFetchAttemptMs = now;
+                    forceWeatherFetchNow = false;
+                    runWeatherFetch();
+                }
+            }
+
+            // Automatische IP-Standort-Ermittlung (siehe Auftrag "Standort
+            // automatisch, notfalls einmalig per Eingabe") - NIE, wenn von
+            // Hand gesetzt. Ausloeser: erster Versuch sobald WLAN steht,
+            // danach einmal pro Tag, sofort bei einem WLAN-Netzwechsel,
+            // bei Fehler alle 2 Minuten erneut.
+            if (wifiConnected && !locationIsManual) {
+                uint8_t currentSlot = WifiStatus::get().slot;
+                bool networkChanged = justConnected && lastWifiSlotForLocation != 255 &&
+                                       currentSlot != lastWifiSlotForLocation;
+                uint32_t now = millis();
+                uint32_t interval = (ipLocationConsecutiveFailures >= 1)
+                                     ? Config::WEATHER_RETRY_INTERVAL_MS
+                                     : Config::IP_LOCATION_DAILY_INTERVAL_MS;
+                bool due = lastIpLocationAttemptMs == 0 || networkChanged ||
+                           (now - lastIpLocationAttemptMs >= interval);
+                if (due) {
+                    lastIpLocationAttemptMs = now;
+                    runIpLocationDetect();
+                }
+                lastWifiSlotForLocation = currentSlot;
             }
             wifiWasConnected = wifiConnected;
+
+            // Lebenszeichen fuer den Watchdog auf Core 1 (siehe
+            // fetch_watchdog.h) - nach JEDEM abgeschlossenen
+            // Schleifendurchlauf, auch wenn an diesem Durchlauf keine
+            // Abfrage faellig war. Ein Haengenbleiben INNERHALB einer der
+            // obigen Abfragen (trotz Gesamt-Zeitlimit theoretisch nie
+            // laenger als Config::HTTP_TOTAL_TIMEOUT_MS) verhindert dann
+            // zuverlaessig den naechsten Herzschlag.
+            FetchHeartbeat::beat();
 
             uint32_t now = millis();
             if (now - lastHeapLogMs >= HEAP_LOG_INTERVAL_MS) {
@@ -351,10 +553,16 @@ namespace {
 
 void start() {
     SolarData::init();
+    WeatherData::init();
+    IpLocationData::init();
     WifiStatus::init();
-    // AccountBridge::init() + der erste set() MUESSEN von main.cpp VOR
-    // diesem Aufruf passiert sein, siehe account_bridge.h - sonst wuerde
-    // applyAccountSnapshot() im Task (unten) mangels Mutex nichts lesen.
+    FetchHeartbeat::init();
+    HttpDeadlineGuard::init();
+    // AccountBridge::init()/LocationBridge::init() + der erste set()
+    // MUESSEN von main.cpp VOR diesem Aufruf passiert sein, siehe
+    // account_bridge.h/location_bridge.h - sonst wuerden
+    // applyAccountSnapshot()/applyLocationSnapshot() im Task (unten)
+    // mangels Mutex nichts lesen.
     commandQueue = xQueueCreate(4, sizeof(Command));
 
     xTaskCreatePinnedToCore(taskFn, "fetch", STACK_SIZE, nullptr, PRIORITY, &taskHandle, CORE_ID);

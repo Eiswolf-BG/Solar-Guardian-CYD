@@ -6,6 +6,7 @@
 #include "app_config.h"
 #include "help_popup.h"
 #include "layout_utils.h"
+#include "layout_check.h"
 #include "i18n.h"
 #include "config.h"
 
@@ -24,6 +25,7 @@ namespace {
     void showMessage(const char* msg) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(msg, Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
@@ -84,8 +86,10 @@ namespace {
 void run() {
     bool done = false;
     while (!done) {
+        LayoutCheck::begin("Ertragswerte");
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::MENU_ITEM_YIELD_VALUES), Config::SCREEN_WIDTH / 2, 14);
@@ -145,15 +149,36 @@ void run() {
         int16_t noteY = (int16_t)(yearBtn.y + yearBtn.h + ROW_GAP);
         Rect backBtn  = {10, (int16_t)(noteY + NOTE_H + ROW_GAP), (int16_t)(Config::SCREEN_WIDTH - 20), ROW_H};
 
+        // Fuer Button-Beschriftungen immer explizit Size 1 setzen statt
+        // sich auf den von der Zusammenfassungs-Schleife (fitText) zuletzt
+        // gesetzten Wert zu verlassen - sonst koennte containedRect() hier
+        // eine falsche (zu grosse) Textbreite/-hoehe pruefen.
+        tft.setTextSize(1);
         tft.drawRoundRect(monthBtn.x, monthBtn.y, monthBtn.w, monthBtn.h, 4, accent);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString(I18n::t(I18n::Str::SET_MONTH_BUTTON), monthBtn.x + monthBtn.w / 2, monthBtn.y + monthBtn.h / 2);
+        const char* monthLabel = I18n::t(I18n::Str::SET_MONTH_BUTTON);
+        tft.drawString(monthLabel, monthBtn.x + monthBtn.w / 2, monthBtn.y + monthBtn.h / 2);
         tft.setTextDatum(TL_DATUM);
+        {
+            int16_t tw = tft.textWidth(monthLabel);
+            int16_t th = tft.fontHeight();
+            LayoutCheck::containedRect("Monat-setzen-Beschriftung", monthBtn.x, monthBtn.y, monthBtn.w, monthBtn.h,
+                                        (int16_t)(monthBtn.x + monthBtn.w / 2 - tw / 2),
+                                        (int16_t)(monthBtn.y + monthBtn.h / 2 - th / 2), tw, th);
+        }
 
         tft.drawRoundRect(yearBtn.x, yearBtn.y, yearBtn.w, yearBtn.h, 4, accent);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString(I18n::t(I18n::Str::SET_YEAR_BUTTON), yearBtn.x + yearBtn.w / 2, yearBtn.y + yearBtn.h / 2);
+        const char* yearLabel = I18n::t(I18n::Str::SET_YEAR_BUTTON);
+        tft.drawString(yearLabel, yearBtn.x + yearBtn.w / 2, yearBtn.y + yearBtn.h / 2);
         tft.setTextDatum(TL_DATUM);
+        {
+            int16_t tw = tft.textWidth(yearLabel);
+            int16_t th = tft.fontHeight();
+            LayoutCheck::containedRect("Jahr-setzen-Beschriftung", yearBtn.x, yearBtn.y, yearBtn.w, yearBtn.h,
+                                        (int16_t)(yearBtn.x + yearBtn.w / 2 - tw / 2),
+                                        (int16_t)(yearBtn.y + yearBtn.h / 2 - th / 2), tw, th);
+        }
 
         tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
@@ -163,8 +188,18 @@ void run() {
 
         tft.drawRoundRect(backBtn.x, backBtn.y, backBtn.w, backBtn.h, 4, accent);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString(I18n::t(I18n::Str::BACK), backBtn.x + backBtn.w / 2, backBtn.y + backBtn.h / 2);
+        const char* backLabel = I18n::t(I18n::Str::BACK);
+        tft.drawString(backLabel, backBtn.x + backBtn.w / 2, backBtn.y + backBtn.h / 2);
         tft.setTextDatum(TL_DATUM);
+        {
+            int16_t tw = tft.textWidth(backLabel);
+            int16_t th = tft.fontHeight();
+            LayoutCheck::containedRect("Zurueck-Beschriftung", backBtn.x, backBtn.y, backBtn.w, backBtn.h,
+                                        (int16_t)(backBtn.x + backBtn.w / 2 - tw / 2),
+                                        (int16_t)(backBtn.y + backBtn.h / 2 - th / 2), tw, th);
+        }
+
+        LayoutCheck::finish();
 
         TouchInput::Point tap;
         while (true) {

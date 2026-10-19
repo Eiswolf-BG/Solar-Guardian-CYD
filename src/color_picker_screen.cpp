@@ -38,6 +38,7 @@ void run() {
     while (!done) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::COLOR_PICKER_TITLE), Config::SCREEN_WIDTH / 2, 14);

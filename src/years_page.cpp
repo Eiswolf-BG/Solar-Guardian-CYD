@@ -95,7 +95,7 @@ namespace {
     }
 }
 
-void draw(int16_t areaTop, int16_t /*areaHeight*/) {
+void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
     uint16_t accent = Display::systemColor();
     uint16_t dimAccent = dimColor(accent);
 

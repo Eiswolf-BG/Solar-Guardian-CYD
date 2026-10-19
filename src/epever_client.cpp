@@ -1,6 +1,7 @@
 #include "epever_client.h"
 #include "epever_datapoints.h"
 #include "epever_auth_headers.h"
+#include "http_deadline_guard.h"
 #include "config.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -53,6 +54,11 @@ namespace {
             }
         }
 
+        // Gesamt-Zeitlimit (siehe http_deadline_guard.h) - deckt
+        // Verbindungsaufbau, Senden UND Lesen zusammen ab, nicht nur
+        // einzelne Socket-Operationen (siehe CLAUDE.md
+        // "Fetch-Task-Absicherung").
+        HttpDeadlineGuard::arm(&client, Config::HTTP_TOTAL_TIMEOUT_MS);
         result.httpCode = http.POST((uint8_t*)body.c_str(), body.length());
         if (result.httpCode == 200) {
             result.contentLength = http.getSize();
@@ -69,6 +75,12 @@ namespace {
             result.jsonOk = !err;
             result.jsonErr = err.c_str();
         }
+        if (HttpDeadlineGuard::lastCallTimedOut()) {
+            Serial.printf("[fetch] Gesamt-Zeitlimit (%lus) ausgeloest - Verbindung abgebrochen\n",
+                          (unsigned long)(Config::HTTP_TOTAL_TIMEOUT_MS / 1000));
+            result.httpCode = -2; // eigener Sentinel-Wert, ungleich jedem echten HTTP-Code
+        }
+        HttpDeadlineGuard::disarm();
         http.end();
         return result;
     }
@@ -199,7 +211,13 @@ namespace {
             JsonArray points = item["list"];
             if (points.size() == 0) break;
             JsonObject newest = points[0];
-            long long t = newest["time"] | 0; // ms
+            // "0LL" (nicht "0") als Default - ArduinoJsons "|"-Operator
+            // leitet den Zieltyp vom LITERAL des Defaults ab, nicht vom
+            // Variablentyp links. Mit "0" (int) ist is<int>() fuer einen
+            // ms-Epoch-Zeitstempel (~1,7*10^12, passt nicht in 32 Bit)
+            // immer false, wodurch IMMER der Default (0) zurueckkommt -
+            // der Zeitstempel war dadurch bislang immer 0 (01:00 CET).
+            long long t = newest["time"] | 0LL; // ms
             p.time = (time_t)(t / 1000);
             JsonVariant val = newest["value"];
             if (val.is<float>() || val.is<int>() || val.is<long>()) {
@@ -376,7 +394,11 @@ bool fetchPowerCurve(const String& deviceNo, const String& token,
         JsonArray pts = item["list"];
         for (JsonObject p : pts) {
             if (outCount >= POWER_CURVE_MAX_POINTS) break;
-            long long t = p["time"] | 0;
+            // Gleicher Bugfix wie oben in extractPoint() - "0LL" statt
+            // "0", sonst wird der ms-Epoch-Zeitstempel immer auf 0
+            // (01:00 CET) zurueckgesetzt (ArduinoJsons "|" leitet den
+            // Zieltyp vom Default-Literal ab, nicht vom Variablentyp).
+            long long t = p["time"] | 0LL;
             float w = p["value"] | 0.0f;
             points[outCount].time = (time_t)(t / 1000);
             points[outCount].watts = w;

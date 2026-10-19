@@ -19,6 +19,7 @@ namespace {
     void drawCross(int16_t x, int16_t y, uint8_t stepNum, uint8_t stepCount) {
         uint16_t accent = Display::systemColor();
         tft.fillScreen(TFT_BLACK);
+        tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
         tft.setTextColor(accent, TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         char buf[48];
@@ -112,6 +113,7 @@ void run() {
     TouchInput::setCalibration(swapXY, xRawMin, xRawMax, yRawMin, yRawMax);
 
     tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
     tft.setTextColor(Display::systemColor(), TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.drawString(I18n::t(I18n::Str::CALIBRATION_DONE), Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);

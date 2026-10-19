@@ -25,6 +25,7 @@ namespace {
 
     bool lastTouched = false;
     Point lastMapped;
+    uint32_t lastTouchedMs = 0; // Zeitpunkt der letzten ECHTEN Beruehrung
 
     int16_t clampi(int16_t v, int16_t lo, int16_t hi) {
         if (v < lo) return lo;
@@ -84,16 +85,30 @@ Point mappedPoint() {
 bool wasTapped(Point& outPoint) {
     Point cur = mappedPoint();
 
-    bool fired = false;
-    if (!cur.touched && lastTouched) {
-        outPoint = lastMapped;
-        fired = true;
+    if (cur.touched) {
+        lastTouched = true;
+        lastMapped = cur;
+        lastTouchedMs = millis();
+        return false;
     }
 
-    lastTouched = cur.touched;
-    if (cur.touched) lastMapped = cur;
+    if (!lastTouched) return false; // war schon vorher nicht beruehrt
 
-    return fired;
+    // Kurzer Druck-Aussetzer wird toleriert (Auftrag "Wischgeste
+    // empfindlicher") - der XPT2046 faellt beim leichten Gleiten des
+    // Fingers manchmal fuer einzelne Abfragen unter die Druckschwelle,
+    // was bisher wie ein sofortiges Loslassen aussah und laufende
+    // Wisch-Gesten mitten in der Bewegung abbrach. Erst wenn seit der
+    // letzten echten Beruehrung TOUCH_DROPOUT_TOLERANCE_MS vergangen
+    // sind, gilt es wirklich als Loslassen - an der zuletzt bekannten
+    // Position (lastMapped), nicht an der (ungueltigen) aktuellen.
+    if (millis() - lastTouchedMs < Config::TOUCH_DROPOUT_TOLERANCE_MS) {
+        return false; // koennte noch ein kurzer Aussetzer sein, abwarten
+    }
+
+    lastTouched = false;
+    outPoint = lastMapped;
+    return true;
 }
 
 }

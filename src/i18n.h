@@ -39,9 +39,20 @@ namespace I18n {
         EMAIL_PROMPT,
         PASSWORD_PROMPT,
         GO_BUTTON,
+        NEXT_BUTTON,
         FETCHING_TIME,
 
+        // Seriennummer (Ersteinrichtung UND Konto-Screen, siehe
+        // serial_number_screen.h)
+        SERIAL_NUMBER_TITLE,
+        SERIAL_NUMBER_PROMPT,
+        SERIAL_NUMBER_HINT,
+        SERIAL_NUMBER_TAP_HINT,
+        SERIAL_NUMBER_SAVE_BUTTON,
+        SERIAL_NUMBER_CHANGE_HINT,
+
         // Hauptbildschirm / Seiten
+        PAGE_HOME_TITLE,
         PAGE_POWER_TITLE,
         PAGE_YIELD_TITLE,
         PAGE_YEARS_TITLE,
@@ -49,10 +60,15 @@ namespace I18n {
         COMING_SOON,
         NO_ACCOUNT_CONFIGURED,
 
+        // Hauptscreen "Uebersicht" (4 Kacheln)
+        HOME_WEATHER_SET_LOCATION,
+        HOME_WEATHER_LOADING,
+
         // Seite "Leistung"
         POWER_UNIT_W,
         POWER_UNIT_KW,
         POWER_NOW_LABEL,
+        POWER_ASOF_FMT,
 
         // Seite "Ertrag"
         YIELD_TILE_TODAY,
@@ -78,11 +94,24 @@ namespace I18n {
         CHARGE_STATUS_1,
         CHARGE_STATUS_2,
         CHARGE_STATUS_3,
+        CHARGE_STATUS_WEAK,
         BATTERY_EXPLAIN_0,
         BATTERY_EXPLAIN_1,
         BATTERY_EXPLAIN_2,
         BATTERY_EXPLAIN_3,
-        STATUS_MEASURED_FMT,
+        BATTERY_EXPLAIN_WEAK,
+        NEXT_FETCH_FMT,
+
+        // Wochenansicht (Wetterkachel antippen)
+        WEEK_DAY_TOMORROW,
+        HOURS_UNIT,
+        WEEKDAY_SUN,
+        WEEKDAY_MON,
+        WEEKDAY_TUE,
+        WEEKDAY_WED,
+        WEEKDAY_THU,
+        WEEKDAY_FRI,
+        WEEKDAY_SAT,
 
         // Menue
         MENU_TITLE,
@@ -115,6 +144,16 @@ namespace I18n {
         GERMAN_LABEL,
         ENGLISH_LABEL,
 
+        // Standort (Wetter)
+        LOCATION_TITLE,
+        LOCATION_SEARCH_PROMPT,
+        LOCATION_SEARCHING,
+        LOCATION_NOTHING_FOUND,
+        LOCATION_NO_UMLAUT_HINT,
+        LOCATION_RESULTS_TITLE,
+        LOCATION_AUTO_DETECT_BUTTON,
+        LOCATION_CHANGE_HINT,
+
         // Zuruecksetzen
         RESET_WARNING_TITLE,
         RESET_WARNING_BODY,
@@ -131,6 +170,7 @@ namespace I18n {
         NEGATIVE_RESULT_TEXT,
 
         // Hilfetexte ("?"-Knopf)
+        HELP_BODY_PAGE_HOME,
         HELP_BODY_PAGE_POWER,
         HELP_BODY_PAGE_YIELD,
         HELP_BODY_PAGE_YEARS,
@@ -140,10 +180,12 @@ namespace I18n {
         HELP_BODY_WIFI_SELECT,
         HELP_BODY_CREDENTIALS,
         HELP_BODY_ACCOUNT,
+        HELP_BODY_SERIAL_NUMBER,
         HELP_BODY_COLOR_PICKER,
         HELP_BODY_LANGUAGE,
         HELP_BODY_RESET,
         HELP_BODY_YIELD_VALUES,
+        HELP_BODY_LOCATION,
 
         COUNT
     };

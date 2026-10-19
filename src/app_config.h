@@ -41,6 +41,20 @@ struct AppConfig {
     // Geheimnis. Standardwert ist Steffens Regler, siehe config.h.
     String deviceNo = Config::DEFAULT_DEVICE_NO;
 
+    // Standort fuer die Wetterabfrage - leer/0 = noch kein Standort
+    // bekannt, die Wetterkachel zeigt dann "Standort waehlen" statt eines
+    // Symbols. locationSet unterscheidet das explizit von echten
+    // Koordinaten 0.0/0.0 (z.B. Null-Insel). Wird normalerweise
+    // automatisch ueber die oeffentliche IP-Adresse ermittelt (siehe
+    // ip_geolocation_client.h) - locationManual=true (von Hand ueber die
+    // Wetterkachel/location_screen.cpp gesetzt) schaltet das ab, die
+    // automatische Ermittlung ueberschreibt dann nichts mehr.
+    String locationName;
+    float locationLat = 0.0f;
+    float locationLon = 0.0f;
+    bool locationSet = false;
+    bool locationManual = false;
+
     // Darstellung
     uint8_t systemColorIndex = 0; // Index in Config::COLOR_PALETTE, siehe config.h
 
@@ -50,9 +64,11 @@ struct AppConfig {
 
     // Version 1: einzelnes WLAN (wifiSsid/wifiPassword). Version 2: drei
     // WLAN-Plaetze (wifiSlots). Version 3: Sprache (language). Version 4:
-    // Geraete-Seriennummer (deviceNo) - siehe AppConfigStore::load() fuer
-    // die automatische Migration alter Versionen.
-    uint8_t formatVersion = 4;
+    // Geraete-Seriennummer (deviceNo). Version 5: Wetter-Standort
+    // (locationName/locationLat/locationLon/locationSet) - siehe
+    // AppConfigStore::load() fuer die automatische Migration alter
+    // Versionen.
+    uint8_t formatVersion = 5;
 
     // true, sobald die Ersteinrichtung (Touch, WLAN, Zugangsdaten) einmal
     // komplett durchlaufen und gespeichert wurde.

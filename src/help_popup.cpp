@@ -60,6 +60,12 @@ void drawButton(int16_t x, int16_t y, int16_t w, int16_t h) {
     uint16_t accent = Display::systemColor();
     tft.drawRoundRect(x, y, w, h, 4, accent);
     tft.setTextColor(accent, TFT_BLACK);
+    // Immer explizit Size 1 setzen statt sich auf den Zustand des
+    // Aufrufers zu verlassen - eine Seite, die vorher mit Size 2
+    // gezeichnet hat (siehe home_page.cpp-Bugfix), liess das "?" sonst
+    // ueberdimensioniert/ausgefranst wirken (CLAUDE.md "Schriftzustand
+    // nie vom Aufrufer erben").
+    tft.setTextSize(1);
     tft.setTextDatum(MC_DATUM);
     tft.drawString("?", (int16_t)(x + w / 2), (int16_t)(y + h / 2));
     tft.setTextDatum(TL_DATUM);

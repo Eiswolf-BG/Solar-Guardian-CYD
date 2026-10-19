@@ -90,8 +90,23 @@ namespace SolarData {
         uint32_t dayFetchSeq = 0;
 
         time_t lastSuccessfulFetch = 0;
+        // Geplanter Zeitpunkt der naechsten Ertrags-/Batterie-/Leistungs-
+        // Abfrage (Normal- oder Wiederholtakt, siehe fetch_task.cpp) -
+        // ersetzt die vorher doppelt angezeigte "Messung HH:MM"-Zeile auf
+        // den Seiten "Leistung"/"Batterie" durch "Naechste Abfrage: HH:MM"
+        // (Auftrag). 0 = noch kein Zeitplan bekannt (keine Verbindung/kein
+        // Konto) - Anzeige zeigt dann "--:--".
+        time_t nextFetchAt = 0;
         char statusText[64] = {0}; // Klartext-Fehlermeldung, leer = kein Fehler
         FetchStatus fetchStatus = FetchStatus::NoAccount;
+
+        // Steigt bei JEDEM erfolgreich abgeschlossenen Ertrags-/Batterie-
+        // Abfragezyklus UNBEDINGT (anders als changeCounter unten, der nur
+        // bei echter Wertaenderung steigt) - fetch_watchdog.cpp nutzt das,
+        // um den Neustart-Zaehler nach ein paar echten erfolgreichen
+        // Zyklen zurueckzusetzen, nicht schon bei einem blossen
+        // Herzschlag (siehe CLAUDE.md "Fetch-Task-Absicherung").
+        uint32_t successfulFetchCount = 0;
 
         // Steigt bei jeder Aktualisierung - Core 1 vergleicht ihn, um nur
         // bei echter Aenderung neu zu zeichnen statt bei jedem Tick.
@@ -118,10 +133,17 @@ namespace SolarData {
     void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh);
     void setBattery(float voltage, float current, float socPercent, float tempC, time_t measuredAt);
     void setPv(float voltage, float current, time_t measuredAt);
+    // Wird nur vom Fetch-Task aufgerufen, wenn sich die Geraete-
+    // Seriennummer geaendert hat (siehe fetch_task.cpp::
+    // applyAccountSnapshot()) - verwirft Leistung/Batterie/PV/Verlauf/
+    // Ertrag, damit nie veraltete Zahlen der alten Anlage angezeigt
+    // werden, waehrend die erste Abfrage mit der neuen Nummer laeuft.
+    void resetForDeviceChange();
     void setChargeStatusCode(int16_t code);
     void setChargeStatusText(const char* text);
     void setDailySource(float kwh, time_t measuredAt, bool fromDatapoint);
     void setLastSuccessfulFetch(time_t epoch);
+    void setNextFetchAt(time_t epoch);
     void setStatusText(const char* text);
     void setFetchStatus(FetchStatus status);
 }

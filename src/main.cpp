@@ -9,13 +9,41 @@
 #include "calibration_screen.h"
 #include "wifi_select_screen.h"
 #include "credentials_screen.h"
+#include "serial_number_screen.h"
 #include "fetch_task.h"
 #include "account_bridge.h"
+#include "location_bridge.h"
+#include "fetch_watchdog.h"
 #include "yield_ledger.h"
 #include "main_screen.h"
 #include "i18n.h"
+#include <esp_system.h>
 
 namespace {
+
+    // Bei JEDEM Neustart aufrufen (Auftrag "Fetch-Task-Absicherung") -
+    // damit sich spaeter im Serial-Log nachvollziehen laesst, ob ein
+    // Neustart vom Watchdog (fetch_watchdog.cpp, meldet sich dort selbst
+    // zusaetzlich kurz VOR dem esp_restart()) oder von etwas anderem
+    // (Stromausfall, manuelles Flashen, Absturz) ausgeloest wurde.
+    void logResetReason() {
+        esp_reset_reason_t r = esp_reset_reason();
+        const char* name = "unbekannt";
+        switch (r) {
+            case ESP_RST_POWERON:   name = "Einschalten"; break;
+            case ESP_RST_EXT:       name = "externer Reset"; break;
+            case ESP_RST_SW:        name = "Software (esp_restart)"; break;
+            case ESP_RST_PANIC:     name = "Absturz/Panic"; break;
+            case ESP_RST_INT_WDT:   name = "interner Watchdog"; break;
+            case ESP_RST_TASK_WDT:  name = "Task-Watchdog"; break;
+            case ESP_RST_WDT:       name = "sonstiger Watchdog"; break;
+            case ESP_RST_DEEPSLEEP: name = "Deep-Sleep-Aufwachen"; break;
+            case ESP_RST_BROWNOUT:  name = "Unterspannung (Brownout)"; break;
+            case ESP_RST_SDIO:      name = "SDIO"; break;
+            default: break;
+        }
+        Serial.printf("[core] Reset-Grund: %s (%d)\n", name, (int)r);
+    }
 
     void showMessage(const char* line1, const char* line2 = nullptr) {
         uint16_t accent = Display::systemColor();
@@ -38,13 +66,43 @@ namespace {
         appConfig.wifiSlots[0].password = password;
         appConfig.lastActiveWifiSlot = 0;
 
-        CredentialsScreen::run(); // Zugangsdaten, legt /SolarGuardian an, speichert, holt NTP-Zeit
+        appConfig.portalEmail = "";
+        appConfig.portalPassword = "";
+        // Bei einer frischen Einrichtung bewusst LEER, NICHT der
+        // eingebaute Standardwert (Config::DEFAULT_DEVICE_NO gehoert zu
+        // einem bestimmten Geraet) - siehe serial_number_screen.h.
+        appConfig.deviceNo = "";
+        // Standort bleibt in der Ersteinrichtung aussen vor (Auftrag
+        // "Standort automatisch, notfalls einmalig per Eingabe") - die
+        // automatische IP-Ermittlung laeuft im Fetch-Task von selbst,
+        // sobald WLAN steht (siehe fetch_task.cpp), eine manuelle Eingabe
+        // ist jederzeit ueber die Wetterkachel moeglich.
+        appConfig.locationName = "";
+        appConfig.locationLat = 0.0f;
+        appConfig.locationLon = 0.0f;
+        appConfig.locationSet = false;
+        appConfig.locationManual = false;
+
+        // Konto -> Seriennummer -> "Los geht's" (schliesst ab, speichert,
+        // holt NTP-Zeit). "Zurueck" auf dem Seriennummer-Screen fuehrt
+        // zurueck zu den Zugangsdaten, ohne bereits eingegebene Werte zu
+        // verlieren (CredentialsScreen::run() loescht die Felder nicht
+        // mehr selbst, siehe credentials_screen.cpp).
+        bool setupFinished = false;
+        while (!setupFinished) {
+            CredentialsScreen::run(false); // "Weiter" statt "Los geht's" - speichert hier noch nichts
+            bool back = false;
+            setupFinished = SerialNumberScreen::runFirstTimeSetup(back);
+            if (back) continue;
+        }
+        CredentialsScreen::finalizeSetup(); // legt /SolarGuardian an, speichert, holt NTP-Zeit
     }
 
 }
 
 void setup() {
     Serial.begin(115200);
+    logResetReason();
 
     Display::begin();
     TouchInput::begin();
@@ -87,6 +145,8 @@ void setup() {
     // greift dafuer nie direkt auf appConfig zu.
     AccountBridge::init();
     AccountBridge::set(appConfig.portalEmail, appConfig.portalPassword, appConfig.deviceNo);
+    LocationBridge::init();
+    LocationBridge::set(appConfig.locationLat, appConfig.locationLon, appConfig.locationSet, appConfig.locationManual);
 
     // Ertragsbuch (Core 1, benutzt die SD-Karte) - laedt yield.json.
     YieldLedger::init();
@@ -104,5 +164,6 @@ void loop() {
     // Core 1: nur Anzeige/Touch/SD - niemals Netzwerk-Wartezeiten hier.
     YieldLedger::tick();
     MainScreen::tick();
+    FetchWatchdog::tick();
     delay(10);
 }
