@@ -32,6 +32,18 @@ namespace SolarData {
         float valueW = 0.0f;
     };
 
+    // Tagesverlauf (Seite "Tagesverlauf", 05:00-22:00) - kompakte
+    // Darstellung (4 statt 12 Byte/Punkt wie HistoryPoint): Uhrzeit als
+    // Minuten seit Mitternacht (reicht fuer einen Tag, 0-1439 passt in
+    // uint16) statt time_t, Leistung als ganze Watt statt float (reicht
+    // fuer jede PV-Anlage dieser Groessenordnung).
+    constexpr uint16_t DAILY_CURVE_MAX_POINTS = 260; // 17h Fenster, grosszuegige Reserve
+
+    struct DailyCurvePoint {
+        uint16_t minutesSinceMidnight = 0; // 0-1439, lokale Zeit
+        uint16_t watts = 0;
+    };
+
     struct Data {
         // Aktuelle Leistung
         float currentPowerW = 0.0f;
@@ -43,6 +55,17 @@ namespace SolarData {
         uint8_t historyCount = 0;
         uint8_t historyHead = 0; // naechster Schreibindex
         bool historyValid = false;
+
+        // Tagesverlauf (Seite "Tagesverlauf") - aeltester zuerst, gehoert
+        // zum Kalendertag dailyCurveDate (das kann der VORTag sein, wenn
+        // die aktuelle Uhrzeit noch vor Config::DAILY_CURVE_START_HOUR
+        // liegt, siehe fetch_task.cpp). NICHT auf die SD-Karte
+        // geschrieben - wird bei jedem Start/Tageswechsel frisch vom
+        // Portal nachgeladen, siehe CLAUDE.md.
+        DailyCurvePoint dailyCurve[DAILY_CURVE_MAX_POINTS];
+        uint16_t dailyCurveCount = 0;
+        bool dailyCurveValid = false;
+        char dailyCurveDate[11] = {0}; // "YYYY-MM-DD" des Kurven-Tags
 
         // Energie (kWh)
         float energyTodayKwh = 0.0f;
@@ -131,6 +154,19 @@ namespace SolarData {
     // inkrementelles Anhaengen noetig. points MUSS aeltester zuerst
     // sortiert sein (siehe CLAUDE.md "Seite Leistung").
     void setHistory(const HistoryPoint* points, uint8_t count);
+    // Ersetzt die komplette Tageskurve (Nachladen beim Start/Tageswechsel,
+    // siehe fetch_task.cpp::runDailyCurveBackfillIfNeeded()). points MUSS
+    // aeltester zuerst sortiert sein, count==0 ist erlaubt (leere Kurve zu
+    // Beginn eines neuen Kurven-Tags).
+    void setDailyCurve(const DailyCurvePoint* points, uint16_t count, const char* dayKey);
+    // Haengt GENAU EINEN neuen Punkt an - nur wenn dayKey zum aktuell
+    // gespeicherten Kurven-Tag passt UND die Minute tatsaechlich neuer
+    // ist als der letzte gespeicherte Punkt (monoton steigend), sonst
+    // No-Op (z.B. kurz waehrend eines Tageswechsels, bis das naechste
+    // Nachladen die Kurve auf den neuen Tag umgestellt hat). Fuer das
+    // Fortschreiben der Kurve aus der ohnehin laufenden 3h-Kurvenabfrage,
+    // ohne Zusatzabfrage (Auftrag).
+    void appendDailyCurvePoint(uint16_t minutesSinceMidnight, uint16_t watts, const char* dayKey);
     void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh);
     void setBattery(float voltage, float current, float socPercent, float tempC, time_t measuredAt);
     void setPv(float voltage, float current, time_t measuredAt);

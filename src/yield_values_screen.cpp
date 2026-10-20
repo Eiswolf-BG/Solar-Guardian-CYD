@@ -9,6 +9,7 @@
 #include "layout_check.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 
 namespace YieldValuesScreen {
 
@@ -204,6 +205,7 @@ void run() {
         TouchInput::Point tap;
         while (true) {
             if (TouchInput::wasTapped(tap)) break;
+            WebServer_::tick();
             delay(15);
         }
 

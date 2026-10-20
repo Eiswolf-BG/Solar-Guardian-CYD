@@ -330,9 +330,17 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
 bool fetchPowerCurve(const String& deviceNo, const String& token,
                     PowerCurvePoint* points, uint8_t& outCount,
                     int* outHttpCode, int* outApiStatus) {
-    outCount = 0;
     int64_t nowMs = (int64_t)time(nullptr) * 1000LL;
     int64_t startMs = nowMs - 3LL * 3600LL * 1000LL;
+    return fetchPowerCurveWindow(deviceNo, token, startMs, nowMs, POWER_CURVE_MAX_POINTS,
+                                  points, outCount, outHttpCode, outApiStatus);
+}
+
+bool fetchPowerCurveWindow(const String& deviceNo, const String& token,
+                          int64_t startMs, int64_t endMs, uint8_t sampleLimit,
+                          PowerCurvePoint* points, uint8_t& outCount,
+                          int* outHttpCode, int* outApiStatus) {
+    outCount = 0;
 
     JsonDocument body;
     body["timeSort"] = "desc";
@@ -341,8 +349,8 @@ bool fetchPowerCurve(const String& deviceNo, const String& token,
     o["deviceNo"] = deviceNo;
     o["dataPointId"] = EpeverDatapoints::PV_POWER;
     body["start"] = startMs;
-    body["end"] = nowMs;
-    body["sampleLimit"] = POWER_CURVE_MAX_POINTS;
+    body["end"] = endMs;
+    body["sampleLimit"] = sampleLimit;
 
     String bodyStr;
     serializeJson(body, bodyStr);

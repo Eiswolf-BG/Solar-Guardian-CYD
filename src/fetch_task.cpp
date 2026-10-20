@@ -65,6 +65,11 @@ namespace {
     bool firstBatteryHeapLogged = false;
     bool firstPowerCurveHeapLogged = false;
     bool wifiWasConnected = false;
+    // Tagesverlauf (Seite "Tagesverlauf") - der Kurven-Tag, fuer den
+    // zuletzt ein Nachladen (siehe runDailyCurveBackfillIfNeeded())
+    // abgeschlossen wurde. Leer beim Start -> erzwingt das erste
+    // Nachladen beim naechsten erfolgreichen Zyklus.
+    char lastBackfilledCurveDayKey[11] = "";
 
     // Wetter-Standort (siehe location_bridge.h) - unabhaengig vom
     // Solar-Guardian-Konto, deshalb eigene Felder statt in
@@ -279,6 +284,118 @@ namespace {
         return true;
     }
 
+    // Grenzen des aktuellen "Kurven-Tags" fuer die Seite "Tagesverlauf" -
+    // der Tag beginnt erst um Config::DAILY_CURVE_START_HOUR, nicht um
+    // Mitternacht (Auftrag): vor dieser Uhrzeit lokal gehoert "jetzt" noch
+    // zum VORTag, dessen fertige Kurve bis zum naechsten Morgen stehen
+    // bleibt. outDayKey muss mindestens 11 Byte gross sein.
+    void curveDayBounds(char* outDayKey, size_t keySize, time_t* outStart, time_t* outEnd) {
+        time_t now = time(nullptr);
+        struct tm nowTm;
+        localtime_r(&now, &nowTm);
+        struct tm dayTm = nowTm;
+        if (nowTm.tm_hour < Config::DAILY_CURVE_START_HOUR) {
+            time_t yesterday = now - 24L * 3600L;
+            localtime_r(&yesterday, &dayTm);
+        }
+        dayTm.tm_hour = Config::DAILY_CURVE_START_HOUR;
+        dayTm.tm_min = 0;
+        dayTm.tm_sec = 0;
+        time_t start = mktime(&dayTm);
+        struct tm endTm = dayTm;
+        endTm.tm_hour = Config::DAILY_CURVE_END_HOUR;
+        time_t end = mktime(&endTm);
+        strftime(outDayKey, keySize, "%Y-%m-%d", &dayTm);
+        *outStart = start;
+        *outEnd = end;
+    }
+
+    // Reicht ein watts-Wert in den gueltigen Bereich fuer
+    // SolarData::DailyCurvePoint (uint16, nie negativ).
+    uint16_t clampWattsU16(float w) {
+        if (w < 0.0f) return 0;
+        if (w > 65535.0f) return 65535;
+        return (uint16_t)w;
+    }
+
+    // Einmaliges Nachladen des bisherigen Tagesverlaufs (Seite
+    // "Tagesverlauf") - beim Start (lastBackfilledCurveDayKey ist dann
+    // leer) und bei jedem Wechsel des Kurven-Tags (05:00). Danach
+    // schreibt die regulaere 3h-Kurvenabfrage die Kurve fort, siehe
+    // runPowerCurveFetch() unten - KEINE weiteren Nachlade-Anfragen.
+    // Teilt das Gesamtfenster in Haeppchen von
+    // Config::DAILY_CURVE_CHUNK_SECONDS auf (Auftrag "zu grosse Antwort
+    // aufteilen"). Fehlgeschlagene Haeppchen bleiben Luecken in der
+    // Kurve, es wird nichts erfunden.
+    void runDailyCurveBackfillIfNeeded() {
+        char dayKey[11];
+        time_t dayStart, dayEnd;
+        curveDayBounds(dayKey, sizeof(dayKey), &dayStart, &dayEnd);
+        if (strcmp(dayKey, lastBackfilledCurveDayKey) == 0) return;
+
+        time_t now = time(nullptr);
+        time_t fetchEnd = (now < dayEnd) ? now : dayEnd;
+        if (fetchEnd <= dayStart) {
+            // Direkt nach dem 05:00-Wechsel gibt es noch nichts
+            // nachzuladen - Kurve fuer den neuen Tag leeren, sie waechst
+            // ab jetzt ganz normal mit den regulaeren Abfragen.
+            SolarData::setDailyCurve(nullptr, 0, dayKey);
+            strncpy(lastBackfilledCurveDayKey, dayKey, sizeof(lastBackfilledCurveDayKey) - 1);
+            return;
+        }
+
+        uint32_t heapBefore = ESP.getFreeHeap();
+
+        SolarData::DailyCurvePoint buf[SolarData::DAILY_CURVE_MAX_POINTS];
+        uint16_t total = 0;
+        bool anyChunkFailed = false;
+        for (time_t chunkStart = dayStart; chunkStart < fetchEnd && total < SolarData::DAILY_CURVE_MAX_POINTS;
+             chunkStart += (time_t)Config::DAILY_CURVE_CHUNK_SECONDS) {
+            time_t chunkEnd = chunkStart + (time_t)Config::DAILY_CURVE_CHUNK_SECONDS;
+            if (chunkEnd > fetchEnd) chunkEnd = fetchEnd;
+
+            EpeverClient::PowerCurvePoint pts[EpeverClient::POWER_CURVE_MAX_POINTS];
+            uint8_t n = 0;
+            int httpCode = 0, apiStatus = 0;
+            bool ok = EpeverClient::fetchPowerCurveWindow(currentDeviceNo, currentToken,
+                          (int64_t)chunkStart * 1000LL, (int64_t)chunkEnd * 1000LL,
+                          EpeverClient::POWER_CURVE_MAX_POINTS, pts, n, &httpCode, &apiStatus);
+            if (!ok && (httpCode == 401 || apiStatus != 0)) {
+                currentToken = "";
+                if (EpeverClient::login(currentEmail, currentPassword, currentToken)) {
+                    needsLogin = false;
+                    ok = EpeverClient::fetchPowerCurveWindow(currentDeviceNo, currentToken,
+                              (int64_t)chunkStart * 1000LL, (int64_t)chunkEnd * 1000LL,
+                              EpeverClient::POWER_CURVE_MAX_POINTS, pts, n, &httpCode, &apiStatus);
+                } else {
+                    needsLogin = true;
+                }
+            }
+            if (!ok) { anyChunkFailed = true; continue; }
+
+            // pts ist neuester zuerst - rueckwaerts durchlaufen fuer
+            // aufsteigende Zeit, nur Punkte innerhalb des Anzeigefensters
+            // und strikt neuer als der letzte uebernommene (monoton).
+            for (int8_t i = (int8_t)n - 1; i >= 0 && total < SolarData::DAILY_CURVE_MAX_POINTS; i--) {
+                struct tm pt;
+                localtime_r(&pts[i].time, &pt);
+                if (pt.tm_hour < Config::DAILY_CURVE_START_HOUR || pt.tm_hour >= Config::DAILY_CURVE_END_HOUR) continue;
+                uint16_t minutes = (uint16_t)(pt.tm_hour * 60 + pt.tm_min);
+                if (total > 0 && minutes <= buf[total - 1].minutesSinceMidnight) continue;
+                buf[total].minutesSinceMidnight = minutes;
+                buf[total].watts = clampWattsU16(pts[i].watts);
+                total++;
+            }
+        }
+
+        SolarData::setDailyCurve(buf, total, dayKey);
+        strncpy(lastBackfilledCurveDayKey, dayKey, sizeof(lastBackfilledCurveDayKey) - 1);
+
+        uint32_t heapAfter = ESP.getFreeHeap();
+        Serial.printf("[fetch] Tagesverlauf nachgeladen: %u Punkte, Luecken=%s, freeHeap vorher=%u nachher=%u\n",
+                      (unsigned)total, anyChunkFailed ? "ja" : "nein", (unsigned)heapBefore, (unsigned)heapAfter);
+    }
+
     // Leistungs-Kurvenabfrage (Seite "Leistung") - eigene Anfrage mit
     // grossem sampleLimit, gleiche Login-/Wiederholungsregeln wie die
     // Batterieabfrage. points[0] der Antwort (neuester Punkt zuerst) ist
@@ -327,6 +444,22 @@ namespace {
                 oldestFirst[i].valueW = points[count - 1 - i].watts;
             }
             SolarData::setHistory(oldestFirst, count);
+
+            // Tagesverlauf fortschreiben (Seite "Tagesverlauf") - OHNE
+            // Zusatzabfrage: der neueste Punkt dieser ohnehin laufenden
+            // 3h-Kurve wird an die Tageskurve angehaengt, sofern er in
+            // deren Anzeigefenster faellt und zum aktuell gespeicherten
+            // Kurven-Tag passt (SolarData::appendDailyCurvePoint() ist
+            // sonst ein No-Op, z.B. kurz waehrend eines Tageswechsels).
+            struct tm pt;
+            localtime_r(&points[0].time, &pt);
+            if (pt.tm_hour >= Config::DAILY_CURVE_START_HOUR && pt.tm_hour < Config::DAILY_CURVE_END_HOUR) {
+                char dayKey[11];
+                time_t dsUnused, deUnused;
+                curveDayBounds(dayKey, sizeof(dayKey), &dsUnused, &deUnused);
+                uint16_t minutes = (uint16_t)(pt.tm_hour * 60 + pt.tm_min);
+                SolarData::appendDailyCurvePoint(minutes, clampWattsU16(points[0].watts), dayKey);
+            }
         }
 
         if (!firstPowerCurveHeapLogged) {
@@ -451,6 +584,7 @@ namespace {
         bool dailyFromDatapointValid = false;
         runBatteryFetch(dailyFromDatapoint, dailyFromDatapointValid);
         runPowerCurveFetch();
+        runDailyCurveBackfillIfNeeded();
 
         // Rohwerte dieser Abfrage gesammelt loggen (Auftrag "Seite
         // Leistung" Teil D) - keine Zugangsdaten, nur Messwerte.

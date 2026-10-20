@@ -59,6 +59,18 @@ namespace EpeverClient {
                         PowerCurvePoint* points, uint8_t& outCount,
                         int* outHttpCode, int* outApiStatus);
 
+    // Wie fetchPowerCurve(), aber mit frei waehlbarem Zeitfenster/
+    // sampleLimit statt der festen letzten 3 Stunden - fuer das einmalige
+    // Nachladen des Tagesverlaufs (Seite "Tagesverlauf"), das das
+    // 05:00-22:00-Fenster in mehreren kleinen Haeppchen abruft (siehe
+    // fetch_task.cpp::runDailyCurveBackfillIfNeeded()). fetchPowerCurve()
+    // selbst ruft diese Funktion intern mit dem festen 3h-Fenster auf.
+    // points MUSS mindestens sampleLimit Eintraege gross sein.
+    bool fetchPowerCurveWindow(const String& deviceNo, const String& token,
+                              int64_t startMs, int64_t endMs, uint8_t sampleLimit,
+                              PowerCurvePoint* points, uint8_t& outCount,
+                              int* outHttpCode, int* outApiStatus);
+
     constexpr uint8_t EQUIPMENT_LIST_MAX_DEVICES = 9; // entspricht pageSize im Auftrag
 
     // Nur die Seriennummer (Feld "gatewayId") je Eintrag - die Antwort

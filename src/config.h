@@ -78,16 +78,7 @@ namespace Config {
     constexpr const char* SD_HISTORY_DIR_OLD         = "/SolarGuardian/History";
     constexpr const char* SD_HISTORY_BACKUP_FILE_OLD = "/SolarGuardian/History/tagesertrag.json";
 
-    // Markerdatei fuer den einmaligen historischen Ertragsimport (siehe
-    // steffen_import.h/yield_ledger.cpp::importHistoricalData()) - lebt
-    // bewusst in /SolarHistory (nicht /SolarGuardian), damit ein
-    // Werksreset den Import NICHT erneut auslöst (nach einem Reset soll
-    // sich das Ertragsbuch stattdessen ganz normal aus dem Backup oben
-    // wiederherstellen, nicht die historischen Importwerte nochmal
-    // aufaddieren).
-    constexpr const char* SD_IMPORT_MARKER = "/SolarHistory/steffen_import_v1.done";
-
-    // ---- Jahresuebersicht (Seite "Jahre", siehe seed_years.h) ----
+    // ---- Jahresuebersicht (Seite "Jahre") ----
     constexpr const char* SD_YEARS_FILE     = "/SolarGuardian/years.json";
     constexpr const char* SD_YEARS_TMP_FILE = "/SolarGuardian/years.json.tmp";
 
@@ -190,6 +181,19 @@ namespace Config {
     constexpr uint32_t EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS = 30UL * 1000UL;
     constexpr uint32_t EPEVER_STALE_AFTER_MS = 30UL * 60UL * 1000UL;    // Werte gelten danach als veraltet
     constexpr const char* EPEVER_BATTERY_URL = "https://hncloudapi.epsolarpv.com:7002/history/getSampleDataPoint";
+
+    // ---- Tagesverlauf (Seite "Tagesverlauf", ganztaegige Leistungskurve
+    // ueber die gleiche Port-7002-Abfrage wie die 3h-Kurve, siehe
+    // fetch_task.cpp::runDailyCurveBackfillIfNeeded()). Die Kurve "gehoert"
+    // zum Kalendertag, der um START_HOUR beginnt - vor START_HOUR lokal
+    // zeigt sie noch den VORTag (bleibt stehen bis zum naechsten Morgen).
+    constexpr uint8_t DAILY_CURVE_START_HOUR = 5;  // 05:00 lokal
+    constexpr uint8_t DAILY_CURVE_END_HOUR = 22;   // 22:00 lokal
+    // Zeitfenster pro Nachlade-Anfrage - das Gesamtfenster (bis zu 17h)
+    // wird in Haeppchen dieser Groesse aufgeteilt (Auftrag "zu grosse
+    // Antwort aufteilen"), jedes Haeppchen nutzt dieselbe
+    // EpeverClient::POWER_CURVE_MAX_POINTS-Begrenzung wie die 3h-Kurve.
+    constexpr uint32_t DAILY_CURVE_CHUNK_SECONDS = 4UL * 3600UL;
 
     // ---- Geraeteliste (automatische Seriennummer-Ermittlung, siehe
     // device_no_resolution.h/fetch_task.cpp) ----

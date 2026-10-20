@@ -100,6 +100,42 @@ void setHistory(const HistoryPoint* points, uint8_t count) {
     });
 }
 
+void setDailyCurve(const DailyCurvePoint* points, uint16_t count, const char* dayKey) {
+    mutate([&](Data& d) {
+        uint16_t n = count > DAILY_CURVE_MAX_POINTS ? DAILY_CURVE_MAX_POINTS : count;
+        bool dayChanged = strncmp(d.dailyCurveDate, dayKey, sizeof(d.dailyCurveDate) - 1) != 0;
+        bool changed = dayChanged || !d.dailyCurveValid || d.dailyCurveCount != n;
+        if (!changed) {
+            for (uint16_t i = 0; i < n; i++) {
+                if (d.dailyCurve[i].minutesSinceMidnight != points[i].minutesSinceMidnight ||
+                    d.dailyCurve[i].watts != points[i].watts) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        for (uint16_t i = 0; i < n; i++) d.dailyCurve[i] = points[i];
+        d.dailyCurveCount = n;
+        d.dailyCurveValid = true;
+        strncpy(d.dailyCurveDate, dayKey, sizeof(d.dailyCurveDate) - 1);
+        d.dailyCurveDate[sizeof(d.dailyCurveDate) - 1] = 0;
+        return changed;
+    });
+}
+
+void appendDailyCurvePoint(uint16_t minutesSinceMidnight, uint16_t watts, const char* dayKey) {
+    mutate([&](Data& d) {
+        if (!d.dailyCurveValid) return false;
+        if (strncmp(d.dailyCurveDate, dayKey, sizeof(d.dailyCurveDate) - 1) != 0) return false;
+        if (d.dailyCurveCount >= DAILY_CURVE_MAX_POINTS) return false;
+        if (d.dailyCurveCount > 0 && minutesSinceMidnight <= d.dailyCurve[d.dailyCurveCount - 1].minutesSinceMidnight) return false;
+        d.dailyCurve[d.dailyCurveCount].minutesSinceMidnight = minutesSinceMidnight;
+        d.dailyCurve[d.dailyCurveCount].watts = watts;
+        d.dailyCurveCount++;
+        return true;
+    });
+}
+
 void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh) {
     mutate([&](Data& d) {
         bool changed = !d.energyValid || floatChanged(d.energyTodayKwh, todayKwh, 0.005f) ||
@@ -153,6 +189,7 @@ void resetForDeviceChange() {
     mutate([&](Data& d) {
         d.currentPowerW = 0.0f; d.powerMeasuredAt = 0; d.powerValid = false;
         d.historyCount = 0; d.historyHead = 0; d.historyValid = false;
+        d.dailyCurveCount = 0; d.dailyCurveValid = false; d.dailyCurveDate[0] = 0;
         d.energyTodayKwh = d.energyMonthKwh = d.energyYearKwh = d.energyTotalKwh = 0.0f;
         d.energyValid = false;
         d.batteryVoltage = d.batteryCurrent = d.batterySocPercent = d.batteryTempC = 0.0f;

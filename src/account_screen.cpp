@@ -12,6 +12,7 @@
 #include "layout_check.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 
 namespace AccountScreen {
 
@@ -89,6 +90,7 @@ namespace {
             TouchInput::Point tap;
             while (true) {
                 if (TouchInput::wasTapped(tap)) break;
+                WebServer_::tick();
                 delay(15);
             }
             if (cancelBtn.contains(tap.x, tap.y)) { choice = false; answered = true; }
@@ -175,6 +177,7 @@ void run() {
         TouchInput::Point tap;
         while (true) {
             if (TouchInput::wasTapped(tap)) break;
+            WebServer_::tick();
             delay(15);
         }
 

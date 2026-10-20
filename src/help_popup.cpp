@@ -3,6 +3,7 @@
 #include "touch_input.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 
 namespace HelpPopup {
 
@@ -112,6 +113,7 @@ void show(const char* body) {
         if (TouchInput::wasTapped(tap)) {
             if (okBtn.contains(tap.x, tap.y)) break;
         }
+        WebServer_::tick();
         delay(15);
     }
 }

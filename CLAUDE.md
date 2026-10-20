@@ -378,23 +378,20 @@ die Seite "Ertrag" zeigt Heute/Woche/Monat/Jahr.
   (`sd_storage.cpp::migrateHistoryFolder()`): existiert noch der alte
   Ordner und der neue nicht, wird die eine Backup-Datei kopiert und der
   alte Ordner gelöscht.
-- **Einmaliger historischer Ertragsimport** (`steffen_import.h`,
-  `yield_ledger.cpp::importHistoricalData()`): site-spezifische
-  Tages-/Monatswerte für die Erstbefüllung eines bestimmten Geräts,
-  läuft einmal (gesteuert über `Config::SD_IMPORT_MARKER`, liegt bewusst
-  in `/SolarHistory` statt `/SolarGuardian`, damit ein Reset den Import
-  NICHT erneut auslöst — nach einem Reset soll sich der Ertrag stattdessen
-  ganz normal aus dem History-Backup oben wiederherstellen). Schreibt
-  Tageswerte in `days.csv` und `letzteTage`, hebt `monat_basis`/
-  `jahr_basis` per `max()` an (verkleinert nie vorhandene Werte), rührt
-  `today_max` nie an. Nur als Vorlage/Beispiel gedacht — site-spezifische
-  Zahlen gehören in diese eigene Datei, nicht in `yield_ledger.cpp`
-  selbst (gleiches Prinzip wie `seed_years.h`).
+- **Einmaliger historischer Ertragsimport** gab es früher über eine
+  eigene, site-spezifische Datei mit fest eingebauten Tages-/
+  Monatswerten für die Erstbefüllung eines bestimmten Geräts - seit dem
+  Auftrag "Startwerte aus dem öffentlichen Code entfernen" vollständig
+  entfernt (lief ohnehin nur einmal pro Gerät, bereits durchgeführte
+  Importe stecken längst in den SD-Dateien). Eine lokale Kopie der
+  entfernten Werte liegt ausserhalb des Repos, siehe Alex' eigene
+  Notizen dazu.
 - **Jahresübersicht** (`/SolarGuardian/years.json`, flache Map
   `{"YYYY": kwh}`): bei Jahreswechsel wird der abgeschlossene Jahreswert
-  hier eingetragen. Fehlt die Datei, wird sie mit den Startwerten aus
-  `seed_years.h` (`SeedYears::SEEDS`, eigene Konstanten, leicht
-  anpassbar) angelegt. Seite "Jahre" (`years_page.h/.cpp`) zeigt eine
+  hier eingetragen. Fehlt die Datei, wird sie LEER angelegt (seit dem
+  Auftrag "Startwerte aus dem öffentlichen Code entfernen" - vorher
+  vorbefüllt mit fest eingebauten Vorjahreswerten). Seite "Jahre"
+  (`years_page.h/.cpp`) zeigt eine
   Balkengrafik mit dem laufenden Jahr (live aus dem Ertragsbuch,
   Systemfarbe) plus bis zu 5 Vorjahren aus `years.json` (gedimmt) — bis
   zu 6 Balken insgesamt, Wert in ganzen kWh über, Jahreszahl unter jedem
@@ -449,7 +446,7 @@ dazukommt**, nicht nur für die aktuell existierenden.
   days.csv            - Ertragsprotokoll, eine Zeile pro abgeschlossenem
                         Tag ("YYYY-MM-DD;kWh"), nur Anhaengen
   years.json          - Jahresuebersicht ("YYYY": kWh), siehe
-                        "Ertragsbuch" oben, Startwerte in seed_years.h
+                        "Ertragsbuch" oben, leer angelegt falls fehlend
   years.json.tmp       - temporaere Datei beim Speichern von years.json
   History/
     tagesertrag.json  - Backup des heutigen Tages-Hoechstwerts
@@ -644,7 +641,7 @@ Popups, neue wie alte):**
     `fitText()` für automatische Schriftgrößen-Anpassung/Kürzung,
     Debug-Layout-Prüfer für Überlappungen/Randüberschreitungen.
 16. **Gleitendes 7-Tage-Fenster + History-Backup + Seite "Jahre"**
-    (`yield_ledger.h/.cpp`, `years_page.h/.cpp`, `seed_years.h`): Woche
+    (`yield_ledger.h/.cpp`, `years_page.h/.cpp`): Woche
     ist jetzt heute + die 6 Vortage (keine Kalenderwoche mehr),
     `/SolarGuardian/History/tagesertrag.json` sichert täglich den
     Tages-Höchstwert als Wiederherstellungs-Quelle, `/SolarGuardian/
@@ -1054,9 +1051,6 @@ Popups, neue wie alte):**
   `usr-source`, siehe "Solar Guardian Portal API" oben)
 - `yield_ledger.h/.cpp` — das Ertragsbuch (Core 1, SD-gestützt), schreibt
   auch das History-Backup und `years.json`
-- `seed_years.h` — Startwerte für `years.json`, falls die Datei fehlt
-- `steffen_import.h` — einmaliger historischer Ertragsimport für ein
-  bestimmtes Gerät, siehe "Ertragsbuch" oben
 - `calibration_screen.h/.cpp`, `wifi_select_screen.h/.cpp`,
   `credentials_screen.h/.cpp`, `serial_number_screen.h/.cpp`,
   `location_screen.h/.cpp` — Ersteinrichtung-Bildschirme

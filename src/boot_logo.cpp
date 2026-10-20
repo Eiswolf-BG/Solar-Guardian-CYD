@@ -149,7 +149,7 @@ void begin(bool unlockedVariant) {
     }
 
     if (unlockedVariant) {
-        constexpr const char* UNLOCK_TEXT = "Steffens";
+        constexpr const char* UNLOCK_TEXT = "Wächter";
         // Gleiche Groesse wie der Titel "Solar Guardian" (Auftrag).
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
         tft.setTextSize(2);

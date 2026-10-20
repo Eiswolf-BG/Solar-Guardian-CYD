@@ -6,6 +6,7 @@
 #include "help_popup.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 
 namespace WifiSelectScreen {
 
@@ -129,6 +130,7 @@ bool run(bool allowCancel, String& outSsid, String& outPassword) {
         TouchInput::Point tap;
         while (true) {
             if (TouchInput::wasTapped(tap)) break;
+            WebServer_::tick();
             delay(15);
         }
 

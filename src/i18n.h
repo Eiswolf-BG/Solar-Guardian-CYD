@@ -223,6 +223,12 @@ namespace I18n {
         MONTH_JAN, MONTH_FEB, MONTH_MAR, MONTH_APR, MONTH_MAY, MONTH_JUN,
         MONTH_JUL, MONTH_AUG, MONTH_SEP, MONTH_OCT, MONTH_NOV, MONTH_DEC,
 
+        // Seite "Tagesverlauf"
+        PAGE_DAILY_TITLE,
+        HELP_BODY_PAGE_DAILY,
+        DAILY_CURVE_MAX_LABEL_FMT,
+        DAILY_CURVE_EMPTY,
+
         COUNT
     };
 

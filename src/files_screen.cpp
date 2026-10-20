@@ -7,6 +7,7 @@
 #include "layout_utils.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 #include <SD.h>
 
 namespace FilesScreen {
@@ -232,6 +233,7 @@ void run() {
         TouchInput::Point tap;
         while (true) {
             if (TouchInput::wasTapped(tap)) break;
+            WebServer_::tick();
             delay(15);
         }
 
@@ -319,6 +321,7 @@ void run() {
         TouchInput::Point confirmTap;
         while (true) {
             if (TouchInput::wasTapped(confirmTap)) break;
+            WebServer_::tick();
             delay(15);
         }
 

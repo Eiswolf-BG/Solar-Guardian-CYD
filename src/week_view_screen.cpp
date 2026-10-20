@@ -8,6 +8,7 @@
 #include "location_screen.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 #include <time.h>
 
 namespace WeekViewScreen {
@@ -201,6 +202,7 @@ void run() {
         TouchInput::Point tap;
         while (true) {
             if (TouchInput::wasTapped(tap)) break;
+            WebServer_::tick();
             delay(15);
         }
 

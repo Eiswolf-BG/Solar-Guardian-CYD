@@ -29,23 +29,25 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Ertrag und Batterie-Ladezustand (mit Füllstandssymbol, grün/gelb/rot).
   Leistung/Ertrag/Batterie antippen springt zur jeweiligen Wisch-Seite.
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
-  -Strom als Kacheln, Kurve der letzten 3 Stunden), Ertrag (Heute, Woche
-  als gleitendes 7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare
-  Reiter Tage/Monate/Jahre, je eine Balkengrafik der letzten 7 Tage,
-  Monate bzw. Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
+  -Strom als Kacheln, Kurve der letzten 3 Stunden), Tagesverlauf
+  (Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr mit dem
+  Tages-Höchstwert in Watt), Ertrag (Heute, Woche als gleitendes
+  7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare Reiter Tage/
+  Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate bzw.
+  Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
   Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
 - **Einheiten** (kWh, W, V, A, %, °C) werden auf allen Seiten in der
   gewählten Systemfarbe angezeigt, wie die zugehörigen Werte selbst.
 - **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
   haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
-  `/SolarHistory` im SD-Karten-Root, manueller Korrekturmöglichkeit und
-  Import alter Werte bei der Ersteinrichtung.
+  `/SolarHistory` im SD-Karten-Root und manueller Korrekturmöglichkeit.
 - **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
   die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
   alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
   Übersicht, Leistung, Ertrag, Batterie, Jahre und Wetter (inklusive
   Wettersymbolen und Leistungskurve). Rein lesend, aktualisiert sich
-  automatisch.
+  automatisch. Jetzt auch erreichbar, während am Gerät selbst die
+  WebUI-Seite (oder eine andere Vollbild-Seite) geöffnet ist.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
@@ -174,22 +176,25 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   fill-level icon, green/yellow/red). Tap Power/Yield/Battery to jump to
   that swipe page.
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
-  current as tiles, a chart of the last 3 hours), Yield (Today, Week as a
-  rolling 7-day window, Month, Year), History (three tappable tabs Days/
-  Months/Years, each a bar chart of the last 7 days, months, or calendar
-  years), and Battery (charge level, voltage, current, temperature,
-  charging status with a short explanation of all four states).
+  current as tiles, a chart of the last 3 hours), Daily curve (the power
+  curve of the whole day from 05:00 to 22:00, with today's peak value in
+  watts), Yield (Today, Week as a rolling 7-day window, Month, Year),
+  History (three tappable tabs Days/Months/Years, each a bar chart of
+  the last 7 days, months, or calendar years), and Battery (charge
+  level, voltage, current, temperature, charging status with a short
+  explanation of all four states).
 - **Units** (kWh, W, V, A, %, °C) are shown in the chosen theme color on
   every page, matching the values they belong to.
 - **Yield log**: counts week/month/year itself (the portal's own totals
   are known to have gaps), with a daily backup in the `/SolarHistory`
-  folder on the SD card root, manual correction, and an import of older
-  values during first-time setup.
+  folder on the SD card root and manual correction.
 - **Web view**: In the menu under "Networks" → "WebUI" you'll find the
   address to open in a browser on a device in the same WiFi network -
   shows all values large and clean on your phone or PC, with its own
   tabs for Overview, Power, Yield, Battery, Years, and Weather (including
   weather icons and the power chart). Read-only, updates automatically.
+  Now also reachable while the WebUI page itself (or any other
+  full-screen page) is open on the device.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.

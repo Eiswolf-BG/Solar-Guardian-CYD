@@ -3,6 +3,7 @@
 #include "touch_input.h"
 #include "i18n.h"
 #include "config.h"
+#include "web_server.h"
 #include <cctype>
 
 namespace Keypad {
@@ -178,7 +179,7 @@ String run(const char* title, const String& initialText, bool& confirmed, bool s
 
     while (!done) {
         TouchInput::Point tap;
-        if (!TouchInput::wasTapped(tap)) { delay(15); continue; }
+        if (!TouchInput::wasTapped(tap)) { WebServer_::tick(); delay(15); continue; }
 
         bool handled = false;
         bool needsRedraw = false;
