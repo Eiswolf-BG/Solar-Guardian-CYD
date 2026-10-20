@@ -5,6 +5,7 @@
 #include "wifi_scan.h"
 #include "wifi_select_screen.h"
 #include "wifi_status.h"
+#include "webui_screen.h"
 #include "fetch_task.h"
 #include "app_config.h"
 #include "help_popup.h"
@@ -169,7 +170,13 @@ void run() {
             }
         }
 
-        Rect backBtn = {10, (int16_t)(TOP + Config::MAX_WIFI_SLOTS * (ROW_H + ROW_GAP) + 4), (int16_t)(Config::SCREEN_WIDTH - 20), 40};
+        Rect webUiBtn = {10, (int16_t)(TOP + Config::MAX_WIFI_SLOTS * (ROW_H + ROW_GAP) + 4), (int16_t)(Config::SCREEN_WIDTH - 20), 40};
+        tft.drawRoundRect(webUiBtn.x, webUiBtn.y, webUiBtn.w, webUiBtn.h, 4, accent);
+        tft.setTextDatum(MC_DATUM);
+        tft.drawString(I18n::t(I18n::Str::MENU_ITEM_WEBUI), webUiBtn.x + webUiBtn.w / 2, webUiBtn.y + webUiBtn.h / 2);
+        tft.setTextDatum(TL_DATUM);
+
+        Rect backBtn = {10, (int16_t)(webUiBtn.y + webUiBtn.h + 8), (int16_t)(Config::SCREEN_WIDTH - 20), 40};
         tft.drawRoundRect(backBtn.x, backBtn.y, backBtn.w, backBtn.h, 4, accent);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(I18n::t(I18n::Str::BACK), backBtn.x + backBtn.w / 2, backBtn.y + backBtn.h / 2);
@@ -187,6 +194,10 @@ void run() {
         }
         if (backBtn.contains(tap.x, tap.y)) {
             done = true;
+            continue;
+        }
+        if (webUiBtn.contains(tap.x, tap.y)) {
+            WebUiScreen::run();
             continue;
         }
         for (uint8_t i = 0; i < Config::MAX_WIFI_SLOTS; i++) {

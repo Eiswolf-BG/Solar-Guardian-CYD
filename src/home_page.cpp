@@ -560,4 +560,17 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight) {
     return false;
 }
 
+bool onLongPress(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight) {
+    Layout L = computeLayout(areaTop, areaHeight);
+    if (L.weather.contains(x, y)) {
+        // Immer den Standort-Screen oeffnen, unabhaengig davon, ob schon
+        // ein Standort bekannt ist (Auftrag "Standort jederzeit neu
+        // einstellen koennen") - anders als der kurze Tipp (onTap()),
+        // der bei bekanntem Standort stattdessen die Wochenansicht zeigt.
+        LocationScreen::run();
+        return true;
+    }
+    return false;
+}
+
 }

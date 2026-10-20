@@ -14,4 +14,10 @@ namespace Display {
     // app_config.h). Ueberall verwenden statt einer fest verdrahteten
     // Farbe, damit der Farbwechsel im Menue wirklich ueberall greift.
     uint16_t systemColor();
+
+    // Wendet appConfig.brightnessPercent (geklemmt auf mind.
+    // Config::BRIGHTNESS_MIN_PERCENT) per PWM auf die Hintergrund-
+    // beleuchtung an - einmal bei begin() und erneut nach jeder Aenderung
+    // im Helligkeit-Menue (brightness_screen.cpp).
+    void applyBrightness();
 }

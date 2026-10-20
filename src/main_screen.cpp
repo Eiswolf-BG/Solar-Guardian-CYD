@@ -13,6 +13,9 @@
 #include "page_nav.h"
 #include "help_popup.h"
 #include "layout_check.h"
+#include "tile_sprite.h"
+#include "networks_screen.h"
+#include "easter_egg.h"
 #include "i18n.h"
 #include "config.h"
 #include <WiFi.h>
@@ -65,62 +68,136 @@ namespace {
     char lastClockText[6] = "--:--";
     uint8_t currentPage = 0;
 
-    void drawHeader() {
-        // IMMER explizit setzen, nie vom Aufrufer/einer vorherigen Seite
-        // erben (siehe CLAUDE.md "Schriftzustand") - eine Seite, die
-        // zuletzt mit Size 2 gezeichnet hat (Bugfix: war bei home_page.cpp
-        // der Fall), liess Uhr/Titel/WLAN-Symbol hier sonst riesig und
-        // ineinanderlaufend erscheinen, da drawHeader() bislang NIE selbst
-        // tft.setTextSize() aufrief.
-        tft.setTextSize(1);
+    // Langer Druck (siehe Pages::Page::onLongPress) - Zustand lebt hier,
+    // nicht in SwipeInput, da es eine von Tap/Wisch unabhaengige,
+    // zusaetzliche Erkennung ist.
+    constexpr uint32_t LONG_PRESS_MS = 2000;
+    bool longPressTracking = false;
+    bool longPressFired = false;
+    uint32_t longPressStartMs = 0;
+    TouchInput::Point longPressStartPoint;
+    bool suppressNextTap = false;
+
+    // Nur bei ECHTER Aenderung neu zeichnen (Auftrag "Header flackert") -
+    // vorher wurde drawHeader() bedingungslos jede Sekunde aufgerufen und
+    // wischte dabei die ganze Kopfzeile mit einem direkten fillRect auf
+    // den echten Bildschirm schwarz, bevor neu gezeichnet wurde - das war
+    // als kurzes Aufblitzen sichtbar, obwohl sich oft weder Uhrzeit noch
+    // WLAN-Balken tatsaechlich geaendert hatten. Jetzt: Uhrzeit UND
+    // WLAN-Balkenzahl werden gegen den zuletzt GEZEICHNETEN Stand
+    // verglichen, und das eigentliche Zeichnen laeuft ueber einen
+    // Off-Screen-Puffer (TileSprite, siehe CLAUDE.md "Dynamische Bereiche
+    // immer ueber Off-Screen-Puffer zeichnen") - dadurch entsteht selbst
+    // bei einer echten Aenderung keine sichtbare Luecke mehr.
+    char lastDrawnHeaderClock[6] = "\x01";
+    uint8_t lastDrawnHeaderBars = 0xFF;
+
+    // Verstecktes Zusatzfeature (siehe easter_egg.h) - Rueckmeldung per
+    // Blinken der Uhrzeit, zeitgesteuert statt mit delay().
+    bool hiddenFeatureBlinking = false;
+    bool hiddenFeatureClockHidden = false;
+    uint8_t hiddenFeatureBlinkStepsLeft = 0;
+    uint32_t hiddenFeatureNextBlinkMs = 0;
+
+    // Tippflaeche um die Uhrzeit (Auftrag, ca. 60x32px) - bewusst NICHT
+    // bei LayoutCheck angemeldet, gleiches Prinzip wie MENU_BTN (reine
+    // unsichtbare Tippflaeche, kein eigenes sichtbares Element).
+    Rect clockTapZone() {
+        return {0, 0, 60, 32};
+    }
+
+    // WLAN-Symbol-Tippflaeche als Abkuerzung zu "Netzwerke" (Auftrag) -
+    // wird bei jedem drawHeader()-Aufruf aus den tatsaechlichen
+    // Balken-Koordinaten neu berechnet (haengt von BAR_COUNT/-W/-GAP ab),
+    // deshalb hier als eigene Funktion statt fester Konstante.
+    Rect wifiIconTapZone() {
+        constexpr uint8_t BAR_W = 3, BAR_GAP = 2, BAR_COUNT = 4;
+        constexpr int16_t TALLEST_BAR_H = 3 + (BAR_COUNT - 1) * 3;
+        int16_t rightX = Config::SCREEN_WIDTH - 6;
+        int16_t barsStartX = (int16_t)(rightX - BAR_COUNT * (BAR_W + BAR_GAP));
+        int16_t barsW = (int16_t)(BAR_COUNT * (BAR_W + BAR_GAP) - BAR_GAP);
+        // Mind. ca. 40x32px um das Symbol (Auftrag), zentriert auf die
+        // tatsaechliche Balkenflaeche, ohne den Menue-Knopf (links) oder
+        // den Bildschirmrand (rechts) zu beruehren.
+        constexpr int16_t MIN_W = 40, MIN_H = 32;
+        int16_t barsCx = (int16_t)(barsStartX + barsW / 2);
+        int16_t barsCy = HEADER_BASELINE_Y - TALLEST_BAR_H / 2;
+        int16_t zx = (int16_t)(barsCx - MIN_W / 2);
+        int16_t zw = MIN_W;
+        if ((int16_t)(zx + zw) > Config::SCREEN_WIDTH) { zw = (int16_t)(Config::SCREEN_WIDTH - zx); }
+        int16_t zy = (int16_t)(barsCy - MIN_H / 2);
+        if (zy < 0) zy = 0;
+        int16_t zh = MIN_H;
+        if ((int16_t)(zy + zh) > HEADER_H) zh = (int16_t)(HEADER_H - zy);
+        return {zx, zy, zw, zh};
+    }
+
+    void drawHeader(bool force) {
         uint16_t accent = Display::systemColor();
-        tft.fillRect(0, 0, Config::SCREEN_WIDTH, HEADER_H, TFT_BLACK);
+        uint8_t bars = WifiScan::signalBars();
+        bool changed = force || strcmp(lastClockText, lastDrawnHeaderClock) != 0 || bars != lastDrawnHeaderBars;
         // Eigene begin()/finish()-Pruefung nur fuer die drei Kopfzeilen-
         // Elemente untereinander (Auftrag) - unabhaengig von der Seiten-
         // Pruefung in drawBody(), da drawHeader() auch separat (Uhr-Tick)
-        // aufgerufen wird.
+        // aufgerufen wird. Registrierung findet IMMER statt (auch ohne
+        // Neuzeichnen), die Rechtecke selbst aendern sich zwischen
+        // Aufrufen nicht.
         LayoutCheck::begin("Kopfzeile");
-
-        tft.setTextColor(accent, TFT_BLACK);
-        tft.setCursor(6, HEADER_BASELINE_Y);
-        tft.print(lastClockText);
+        tft.setTextSize(1);
         {
             int16_t clockW = tft.textWidth(lastClockText);
             LayoutCheck::rect("Uhr", 6, (int16_t)(HEADER_BASELINE_Y - tft.fontHeight()), clockW, tft.fontHeight());
         }
-
-        // Bewusst OHNE Rahmen (Alex' Wunsch) - nur der Text ist sichtbar,
-        // die Tipp-Flaeche (MENU_BTN) bleibt trotzdem gleich gross und
-        // reicht bis zur Oberkante des Displays. 3px unterhalb der
-        // gemeinsamen Grundlinie (Alex' Wunsch nach Sichtkontrolle) - nur
-        // dieser eine Text, Uhr/WLAN-Symbol bleiben auf HEADER_BASELINE_Y.
         constexpr const char* TITLE_TEXT = "Solar Guardian";
-        tft.setTextDatum(BC_DATUM);
-        tft.drawString(TITLE_TEXT, MENU_BTN.x + MENU_BTN.w / 2, (int16_t)(HEADER_BASELINE_Y + 3));
-        tft.setTextDatum(TL_DATUM);
         {
             int16_t titleW = tft.textWidth(TITLE_TEXT);
             int16_t titleX = (int16_t)(MENU_BTN.x + MENU_BTN.w / 2 - titleW / 2);
             LayoutCheck::rect("Titel", titleX, (int16_t)(HEADER_BASELINE_Y + 3 - tft.fontHeight()), titleW, tft.fontHeight());
         }
-
-        // Etwas kleiner als vorher und auf dieselbe Grundlinie gehoben
-        // (Alex' Wunsch).
-        uint8_t bars = WifiScan::signalBars();
-        constexpr uint8_t BAR_W = 3, BAR_GAP = 2, BAR_COUNT = 4;
-        int16_t rightX = Config::SCREEN_WIDTH - 6;
-        int16_t x = rightX - BAR_COUNT * (BAR_W + BAR_GAP);
-        int16_t barsStartX = x;
-        for (uint8_t i = 0; i < BAR_COUNT; i++) {
-            int16_t barH = 3 + i * 3;
-            uint16_t color = (i < bars) ? accent : TFT_DARKGREY;
-            tft.fillRect(x, HEADER_BASELINE_Y - barH, BAR_W, barH, color);
-            x += BAR_W + BAR_GAP;
+        constexpr uint8_t BAR_COUNT = 4, BAR_W = 3, BAR_GAP = 2;
+        int16_t barsStartX = (int16_t)(Config::SCREEN_WIDTH - 6 - BAR_COUNT * (BAR_W + BAR_GAP));
+        // Nur die TIPPFLAECHE registrieren (umschliesst das sichtbare
+        // Symbol), nicht zusaetzlich das Symbol-Rechteck selbst - beide
+        // wuerden sich zwangslaeufig ueberlappen und einen Konflikt
+        // melden, obwohl das gewollt ist (gleiches Prinzip wie die
+        // Statuszeilen-Tippflaechen in power_page.cpp/battery_page.cpp/
+        // yield_page.cpp - dort wird ebenfalls nur die Tippflaeche
+        // registriert).
+        {
+            Rect wz = wifiIconTapZone();
+            LayoutCheck::rect("WLAN-Tippflaeche", wz.x, wz.y, wz.w, wz.h);
         }
-        constexpr int16_t TALLEST_BAR_H = 3 + (BAR_COUNT - 1) * 3;
-        LayoutCheck::rect("WLAN-Symbol", barsStartX, (int16_t)(HEADER_BASELINE_Y - TALLEST_BAR_H),
-                           (int16_t)(BAR_COUNT * (BAR_W + BAR_GAP) - BAR_GAP), TALLEST_BAR_H);
         LayoutCheck::finish();
+
+        if (!changed) return;
+        strncpy(lastDrawnHeaderClock, lastClockText, sizeof(lastDrawnHeaderClock));
+        lastDrawnHeaderBars = bars;
+
+        TileSprite::drawInto(0, 0, Config::SCREEN_WIDTH, HEADER_H, [&](TFT_eSPI& t) {
+            t.setTextSize(1);
+            t.setTextColor(accent, TFT_BLACK);
+            if (!hiddenFeatureClockHidden) {
+                t.setCursor(6, HEADER_BASELINE_Y);
+                t.print(lastClockText);
+            }
+
+            // Bewusst OHNE Rahmen (Alex' Wunsch) - nur der Text ist
+            // sichtbar, die Tipp-Flaeche (MENU_BTN) bleibt trotzdem gleich
+            // gross und reicht bis zur Oberkante des Displays. 3px
+            // unterhalb der gemeinsamen Grundlinie (Alex' Wunsch nach
+            // Sichtkontrolle).
+            t.setTextDatum(BC_DATUM);
+            t.drawString(TITLE_TEXT, MENU_BTN.x + MENU_BTN.w / 2, (int16_t)(HEADER_BASELINE_Y + 3));
+            t.setTextDatum(TL_DATUM);
+
+            int16_t x = barsStartX;
+            for (uint8_t i = 0; i < BAR_COUNT; i++) {
+                int16_t barH = 3 + i * 3;
+                uint16_t color = (i < bars) ? accent : TFT_DARKGREY;
+                t.fillRect(x, HEADER_BASELINE_Y - barH, BAR_W, barH, color);
+                x += BAR_W + BAR_GAP;
+            }
+        });
     }
 
     void drawDots() {
@@ -196,7 +273,7 @@ namespace {
 void enter() {
     tft.fillScreen(TFT_BLACK);
     updateClockText();
-    drawHeader();
+    drawHeader(true);
     drawBody();
     lastClockRedrawMs = millis();
 }
@@ -204,10 +281,21 @@ void enter() {
 void tick() {
     uint32_t now = millis();
 
-    if (now - lastClockRedrawMs >= 1000) {
+    if (hiddenFeatureBlinking) {
+        if (now >= hiddenFeatureNextBlinkMs) {
+            hiddenFeatureClockHidden = !hiddenFeatureClockHidden;
+            hiddenFeatureNextBlinkMs = now + 250;
+            drawHeader(true);
+            if (--hiddenFeatureBlinkStepsLeft == 0) {
+                hiddenFeatureBlinking = false;
+                hiddenFeatureClockHidden = false;
+                drawHeader(true);
+            }
+        }
+    } else if (now - lastClockRedrawMs >= 1000) {
         lastClockRedrawMs = now;
         updateClockText();
-        drawHeader();
+        drawHeader(false);
     }
 
     // Der Fetch-Task (Core 0) darf die SD-Karte nie beruehren - er meldet
@@ -256,23 +344,102 @@ void tick() {
         Serial.println();
     }
 
+    // Langer Druck (~2s) erkennen - unabhaengig von SwipeInput/wasTapped()
+    // (reiner Lesezugriff auf den aktuellen Touch-Zustand, stoert deren
+    // eigene Tap-/Wisch-Erkennung nicht, siehe swipe_input.cpp). Nur
+    // Seiten mit eigenem onLongPress (aktuell nur die Uebersicht, siehe
+    // home_page.cpp) reagieren ueberhaupt darauf.
+    TouchInput::Point curTouch = TouchInput::mappedPoint();
+    if (curTouch.touched) {
+        if (!longPressTracking) {
+            longPressTracking = true;
+            longPressStartMs = millis();
+            longPressFired = false;
+            longPressStartPoint = curTouch;
+        } else if (!longPressFired && millis() - longPressStartMs >= LONG_PRESS_MS) {
+            longPressFired = true;
+            bool (*pageLongPress)(int16_t, int16_t, int16_t, int16_t) = Pages::get(currentPage).onLongPress;
+            if (pageLongPress) {
+                // Der Finger liegt beim Erkennen des langen Drucks noch
+                // AUF dem Bildschirm (ein langer Druck wird WAEHREND des
+                // Haltens erkannt, nicht erst beim Loslassen). Oeffnet
+                // onLongPress() jetzt einen Vollbild-Screen (z.B. den
+                // Standort-Screen), wuerde dessen eigene Tap-Warteschleife
+                // sonst das GLEICH BEVORSTEHENDE Loslassen als ersten Tap
+                // an der (veralteten) Lang-Druck-Position empfangen - ein
+                // Phantom-Tap, der dort versehentlich einen Knopf treffen
+                // kann (Auftrag "Standort-Screen"-Bugfix: genau das
+                // fuehrte dazu, dass der neu geoeffnete Screen quasi
+                // sofort durch diesen Phantom-Tap wieder verlassen wurde).
+                // Deshalb zuerst auf das tatsaechliche Loslassen warten
+                // und es hier konsumieren, BEVOR der neue Screen startet.
+                TouchInput::Point ignored;
+                while (!TouchInput::wasTapped(ignored)) delay(15);
+
+                if (pageLongPress(longPressStartPoint.x, longPressStartPoint.y, BODY_TOP, BODY_H)) {
+                    suppressNextTap = true;
+                    // Nicht nur die Seite, sondern den KOMPLETTEN
+                    // Bildschirm (inkl. Kopfzeile) neu aufbauen - der
+                    // aufgerufene Vollbild-Screen (z.B. Standort) hat per
+                    // tft.fillScreen() alles ueberschrieben, auch den
+                    // Bereich der sonst eigenstaendig (und jetzt bewusst
+                    // nur bei echter Aenderung) gezeichneten Kopfzeile
+                    // (Auftrag "Standort-Screen"-Bugfix).
+                    enter();
+                }
+            }
+        }
+    } else {
+        longPressTracking = false;
+    }
+
     SwipeInput::Direction dir;
     TouchInput::Point point;
     if (!SwipeInput::poll(dir, point)) return;
 
+    if (suppressNextTap) {
+        // Der lange Druck hat schon reagiert - das zugehoerige Loslassen
+        // soll nicht zusaetzlich noch als normaler Tap verarbeitet werden
+        // (sonst wuerde z.B. der Standort-Screen sofort durch den
+        // Druck-Wechsel-Tap wieder verlassen bzw. die Seite springen).
+        suppressNextTap = false;
+        return;
+    }
+
     if (dir == SwipeInput::Direction::Left) {
+        EasterEgg::resetTapCount();
         currentPage = (uint8_t)((currentPage + 1) % Pages::count());
         drawBody();
     } else if (dir == SwipeInput::Direction::Right) {
+        EasterEgg::resetTapCount();
         currentPage = (uint8_t)((currentPage + Pages::count() - 1) % Pages::count());
         drawBody();
+    } else if (clockTapZone().contains(point.x, point.y)) {
+        // Tut sonst nichts (Auftrag) - waehrend des Blinkens werden
+        // weitere Tipps ignoriert.
+        if (!hiddenFeatureBlinking && EasterEgg::registerTap()) {
+            hiddenFeatureBlinking = true;
+            hiddenFeatureBlinkStepsLeft = 6;
+            hiddenFeatureClockHidden = true;
+            hiddenFeatureNextBlinkMs = millis() + 250;
+            drawHeader(true);
+        }
     } else if (HELP_BTN.contains(point.x, point.y)) {
+        EasterEgg::resetTapCount();
         HelpPopup::show(I18n::t(Pages::get(currentPage).helpKey));
         drawBody();
     } else if (MENU_BTN.contains(point.x, point.y)) {
+        EasterEgg::resetTapCount();
         MenuScreen::run();
         enter(); // Bildschirm nach Rueckkehr aus dem Menue neu aufbauen
+    } else if (wifiIconTapZone().contains(point.x, point.y)) {
+        EasterEgg::resetTapCount();
+        // WLAN-Symbol als Abkuerzung zu "Netzwerke" (Auftrag) - funktioniert
+        // auf allen Seiten, da die Kopfzeile ueberall gleich ist.
+        NetworksScreen::run();
+        enter();
     } else {
+        EasterEgg::resetTapCount();
         bool (*pageOnTap)(int16_t, int16_t, int16_t, int16_t) = Pages::get(currentPage).onTap;
         if (pageOnTap && pageOnTap(point.x, point.y, BODY_TOP, BODY_H)) {
             // Eine Kachel (siehe home_page.cpp) kann ueber PageNav zu einer
@@ -283,7 +450,13 @@ void tick() {
             if (PageNav::consume(requestedPage) && requestedPage < Pages::count()) {
                 currentPage = requestedPage;
             }
-            drawBody();
+            // Komplett neu aufbauen, nicht nur die Seite - onTap() kann
+            // einen Vollbild-Screen geoeffnet haben (z.B. Wochenansicht/
+            // Standort ueber die Wetterkachel), der per tft.fillScreen()
+            // auch die Kopfzeile ueberschrieben hat (Auftrag "Standort-
+            // Screen"-Bugfix, gilt generell fuer jeden onTap()-geoeffneten
+            // Vollbild-Screen, kein Sonderfall pro Screen).
+            enter();
         }
     }
 }

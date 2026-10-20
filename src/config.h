@@ -94,19 +94,25 @@ namespace Config {
     constexpr uint8_t YEARS_CHART_MAX_BARS  = 6; // laufendes Jahr + bis zu 5 fruehere
 
     // ---- Wisch-Navigation zwischen den Hauptseiten (Auftrag "Wischgeste
-    // empfindlicher" - vorher musste man "gewaltig druecken") ----
-    // Mindestweg in Pixeln, ab dem eine Bewegung ueberhaupt als Wisch
-    // zaehlt (vorher 50, deutlich herabgesetzt).
+    // empfindlicher" - vorher musste man "gewaltig druecken", dann in
+    // einer zweiten Runde "5x wischen" wegen einer zu strengen toten
+    // Zone zwischen Tap- und Wisch-Schwelle) ----
+    // Mindestweg in Pixeln, ab dem eine ueberwiegend waagerechte Bewegung
+    // als Wisch zaehlt (vorher 50, deutlich herabgesetzt). Gilt NUR noch
+    // zusammen mit "adx > ady" (ueberwiegend waagerecht) - KEIN striktes
+    // Verhaeltnis mehr, das erzeugte eine tote Zone, in der echte Wisch-
+    // Gesten mit etwas Hoehenversatz komplett verworfen wurden (siehe
+    // swipe_input.cpp fuer die genaue Begruendung).
     constexpr int16_t SWIPE_MIN_DISTANCE_PX = 22;
-    // Waagerecht muss mindestens so ein Vielfaches der senkrechten
-    // Bewegung sein, damit ein leicht schraeger Wisch noch als
-    // links/rechts gilt (statt komplett waagerecht zu verlangen).
-    constexpr int16_t SWIPE_HORIZONTAL_RATIO = 2;
     // Unter dieser Wegstrecke (in jede Richtung) gilt ein Loslassen noch
-    // sicher als Tippen - alles DAZWISCHEN (mehr als das hier, aber nicht
-    // genug fuer einen Wisch) wird verworfen, statt faelschlich als Tap
-    // einen Knopf/eine Kachel auszuloesen.
+    // sicher als Tippen - alles DARUEBER mit ueberwiegend waagerechter
+    // Bewegung ist ein Wisch (Auftrag "alles darueber ist ein Wischen").
     constexpr int16_t TAP_MAX_DRIFT_PX = 8;
+    // Temporaeres Diagnose-Log fuer die Wisch-Erkennung (Auftrag
+    // "Wischen reagiert schlechter") - loggt NUR Zeitstempel, Druckstatus,
+    // x/y und die Tipp/Wisch/Verworfen-Entscheidung mit Begruendung, NIE
+    // andere Daten. Nach der Diagnose wieder auf false setzen.
+    constexpr bool DEBUG_TOUCH_LOG = false;
     // Kurze Druck-Aussetzer waehrend einer laufenden Beruehrung tolerieren
     // (XPT2046 bei leichtem Druck/beim Gleiten manchmal kurz unter der
     // Z-Schwelle, siehe lib/XPT2046_Touchscreen/README_PATCH.md) - erst
@@ -116,6 +122,22 @@ namespace Config {
 
     // ---- Touch-Ziele ----
     constexpr int16_t MIN_TOUCH_TARGET_PX = 40;
+
+    // ---- Helligkeit (Auftrag "Helligkeit stufenlos einstellbar") ----
+    // Derselbe Pin wie platformio.ini's TFT_BL=21 (TFT_eSPI-Build-Flag) -
+    // hier als eigene Konstante, weil display.cpp die Hintergrund-
+    // beleuchtung NACH tft.init() selbst per LEDC/PWM uebernimmt (TFT_eSPI
+    // kennt nur An/Aus, keine Dimmung).
+    constexpr uint8_t TFT_BL_PIN = 21;
+    // Nie 0% - sonst bleibt das Display komplett dunkel und man kann sich
+    // aussperren (Auftrag), da es keinen Hardware-Knopf fuer die
+    // Beleuchtung gibt.
+    constexpr uint8_t BRIGHTNESS_MIN_PERCENT = 5;
+
+    // ---- Startlogo (siehe boot_logo.h) ----
+    // Mindestanzeigezeit ab dem Erscheinen des Logos, nicht zusaetzlich
+    // zur restlichen Startzeit (siehe main.cpp::setup()).
+    constexpr uint32_t BOOT_LOGO_MS = 7000;
 
     // ---- WLAN ----
     constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;

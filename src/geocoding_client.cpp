@@ -57,7 +57,10 @@ namespace {
             if (v.length()) { place = v; break; }
         }
         if (place.length() == 0) {
-            constexpr const char* FALLBACK_KEYS[] = {"suburb", "city_district"};
+            // Weitere, seltenere Nominatim-Feldnamen, bevor auf den langen
+            // display_name zurueckgefallen wird (Auftrag "Hauptstadt/Ort
+            // auch unter einem anderen Feld finden").
+            constexpr const char* FALLBACK_KEYS[] = {"suburb", "city_district", "hamlet", "county"};
             for (const char* k : FALLBACK_KEYS) {
                 String v = String((const char*)(addr[k] | ""));
                 if (v.length()) { place = v; break; }
@@ -81,8 +84,10 @@ namespace {
     // Ein einzelner Nominatim-Abruf - gibt true bei HTTP 200 + gueltigem
     // JSON zurueck (auch wenn 0 Treffer), false bei Netzwerk-/JSON-Fehler.
     // Entfernt doppelte Namen (gleicher gebauter Anzeigename) direkt hier.
+    // HAENGT an outCount AN statt es zurueckzusetzen - so lassen sich
+    // mehrere Abfragen (z.B. postalcode= UND q=) zu einer gemeinsamen
+    // Trefferliste zusammenfuehren (Auftrag "alle gefundenen Orte zeigen").
     bool fetchOnce(const String& url, Result* out, uint8_t& outCount) {
-        outCount = 0;
         JsonDocument filter;
         JsonObject item = filter.add<JsonObject>();
         item["display_name"] = true;
@@ -95,6 +100,8 @@ namespace {
         addr["village"] = true;
         addr["suburb"] = true;
         addr["city_district"] = true;
+        addr["hamlet"] = true;
+        addr["county"] = true;
         addr["postcode"] = true;
 
         JsonDocument doc;
@@ -132,17 +139,26 @@ SearchStatus search(const String& query, Result* out, uint8_t& outCount) {
     trimmed.trim();
 
     if (isAllDigits(trimmed) && trimmed.length() >= 4 && trimmed.length() <= 5) {
-        // Postleitzahl - Nominatims "postalcode="-Parameter ist dafuer
-        // zuverlaessig (Open-Meteo war das NICHT, siehe geocoding_client.h-
-        // Kommentar). Reihenfolge DE -> AT -> CH, erster Treffer gewinnt.
+        // Postleitzahl - Reihenfolge DE -> AT -> CH, das erste Land mit
+        // Treffern gewinnt (verhindert, dass zufaellig gleich aussehende
+        // PLZ aus verschiedenen Laendern gemischt werden). Je Land ZWEI
+        // Abfragen kombiniert: Nominatims "postalcode="-Parameter (eine
+        // feste Verwaltungsflaeche) UND eine normale Textsuche "q=" nach
+        // der Ziffernfolge (kann zusaetzliche/andere Orte mit dieser PLZ
+        // finden, die der Verwaltungs-Grenzen-Treffer nicht abdeckt) -
+        // zusammen ergeben sie die vollstaendigere Trefferliste (Auftrag
+        // "alle gefundenen Orte als Auswahlliste").
         constexpr const char* COUNTRIES[] = {"de", "at", "ch"};
         bool anyRequestSucceeded = false;
         for (const char* cc : COUNTRIES) {
-            String url = "https://nominatim.openstreetmap.org/search?postalcode=" + trimmed +
-                         "&country=" + String(cc) + "&format=json&addressdetails=1&limit=" + String(MAX_RESULTS);
             uint8_t n = 0;
-            bool ok = fetchOnce(url, out, n);
-            if (ok) {
+            String urlPostal = "https://nominatim.openstreetmap.org/search?postalcode=" + trimmed +
+                               "&country=" + String(cc) + "&format=json&addressdetails=1&limit=" + String(MAX_RESULTS);
+            bool ok1 = fetchOnce(urlPostal, out, n);
+            String urlQ = "https://nominatim.openstreetmap.org/search?q=" + trimmed +
+                         "&countrycodes=" + String(cc) + "&format=json&addressdetails=1&limit=" + String(MAX_RESULTS);
+            bool ok2 = fetchOnce(urlQ, out, n);
+            if (ok1 || ok2) {
                 anyRequestSucceeded = true;
                 if (n > 0) { outCount = n; return SearchStatus::Ok; }
             }

@@ -35,6 +35,14 @@ namespace Pages {
         // Kopfzeile/"?"-Knopf fiel, aufgerufen - true = behandelt, Core 1
         // zeichnet danach neu.
         bool (*onTap)(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight);
+        // nullptr = die Seite hat keine eigene Reaktion auf einen langen
+        // Druck (~2s, siehe main_screen.cpp::tick()). Sonst: wird beim
+        // Erkennen des langen Drucks EINMAL aufgerufen (mit der Druck-
+        // START-Position) - true = behandelt, Core 1 zeichnet danach neu
+        // UND der anschliessende normale Tap beim Loslassen wird
+        // unterdrueckt (siehe home_page.cpp, Standort-Screen ueber die
+        // Wetterkachel).
+        bool (*onLongPress)(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight);
         // Hilfetext fuer den "?"-Knopf (siehe main_screen.cpp).
         I18n::Str helpKey;
     };

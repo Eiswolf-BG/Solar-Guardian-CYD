@@ -118,6 +118,7 @@ namespace I18n {
         MENU_ITEM_NETWORKS,
         MENU_ITEM_ACCOUNT,
         MENU_ITEM_COLOR,
+        MENU_ITEM_BRIGHTNESS,
         MENU_ITEM_LANGUAGE,
         MENU_ITEM_YIELD_VALUES,
         MENU_ITEM_RESET,
@@ -126,9 +127,18 @@ namespace I18n {
         NETWORKS_TITLE,
         CHANGE_PASSWORD_BUTTON,
         NEW_PASSWORD_FOR_PROMPT_FMT,
+        MENU_ITEM_WEBUI,
+
+        // WebUI
+        WEBUI_TITLE,
+        WEBUI_INFO_TEXT,
+        WEBUI_NO_WIFI,
 
         // Systemfarbe
         COLOR_PICKER_TITLE,
+
+        // Helligkeit
+        BRIGHTNESS_TITLE,
 
         // Konto
         ACCOUNT_TITLE,
@@ -182,10 +192,15 @@ namespace I18n {
         HELP_BODY_ACCOUNT,
         HELP_BODY_SERIAL_NUMBER,
         HELP_BODY_COLOR_PICKER,
+        HELP_BODY_BRIGHTNESS,
+        HELP_BODY_WEBUI,
         HELP_BODY_LANGUAGE,
         HELP_BODY_RESET,
         HELP_BODY_YIELD_VALUES,
         HELP_BODY_LOCATION,
+
+        // Startlogo
+        BOOT_LOGO_SUBTITLE,
 
         COUNT
     };

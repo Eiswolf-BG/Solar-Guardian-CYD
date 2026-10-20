@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-1.2-blue)
+![version](https://img.shields.io/badge/version-1.3-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -37,8 +37,18 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
   `/SolarHistory` im SD-Karten-Root, manueller Korrekturmöglichkeit und
   Import alter Werte bei der Ersteinrichtung.
+- **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
+  die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
+  alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
+  Übersicht, Leistung, Ertrag, Batterie, Jahre und Wetter (inklusive
+  Wettersymbolen und Leistungskurve). Rein lesend, aktualisiert sich
+  automatisch.
+- **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
+- **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
+- Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
 - **Empfindliche, zuverlässige Bedienung**: flackerfreie Anzeige, keine
-  abgeschnittenen Texte, feinfühlige Wisch-Gesten zwischen den Seiten.
+  abgeschnittenen Texte, feinfühlige Wisch-Gesten zwischen den Seiten,
+  saubere Anzeige beim Öffnen und Verlassen von Vollbild-Bildschirmen.
 - **Absicherung**: Zeitlimit für jede Netzwerk-Abfrage, ein Wächter gegen
   hängenbleibende Hintergrund-Abgleiche mit kontrolliertem Neustart (gibt
   danach nicht für immer auf, sondern versucht es nötigenfalls stündlich
@@ -108,8 +118,8 @@ kostenlos, ohne Zugangsschlüssel. Der Standort wird automatisch über die
 öffentliche IP-Adresse des Geräts ermittelt (dabei geht die IP-Adresse an
 den jeweiligen Ermittlungsdienst; die Genauigkeit liegt nur auf
 Stadt-Ebene, nicht auf die genaue Adresse). Ohne erkannten Standort oder
-für einen anderen Ort: auf die Wetterkachel auf der Übersicht tippen -
-dort lässt sich der Standort einmalig von Hand per Ortsname oder
+für einen anderen Ort: die Wetterkachel auf der Übersicht lange gedrückt
+halten - dort lässt sich der Standort einmalig von Hand per Ortsname oder
 Postleitzahl setzen (liefert die Suche genau einen Treffer, wird er
 automatisch übernommen, sonst zur Auswahl eine Liste gezeigt) oder die
 automatische Ermittlung erneut anstoßen; ein von Hand gesetzter Standort
@@ -158,8 +168,17 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   are known to have gaps), with a daily backup in the `/SolarHistory`
   folder on the SD card root, manual correction, and an import of older
   values during first-time setup.
+- **Web view**: In the menu under "Networks" → "WebUI" you'll find the
+  address to open in a browser on a device in the same WiFi network -
+  shows all values large and clean on your phone or PC, with its own
+  tabs for Overview, Power, Yield, Battery, Years, and Weather (including
+  weather icons and the power chart). Read-only, updates automatically.
+- **Boot logo** "sun in a shield", shown for 7 seconds on every start.
+- **Brightness** of the backlight, steplessly adjustable in the menu.
+- Tapping the WiFi icon in the header opens "Networks" directly.
 - **Sensitive, reliable operation**: flicker-free display, no clipped
-  text, sensitive swipe gestures between pages.
+  text, sensitive swipe gestures between pages, clean redraws when
+  opening and leaving full-screen pages.
 - **Hardening**: a timeout on every network request, a watchdog against a
   stuck background sync with a controlled restart (doesn't give up
   forever afterward, falls back to trying hourly if needed), safe SD card
@@ -226,8 +245,9 @@ Weather data from [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) -
 free, no API key required. The location is detected automatically from
 the device's public IP address (this sends the IP address to the
 detection service; accuracy is only city-level, not an exact address).
-Without a detected location, or to use a different one: tap the weather
-tile on the Overview - there you can set the location by hand once (place
+Without a detected location, or to use a different one: press and hold
+the weather tile on the Overview - there you can set the location by
+hand once (place
 name or postal code; if the search returns exactly one match it's used
 automatically, otherwise you pick from a list) or trigger automatic
 detection again; a manually set location is never overwritten

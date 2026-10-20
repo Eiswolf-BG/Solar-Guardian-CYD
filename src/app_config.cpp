@@ -63,6 +63,12 @@ bool load() {
     appConfig.systemColorIndex = doc["system_color_index"] | 0;
     if (appConfig.systemColorIndex >= Config::COLOR_COUNT) appConfig.systemColorIndex = 0;
 
+    // Optionales Feld (wie die Standort-Felder oben) - bestehende Configs
+    // ohne diesen Eintrag laufen einfach mit voller Helligkeit weiter.
+    appConfig.brightnessPercent = doc["brightness_percent"] | 100;
+    if (appConfig.brightnessPercent < Config::BRIGHTNESS_MIN_PERCENT) appConfig.brightnessPercent = Config::BRIGHTNESS_MIN_PERCENT;
+    if (appConfig.brightnessPercent > 100) appConfig.brightnessPercent = 100;
+
     if (loadedVersion < 3) {
         // Migration auf Version 3: neues Feld "language", Standard Deutsch.
         appConfig.language = 0;
@@ -128,6 +134,7 @@ bool save() {
     doc["portal_password"] = appConfig.portalPassword;
 
     doc["system_color_index"] = appConfig.systemColorIndex;
+    doc["brightness_percent"] = appConfig.brightnessPercent;
     doc["language"] = (appConfig.language == 1) ? "en" : "de";
     doc["device_no"] = appConfig.deviceNo;
     doc["location_name"] = appConfig.locationName;

@@ -57,6 +57,10 @@ struct AppConfig {
 
     // Darstellung
     uint8_t systemColorIndex = 0; // Index in Config::COLOR_PALETTE, siehe config.h
+    // Helligkeit der Hintergrundbeleuchtung in Prozent (5-100, siehe
+    // Config::BRIGHTNESS_MIN_PERCENT) - angewendet per PWM in
+    // Display::applyBrightness().
+    uint8_t brightnessPercent = 100;
 
     // Sprache der App (0 = Deutsch, 1 = Englisch, siehe i18n.h). Standard
     // Deutsch.

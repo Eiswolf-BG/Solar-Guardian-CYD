@@ -113,6 +113,7 @@ namespace {
         "Netzwerke",
         "Konto",
         "Systemfarbe",
+        "Helligkeit",
         "Sprache / Language",
         "Ertragswerte",
         "Zurücksetzen",
@@ -121,9 +122,18 @@ namespace {
         "Netzwerke",
         "Passwort ändern",
         "Neues Passwort für %s",
+        "WebUI",
+
+        // WebUI
+        "WebUI",
+        "Öffne diese Adresse im Browser eines Geräts im selben WLAN, um alle Werte groß auf Handy oder PC zu sehen.",
+        "Kein WLAN",
 
         // Systemfarbe
         "Systemfarbe wählen",
+
+        // Helligkeit
+        "Helligkeit",
 
         // Konto
         "Konto",
@@ -177,10 +187,15 @@ namespace {
         "Zugangsdaten ändern oder entfernen, Geräte-Seriennummer antippen zum Ändern.",
         "Geräte-Seriennummer für die Batterie- und Leistungsabfrage eingeben oder ändern.",
         "Farbe für Schrift und Symbole auswählen.",
+        "Helligkeit der Hintergrundbeleuchtung einstellen - mit dem Finger auf dem Regler ziehen. Mindestens 5%, damit das Display nie komplett dunkel wird.",
+        "Zeigt die Adresse der Web-Ansicht. Diese Adresse im Browser eines Geräts im selben WLAN öffnen, um alle Werte groß auf Handy oder PC zu sehen - nur Anzeige, keine Einstellungen.",
         "Sprache der App auswählen.",
         "Alle Einstellungen löschen und neu einrichten.",
         "Hier kannst du Monat und Jahr korrigieren. Der Wert gilt einschließlich heute.",
         "Der Standort wird normalerweise automatisch über die IP-Adresse ermittelt. Hier kannst du ihn stattdessen von Hand eingeben (Ort oder Postleitzahl, aus den Treffern auswählen) oder die automatische Ermittlung erneut anstoßen.",
+
+        // Startlogo
+        "wacht über deine Anlage",
     };
 
     constexpr const char* EN[] = {
@@ -290,6 +305,7 @@ namespace {
         "Networks",
         "Account",
         "Theme color",
+        "Brightness",
         "Language / Sprache",
         "Yield values",
         "Factory reset",
@@ -298,9 +314,18 @@ namespace {
         "Networks",
         "Change password",
         "New password for %s",
+        "WebUI",
+
+        // WebUI
+        "WebUI",
+        "Open this address in a browser on a device in the same WiFi network to see all values large on your phone or PC.",
+        "No WiFi",
 
         // Theme color
         "Choose theme color",
+
+        // Brightness
+        "Brightness",
 
         // Account
         "Account",
@@ -354,10 +379,15 @@ namespace {
         "Change or remove your account details, tap the serial number to change it.",
         "Enter or change the device serial number used for the battery and power queries.",
         "Choose the color used for text and icons.",
+        "Set the backlight brightness - drag your finger on the slider. At least 5% so the display never goes completely dark.",
+        "Shows the address of the web view. Open this address in a browser on a device in the same WiFi network to see all values large on your phone or PC - view only, no settings.",
         "Choose the app language.",
         "Delete all settings and set up again.",
         "Here you can correct month and year. The value you enter counts including today.",
         "The location is normally detected automatically from your IP address. Here you can enter it by hand instead (place or postal code, pick one of the results) or trigger automatic detection again.",
+
+        // Startlogo
+        "watching over your system",
     };
 
     static_assert(sizeof(DE) / sizeof(DE[0]) == (size_t)Str::COUNT, "DE table size mismatch - add/remove an entry to match enum Str");

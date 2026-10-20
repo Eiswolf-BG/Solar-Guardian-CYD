@@ -2,6 +2,7 @@
 #include "display.h"
 #include "touch_input.h"
 #include "color_picker_screen.h"
+#include "brightness_screen.h"
 #include "networks_screen.h"
 #include "account_screen.h"
 #include "language_screen.h"
@@ -44,7 +45,7 @@ namespace {
     // Die Zeilenhoehe wird rechnerisch aus ITEM_COUNT ermittelt (statt
     // fest verdrahtet), damit das Menue bei einer geaenderten Zeilenzahl
     // automatisch gleichmaessig verteilt bleibt statt zu ueberlaufen.
-    enum class Action { Networks, Account, ColorPicker, Language, YieldValues, Reset, Back };
+    enum class Action { Networks, Account, ColorPicker, Brightness, Language, YieldValues, Reset, Back };
     struct MenuItem {
         I18n::Str labelKey;
         Action action;
@@ -53,6 +54,7 @@ namespace {
         {I18n::Str::MENU_ITEM_NETWORKS, Action::Networks},
         {I18n::Str::MENU_ITEM_ACCOUNT, Action::Account},
         {I18n::Str::MENU_ITEM_COLOR, Action::ColorPicker},
+        {I18n::Str::MENU_ITEM_BRIGHTNESS, Action::Brightness},
         {I18n::Str::MENU_ITEM_LANGUAGE, Action::Language},
         {I18n::Str::MENU_ITEM_YIELD_VALUES, Action::YieldValues},
         {I18n::Str::MENU_ITEM_RESET, Action::Reset},
@@ -125,6 +127,9 @@ void run() {
                     break;
                 case Action::ColorPicker:
                     ColorPickerScreen::run();
+                    break;
+                case Action::Brightness:
+                    BrightnessScreen::run();
                     break;
                 case Action::Language:
                     LanguageScreen::run();

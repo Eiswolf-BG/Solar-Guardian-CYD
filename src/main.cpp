@@ -17,6 +17,9 @@
 #include "yield_ledger.h"
 #include "main_screen.h"
 #include "i18n.h"
+#include "web_server.h"
+#include "boot_logo.h"
+#include "easter_egg.h"
 #include <esp_system.h>
 
 namespace {
@@ -107,17 +110,34 @@ void setup() {
     Display::begin();
     TouchInput::begin();
 
-    // SD-Karte pruefen, alle 2s erneut versuchen, bis eine Karte erkannt
-    // wird - automatisches Weitermachen, sobald eine Karte steckt.
-    // Bleibt fest zweisprachig (DE+EN) - es gibt an dieser Stelle noch
-    // keine geladene Spracheinstellung.
-    while (!SdStorage::begin()) {
-        showMessage("SD Karte wird benötigt", "SD card required");
-        delay(Config::SD_CHECK_RETRY_MS);
+    // Frueher, einmaliger SD-Mount-Versuch (ohne Wiederhol-Schleife) -
+    // noetig, damit die Helligkeit und ein evtl. vorhandenes Zertifikat
+    // (siehe easter_egg.h) schon VOR dem Logo feststehen (Auftrag). Ist
+    // die Karte hier noch nicht da, laeuft weiter unten die normale
+    // Wiederhol-Schleife, das Logo erscheint dann mit Standardhelligkeit
+    // und ohne Zusatzschriftzug.
+    bool sdReady = SdStorage::begin();
+    bool loadedOk = false;
+    if (sdReady) {
+        SdStorage::ensureRootDir();
+        loadedOk = AppConfigStore::load();
+        Display::applyBrightness();
     }
-    SdStorage::ensureRootDir();
 
-    bool loadedOk = AppConfigStore::load();
+    BootLogo::begin(sdReady && EasterEgg::certificateValid());
+
+    if (!sdReady) {
+        // Bleibt fest zweisprachig (DE+EN) - es gibt an dieser Stelle noch
+        // keine geladene Spracheinstellung. Ueberschreibt das Logo
+        // bewusst (Auftrag "Meldung darf nicht verdeckt werden").
+        while (!SdStorage::begin()) {
+            showMessage("SD Karte wird benötigt", "SD card required");
+            delay(Config::SD_CHECK_RETRY_MS);
+        }
+        SdStorage::ensureRootDir();
+        loadedOk = AppConfigStore::load();
+        Display::applyBrightness();
+    }
 
     if (!loadedOk && SD.exists(Config::SD_CONFIG_FILE)) {
         // Datei war da, liess sich aber nicht sinnvoll einlesen.
@@ -157,6 +177,15 @@ void setup() {
     // erscheint sofort, egal wie lange die Verbindung braucht.
     FetchTask::start();
 
+    // Mindestanzeigezeit des Logos sicherstellen, ab dem Moment seines
+    // Erscheinens (nicht zusaetzlich zur restlichen Startzeit, siehe
+    // config.h) - der obige Ablauf (SD/Konfiguration/WLAN-Task) lief
+    // bereits waehrenddessen. War eine Vollbild-Ersteinrichtung noetig,
+    // ist die Zeit hier laengst abgelaufen, die Schleife endet sofort.
+    while (!BootLogo::tick()) {
+        delay(16);
+    }
+
     MainScreen::enter();
 }
 
@@ -165,5 +194,6 @@ void loop() {
     YieldLedger::tick();
     MainScreen::tick();
     FetchWatchdog::tick();
+    WebServer_::tick();
     delay(10);
 }

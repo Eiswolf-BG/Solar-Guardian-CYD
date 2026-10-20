@@ -237,7 +237,7 @@ Gemeinsame Header: `Content-Type: application/json`,
   frischen Ersteinrichtung ist das Feld bewusst LEER (`main.cpp`
   überschreibt `AppConfig::deviceNo`s Default), nicht der in
   `Config::DEFAULT_DEVICE_NO` eingebaute Standardwert
-  (`04510146093XRJTQ-00918`, gehört zu einer bestimmten Anlage) — der
+  (`<SERIENNUMMER>`, gehört zu einer bestimmten Anlage) — der
   bleibt nur als Rückfall für bestehende Geräte, bei denen `device_no`
   bereits in der Config steht (`AppConfigStore::load()` übernimmt ihn
   weiterhin, wenn das Feld dort leer ist). Validierung (beide Screens,
@@ -845,8 +845,8 @@ Popups, neue wie alte):**
         strukturierten Adressfeldern gebaut, Priorität
         city > town > municipality > village > suburb > city_district,
         Postleitzahl in Klammern dahinter, z.B. aus (erfundenen) Rohdaten
-        `{village: "Kleindorf", town: "Großstadt", postcode: "73312"}`
-        wird `"Großstadt (73312)"` (nicht `"Kleindorf"` und nicht der
+        `{village: "Kleindorf", town: "Großstadt", postcode: "<PLZ>"}`
+        wird `"Großstadt (<PLZ>)"` (nicht `"Kleindorf"` und nicht der
         lange `display_name`). Bei genau einem Treffer wird er automatisch
         übernommen (kein Listen-Umweg), bei mehreren Treffern zeigt
         `location_screen.cpp::showResultList()` weiterhin eine Liste
@@ -1064,4 +1064,8 @@ Popups, neue wie alte):**
   `account_screen.h/.cpp`, `color_picker_screen.h/.cpp`,
   `language_screen.h/.cpp`, `reset_screen.h/.cpp`,
   `yield_values_screen.h/.cpp` — laufender Betrieb
+- `boot_logo.h/.cpp` — Startlogo "Sonne im Schild", komplett im Code
+  gezeichnet, läuft während der übrigen Startsequenz
+- `easter_egg.h/.cpp` — verstecktes Zusatzfeature, Details bewusst nicht
+  dokumentiert
 - `main.cpp` — orchestriert den Startablauf
