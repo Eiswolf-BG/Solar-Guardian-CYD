@@ -6,6 +6,8 @@
 #include "wifi_status.h"
 #include "app_config.h"
 #include "ip_location_data.h"
+#include "device_no_resolution.h"
+#include "account_bridge.h"
 #include "location_bridge.h"
 #include "fetch_task.h"
 #include "menu_screen.h"
@@ -58,6 +60,7 @@ namespace {
 
     uint32_t lastClockRedrawMs = 0;
     uint32_t lastSeenIpLocationCounter = 0xFFFFFFFFu;
+    uint32_t lastSeenDeviceNoCounter = 0xFFFFFFFFu;
 
     // Diagnose: Neuzeichnungen je Seite zaehlen und einmal pro Minute
     // loggen (Auftrag "Flackern" - vorher/nachher-Vergleich).
@@ -93,11 +96,15 @@ namespace {
     uint8_t lastDrawnHeaderBars = 0xFF;
 
     // Verstecktes Zusatzfeature (siehe easter_egg.h) - Rueckmeldung per
-    // Blinken der Uhrzeit, zeitgesteuert statt mit delay().
+    // Blinken der Uhrzeit, zeitgesteuert statt mit delay(). Feste,
+    // kraeftige Farben (nicht an die Systemfarbe gekoppelt, Auftrag).
+    constexpr uint16_t HIDDEN_FEATURE_BLINK_GREEN = 0x07E0;
+    constexpr uint16_t HIDDEN_FEATURE_BLINK_RED   = 0xF800;
     bool hiddenFeatureBlinking = false;
     bool hiddenFeatureClockHidden = false;
     uint8_t hiddenFeatureBlinkStepsLeft = 0;
     uint32_t hiddenFeatureNextBlinkMs = 0;
+    uint16_t hiddenFeatureBlinkColor = HIDDEN_FEATURE_BLINK_GREEN;
 
     // Tippflaeche um die Uhrzeit (Auftrag, ca. 60x32px) - bewusst NICHT
     // bei LayoutCheck angemeldet, gleiches Prinzip wie MENU_BTN (reine
@@ -177,8 +184,13 @@ namespace {
             t.setTextSize(1);
             t.setTextColor(accent, TFT_BLACK);
             if (!hiddenFeatureClockHidden) {
+                // Waehrend des Blinkens eine feste, kraeftige Farbe statt
+                // der Systemfarbe (Auftrag) - danach wieder normal (siehe
+                // t.setTextColor(accent,...) oben/unten).
+                if (hiddenFeatureBlinking) t.setTextColor(hiddenFeatureBlinkColor, TFT_BLACK);
                 t.setCursor(6, HEADER_BASELINE_Y);
                 t.print(lastClockText);
+                if (hiddenFeatureBlinking) t.setTextColor(accent, TFT_BLACK);
             }
 
             // Bewusst OHNE Rahmen (Alex' Wunsch) - nur der Text ist
@@ -327,6 +339,23 @@ void tick() {
         }
     }
 
+    // Automatisch vom Portal ermittelte Seriennummer (Fetch-Task, Core 0)
+    // uebernehmen (Auftrag "Seriennummer automatisch ermitteln") - SD-
+    // Zugriff bleibt exklusiv auf Core 1. Nur schreiben, wenn sich der
+    // Wert wirklich aendert.
+    DeviceNoResolution::Data devNo = DeviceNoResolution::snapshot();
+    if (devNo.shouldApply && devNo.changeCounter != lastSeenDeviceNoCounter) {
+        lastSeenDeviceNoCounter = devNo.changeCounter;
+        if (devNo.gatewayId.length() > 0 && devNo.gatewayId != appConfig.deviceNo) {
+            appConfig.deviceNo = devNo.gatewayId;
+            AppConfigStore::save();
+            AccountBridge::set(appConfig.portalEmail, appConfig.portalPassword, appConfig.deviceNo);
+            FetchTask::sendCommand(FetchTask::Command::AccountChanged);
+            Serial.printf("[core] Geraeteliste: Seriennummer uebernommen, Laenge %u\n",
+                          (unsigned)appConfig.deviceNo.length());
+        }
+    }
+
     // Seiten mit eigener Aktualisierung (z.B. "Ertrag") zeichnen nur neu,
     // wenn sich wirklich etwas geaendert hat - kein Flackern, siehe
     // CLAUDE.md.
@@ -417,10 +446,12 @@ void tick() {
     } else if (clockTapZone().contains(point.x, point.y)) {
         // Tut sonst nichts (Auftrag) - waehrend des Blinkens werden
         // weitere Tipps ignoriert.
-        if (!hiddenFeatureBlinking && EasterEgg::registerTap()) {
+        bool nowUnlocked = false;
+        if (!hiddenFeatureBlinking && EasterEgg::registerTap(nowUnlocked)) {
             hiddenFeatureBlinking = true;
             hiddenFeatureBlinkStepsLeft = 6;
             hiddenFeatureClockHidden = true;
+            hiddenFeatureBlinkColor = nowUnlocked ? HIDDEN_FEATURE_BLINK_GREEN : HIDDEN_FEATURE_BLINK_RED;
             hiddenFeatureNextBlinkMs = millis() + 250;
             drawHeader(true);
         }

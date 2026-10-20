@@ -41,10 +41,11 @@ namespace {
         // Seriennummer (Ersteinrichtung UND Konto-Screen)
         "Seriennummer",
         "Seriennummer eingeben",
-        "Hier trägst du die Seriennummer deines Solar-Guardian-Geräts ein oder änderst sie. Sie sagt der App, von welcher Anlage die Daten abgefragt werden. Du findest sie im Solar-Guardian-Portal auf der Geräteseite, in der Adresszeile hinter devid=.",
+        "Die Seriennummer wird nach dem Login automatisch vom Portal geholt und muss normalerweise nicht eingetragen werden. Nur bei Problemen oder mehreren Geräten hier eintragen - du findest sie im Solar-Guardian-Portal auf der Geräteseite, in der Adresszeile hinter devid=.",
         "Zum Ändern antippen",
         "Speichern",
         "Bei einer anderen Anlage bitte unter Zurücksetzen das Ertragsbuch neu beginnen.",
+        "Verbinde mit dem Portal …",
 
         // Hauptbildschirm / Seiten
         "Übersicht",
@@ -54,6 +55,7 @@ namespace {
         "Batterie",
         "folgt",
         "Kein Konto eingerichtet",
+        "Seriennummer fehlt. Bitte im Menü unter Konto eintragen.",
 
         // Hauptscreen "Uebersicht" (4 Kacheln)
         "Standort wählen",
@@ -117,6 +119,15 @@ namespace {
         "Sprache / Language",
         "Ertragswerte",
         "Zurücksetzen",
+        "Dateien",
+
+        // Dateien
+        "Dateien",
+        "Keine SD-Karte",
+        "Keine Dateien",
+        "%s löschen?",
+        "Löschen fehlgeschlagen",
+        "Geschützt",
 
         // Netzwerke
         "Netzwerke",
@@ -185,7 +196,7 @@ namespace {
         "Netzwerk suchen und verbinden.",
         "E-Mail und Passwort für das Solar Guardian Portal eingeben.",
         "Zugangsdaten ändern oder entfernen, Geräte-Seriennummer antippen zum Ändern.",
-        "Geräte-Seriennummer für die Batterie- und Leistungsabfrage eingeben oder ändern.",
+        "Wird normalerweise automatisch vom Portal geholt. Hier nur bei Problemen oder mehreren Geräten von Hand eingeben oder ändern.",
         "Farbe für Schrift und Symbole auswählen.",
         "Helligkeit der Hintergrundbeleuchtung einstellen - mit dem Finger auf dem Regler ziehen. Mindestens 5%, damit das Display nie komplett dunkel wird.",
         "Zeigt die Adresse der Web-Ansicht. Diese Adresse im Browser eines Geräts im selben WLAN öffnen, um alle Werte groß auf Handy oder PC zu sehen - nur Anzeige, keine Einstellungen.",
@@ -193,6 +204,7 @@ namespace {
         "Alle Einstellungen löschen und neu einrichten.",
         "Hier kannst du Monat und Jahr korrigieren. Der Wert gilt einschließlich heute.",
         "Der Standort wird normalerweise automatisch über die IP-Adresse ermittelt. Hier kannst du ihn stattdessen von Hand eingeben (Ort oder Postleitzahl, aus den Treffern auswählen) oder die automatische Ermittlung erneut anstoßen.",
+        "Zeigt die Dateien auf der SD-Karte. Ordner antippen öffnet ihn, Datei antippen fragt vor dem Löschen nach. Der Ordner SolarHistory ist geschützt und kann hier nicht geändert werden.",
 
         // Startlogo
         "wacht über deine Anlage",
@@ -233,10 +245,11 @@ namespace {
         // Serial number (first-time setup AND account screen)
         "Serial number",
         "Enter serial number",
-        "Enter or change the serial number of your Solar Guardian device here. It tells the app which solar system to read data from. You can find it in the Solar Guardian portal on the device page, in the address bar after devid=.",
+        "The serial number is fetched from the portal automatically after login and normally doesn't need to be entered. Only enter it here if there's a problem or more than one device - you can find it in the Solar Guardian portal on the device page, in the address bar after devid=.",
         "Tap to change",
         "Save",
         "For a different installation, please restart the yield log under Factory reset.",
+        "Connecting to the portal …",
 
         // Main screen / pages
         "Overview",
@@ -246,6 +259,7 @@ namespace {
         "Battery",
         "coming soon",
         "No account set up",
+        "Serial number missing. Please enter it under Menu, Account.",
 
         // Main screen "Overview" (4 tiles)
         "Set location",
@@ -309,6 +323,15 @@ namespace {
         "Language / Sprache",
         "Yield values",
         "Factory reset",
+        "Files",
+
+        // Files
+        "Files",
+        "No SD card",
+        "No files",
+        "Delete %s?",
+        "Delete failed",
+        "Protected",
 
         // Networks
         "Networks",
@@ -377,7 +400,7 @@ namespace {
         "Find a network and connect to it.",
         "Enter your email and password for the Solar Guardian portal.",
         "Change or remove your account details, tap the serial number to change it.",
-        "Enter or change the device serial number used for the battery and power queries.",
+        "Normally fetched from the portal automatically. Only enter or change it here if there's a problem or more than one device.",
         "Choose the color used for text and icons.",
         "Set the backlight brightness - drag your finger on the slider. At least 5% so the display never goes completely dark.",
         "Shows the address of the web view. Open this address in a browser on a device in the same WiFi network to see all values large on your phone or PC - view only, no settings.",
@@ -385,6 +408,7 @@ namespace {
         "Delete all settings and set up again.",
         "Here you can correct month and year. The value you enter counts including today.",
         "The location is normally detected automatically from your IP address. Here you can enter it by hand instead (place or postal code, pick one of the results) or trigger automatic detection again.",
+        "Shows the files on the SD card. Tap a folder to open it, tap a file to be asked before deleting it. The SolarHistory folder is protected and can't be changed here.",
 
         // Startlogo
         "watching over your system",

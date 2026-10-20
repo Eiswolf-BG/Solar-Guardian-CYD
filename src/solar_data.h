@@ -18,6 +18,7 @@ namespace SolarData {
     // zentrale Textliste (i18n.h), damit hier keine Sprache drinsteckt.
     enum class FetchStatus : uint8_t {
         NoAccount,
+        NoDeviceNo,
         LoggingIn,
         LoginFailed,
         NetworkError,

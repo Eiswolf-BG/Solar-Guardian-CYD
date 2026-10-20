@@ -384,8 +384,8 @@ namespace {
         }
 
         // Icon darf groesser werden, solange es Rahmen/Text nicht beruehrt
-        // (Auftrag) - 0.62 statt vorher 0.5 der kleineren Kachelseite,
-        // rechnerisch gegen Beschriftungs-/Temperaturzone geprueft.
+        // (Auftrag) - 0.62 der kleineren Kachelseite, rechnerisch gegen
+        // Beschriftungs-/Temperaturzone geprueft.
         int16_t iconSize = (int16_t)((w < h ? w : h) * 0.62f);
         int16_t iconCy = (int16_t)(h * 0.4f);
         int16_t iconCx = (int16_t)(w / 2);
@@ -394,6 +394,8 @@ namespace {
                                     (int16_t)(absX + iconCx - iconSize / 2), (int16_t)(absY + iconCy - iconSize / 2),
                                     iconSize, iconSize);
 
+        // Temperatur wieder anzeigen (Auftrag) - jetzt ueber MET Norway
+        // verfeinert, siehe fetch_task.cpp::runWeatherFetch().
         char tempStr[16];
         formatDecimal(weather.currentTempC, 1, tempStr, sizeof(tempStr));
         String tempLine = String(tempStr) + " " + I18n::t(I18n::Str::CELSIUS_UNIT);

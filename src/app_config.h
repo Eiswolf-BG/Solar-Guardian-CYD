@@ -38,8 +38,11 @@ struct AppConfig {
     String portalPassword;
 
     // Geraete-Seriennummer fuer die Port-7002-Batterieabfrage - kein
-    // Geheimnis. Standardwert ist Steffens Regler, siehe config.h.
-    String deviceNo = Config::DEFAULT_DEVICE_NO;
+    // Geheimnis, aber geraetespezifisch. Kein eingebauter Standardwert
+    // mehr (Auftrag "Seriennummer aus dem Projekt entfernen") - leer, bis
+    // sie am Geraet eingegeben wird (Ersteinrichtung, Konto, oder der
+    // einmalige Hinweis-Screen, siehe main.cpp).
+    String deviceNo;
 
     // Standort fuer die Wetterabfrage - leer/0 = noch kein Standort
     // bekannt, die Wetterkachel zeigt dann "Standort waehlen" statt eines

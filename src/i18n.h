@@ -50,6 +50,7 @@ namespace I18n {
         SERIAL_NUMBER_TAP_HINT,
         SERIAL_NUMBER_SAVE_BUTTON,
         SERIAL_NUMBER_CHANGE_HINT,
+        CONNECTING_TO_PORTAL,
 
         // Hauptbildschirm / Seiten
         PAGE_HOME_TITLE,
@@ -59,6 +60,7 @@ namespace I18n {
         PAGE_BATTERY_TITLE,
         COMING_SOON,
         NO_ACCOUNT_CONFIGURED,
+        NO_DEVICE_NO_CONFIGURED,
 
         // Hauptscreen "Uebersicht" (4 Kacheln)
         HOME_WEATHER_SET_LOCATION,
@@ -122,6 +124,15 @@ namespace I18n {
         MENU_ITEM_LANGUAGE,
         MENU_ITEM_YIELD_VALUES,
         MENU_ITEM_RESET,
+        MENU_ITEM_FILES,
+
+        // Dateien
+        FILES_TITLE,
+        FILES_NO_SD,
+        FILES_EMPTY,
+        FILES_DELETE_CONFIRM_FMT,
+        FILES_DELETE_FAILED,
+        FILES_PROTECTED_HINT,
 
         // Netzwerke
         NETWORKS_TITLE,
@@ -198,6 +209,7 @@ namespace I18n {
         HELP_BODY_RESET,
         HELP_BODY_YIELD_VALUES,
         HELP_BODY_LOCATION,
+        HELP_BODY_FILES,
 
         // Startlogo
         BOOT_LOGO_SUBTITLE,

@@ -53,7 +53,6 @@ namespace Config {
     constexpr const char* SD_CONFIG_TMP_FILE = "/SolarGuardian/config.json.tmp";
     constexpr uint8_t CONFIG_FORMAT_VERSION  = 5;
     constexpr uint8_t MAX_WIFI_SLOTS = 3;
-    constexpr const char* DEFAULT_DEVICE_NO = "04510146093XRJTQ-00918";
 
     // ---- Ertragsbuch (siehe yield_ledger.h/.cpp und CLAUDE.md) ----
     constexpr const char* SD_YIELD_FILE     = "/SolarGuardian/yield.json";
@@ -179,6 +178,13 @@ namespace Config {
     constexpr uint32_t EPEVER_STALE_AFTER_MS = 30UL * 60UL * 1000UL;    // Werte gelten danach als veraltet
     constexpr const char* EPEVER_BATTERY_URL = "https://hncloudapi.epsolarpv.com:7002/history/getSampleDataPoint";
 
+    // ---- Geraeteliste (automatische Seriennummer-Ermittlung, siehe
+    // device_no_resolution.h/fetch_task.cpp) ----
+    constexpr const char* EPEVER_EQUIPMENT_LIST_URL = "https://hncloudapi.epsolarpv.com/usrCloud/vn/equipment/getEquipmentListPage";
+    // Hoechstens einmal in dieser Zeitspanne abfragen (Auftrag) - egal ob
+    // durch Login, fehlende Nummer oder einen 5004-Fehler ausgeloest.
+    constexpr uint32_t EQUIPMENT_LIST_MIN_INTERVAL_MS = 10UL * 60UL * 1000UL;
+
     // ---- Wetter (Open-Meteo.com, kostenlos, ohne Zugangsschluessel) ----
     constexpr const char* WEATHER_API_HOST = "https://api.open-meteo.com/v1/forecast";
     constexpr const char* GEOCODING_API_HOST = "https://geocoding-api.open-meteo.com/v1/search";
@@ -186,6 +192,12 @@ namespace Config {
     constexpr uint32_t WEATHER_FETCH_INTERVAL_MS = 30UL * 60UL * 1000UL; // alle 30 Minuten
     constexpr uint32_t WEATHER_RETRY_INTERVAL_MS = 2UL * 60UL * 1000UL;  // bei Fehler alle 2 Minuten erneut
     constexpr uint8_t WEATHER_FORECAST_DAYS = 7;
+
+    // ---- Aktuelles Wetter: Symbol/Bewoelkung ueber MET Norway (trifft
+    // Realitaet laut Vergleich besser), Open-Meteo bleibt Rueckfall sowie
+    // Quelle fuer Vorhersage/Standortsuche (siehe weather_client.cpp) ----
+    constexpr const char* MET_NORWAY_API_HOST = "https://api.met.no/weatherapi/locationforecast/2.0/compact";
+    constexpr const char* MET_NORWAY_USER_AGENT = "SolarGuardianCYD/1.4 github.com/Eiswolf-BG/Solar-Guardian-CYD";
 
     // ---- Automatische IP-Standort-Ermittlung (siehe ip_geolocation_client.h) ----
     constexpr uint32_t IP_LOCATION_DAILY_INTERVAL_MS = 24UL * 60UL * 60UL * 1000UL;

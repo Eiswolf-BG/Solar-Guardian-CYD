@@ -412,4 +412,72 @@ bool fetchPowerCurve(const String& deviceNo, const String& token,
     return true;
 }
 
+bool fetchEquipmentList(const String& token, EquipmentListResult& out,
+                        int* outHttpCode, int* outApiStatus) {
+    out.total = 0;
+    out.count = 0;
+
+    JsonDocument body;
+    body["equipmentName"] = "";
+    body["status"] = "";
+    body["powerStationId"] = "";
+    body["gatewayId"] = "";
+    body["projectId"] = nullptr;
+    body["pageNo"] = 1;
+    body["pageSize"] = EQUIPMENT_LIST_MAX_DEVICES;
+    body["token"] = token;
+    String bodyStr;
+    serializeJson(body, bodyStr);
+
+    // Filter: NUR status, data.total und data.list[].gatewayId parsen -
+    // die Antwort enthaelt auch persoenliche Daten (Anschrift/Name/
+    // Konto), die so gar nicht erst in den Speicher gelangen (Auftrag,
+    // haelt zudem den RAM-Bedarf klein).
+    JsonDocument filter;
+    filter["status"] = true;
+    filter["data"]["total"] = true;
+    filter["data"]["list"][0]["gatewayId"] = true;
+
+    ExtraHeader headers[2];
+    headers[0] = {"Languagetype", "1"};
+    headers[1] = {"Token", token.c_str()};
+
+    JsonDocument resp;
+    PostResult res = httpPostJson(Config::EPEVER_EQUIPMENT_LIST_URL, bodyStr, resp, &filter, true, headers, 2);
+
+    if (outHttpCode) *outHttpCode = res.httpCode;
+    if (outApiStatus) *outApiStatus = -1;
+
+    if (res.httpCode != 200) {
+        Serial.printf("[fetch] Geraeteliste HTTP-Fehler, Code=%d\n", res.httpCode);
+        return false;
+    }
+    if (!res.jsonOk) {
+        Serial.printf("[fetch] Geraeteliste: Antwort kein gueltiges JSON (contentLength=%d, Fehler=%s)\n",
+                      res.contentLength, res.jsonErr);
+        return false;
+    }
+
+    int status = resp["status"] | -1;
+    if (outApiStatus) *outApiStatus = status;
+    if (status != 0) {
+        // Bewusst KEIN logJsonKeys() hier (anders als bei den anderen
+        // Abfragen) - die Antwort kann persoenliche Daten enthalten,
+        // auch Feldnamen sollen dafuer nicht ins Log.
+        Serial.printf("[fetch] Geraeteliste fehlgeschlagen, status=%d\n", status);
+        return false;
+    }
+
+    out.total = resp["data"]["total"] | 0;
+    JsonArray list = resp["data"]["list"];
+    for (JsonObject item : list) {
+        if (out.count >= EQUIPMENT_LIST_MAX_DEVICES) break;
+        out.gatewayIds[out.count] = String((const char*)(item["gatewayId"] | ""));
+        out.count++;
+    }
+
+    Serial.printf("[fetch] Geraeteliste: %d Geraet(e)\n", (int)out.total);
+    return true;
+}
+
 }

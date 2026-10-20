@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-1.3-blue)
+![version](https://img.shields.io/badge/version-1.4-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -46,6 +46,14 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
+- **Geräte-Seriennummer wird automatisch** nach dem Login vom
+  Solar-Guardian-Portal geholt - man muss sie nicht mehr eintippen,
+  außer bei Problemen oder mehreren Geräten.
+- **Genaueres Wetter**: Das aktuelle Wetter (Temperatur und Symbol) kommt
+  jetzt von MET Norway, Open-Meteo bleibt als Rückfall, falls MET Norway
+  nicht erreichbar ist.
+- **Dateiexplorer** im Menü unter "Dateien": Dateien auf der SD-Karte
+  ansehen und einzeln löschen (mit Rückfrage).
 - **Empfindliche, zuverlässige Bedienung**: flackerfreie Anzeige, keine
   abgeschnittenen Texte, feinfühlige Wisch-Gesten zwischen den Seiten,
   saubere Anzeige beim Öffnen und Verlassen von Vollbild-Bildschirmen.
@@ -53,13 +61,15 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   hängenbleibende Hintergrund-Abgleiche mit kontrolliertem Neustart (gibt
   danach nicht für immer auf, sondern versucht es nötigenfalls stündlich
   weiter), sichere Schreibzugriffe auf die SD-Karte.
-- **Menü**: Konto (Benutzername, Passwort, Geräte-Seriennummer),
-  Netzwerke (bis zu 3 WLANs), Systemfarbe, Sprache (Deutsch/Englisch),
-  Ertragswerte (Monat/Jahr manuell korrigieren), Zurücksetzen. Der
-  Standort für die Wetterkachel
-  wird automatisch ermittelt und hat deshalb keinen eigenen Menüpunkt.
+- **Menü**: Konto (Benutzername, Passwort, Geräte-Seriennummer - wird
+  normalerweise automatisch geholt), Netzwerke (bis zu 3 WLANs),
+  Systemfarbe, Sprache (Deutsch/Englisch), Ertragswerte (Monat/Jahr
+  manuell korrigieren), Dateien, Zurücksetzen. Der Standort für die
+  Wetterkachel wird automatisch ermittelt und hat deshalb keinen
+  eigenen Menüpunkt.
 - **Ersteinrichtung** direkt am Gerät: Touch-Kalibrierung, WLAN-Auswahl,
-  Solar-Guardian-Zugangsdaten, Geräte-Seriennummer.
+  Solar-Guardian-Zugangsdaten - die Geräte-Seriennummer wird danach
+  automatisch vom Portal geholt.
 
 ### Installation
 
@@ -113,7 +123,9 @@ wiederhergestellt wird.
 
 ### Standort und Wetter
 
-Wetterdaten von [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) -
+Wetterdaten: MET Norway (CC BY 4.0) für das aktuelle Wetter (Temperatur
+und Symbol), [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) für
+die Wochenvorhersage, die Standortsuche und als Rückfall - beide
 kostenlos, ohne Zugangsschlüssel. Der Standort wird automatisch über die
 öffentliche IP-Adresse des Geräts ermittelt (dabei geht die IP-Adresse an
 den jeweiligen Ermittlungsdienst; die Genauigkeit liegt nur auf
@@ -176,6 +188,14 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.
+- **Device serial number is fetched automatically** after login from the
+  Solar Guardian portal - no need to type it in, except for problems or
+  more than one device.
+- **More accurate weather**: the current weather (temperature and icon)
+  now comes from MET Norway, with Open-Meteo as a fallback if MET Norway
+  is unreachable.
+- **File explorer** in the menu under "Files": view the files on the SD
+  card and delete them individually (with confirmation).
 - **Sensitive, reliable operation**: flicker-free display, no clipped
   text, sensitive swipe gestures between pages, clean redraws when
   opening and leaving full-screen pages.
@@ -183,13 +203,14 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   stuck background sync with a controlled restart (doesn't give up
   forever afterward, falls back to trying hourly if needed), safe SD card
   writes.
-- **Menu**: Account (username, password, device serial number), Networks
-  (up to 3 WiFi networks), Theme color, Language (German/English), Yield
-  values (manually correct month/year), Factory reset. The location used
-  for the weather tile is detected automatically and has no menu entry of
-  its own.
+- **Menu**: Account (username, password, device serial number - normally
+  fetched automatically), Networks (up to 3 WiFi networks), Theme color,
+  Language (German/English), Yield values (manually correct month/year),
+  Files, Factory reset. The location used for the weather tile is
+  detected automatically and has no menu entry of its own.
 - **First-time setup** directly on the device: touch calibration, WiFi
-  selection, Solar Guardian account details, device serial number.
+  selection, Solar Guardian account details - the device serial number
+  is then fetched from the portal automatically.
 
 ### Installation
 
@@ -241,8 +262,11 @@ it and today's yield is automatically restored afterward.
 
 ### Location and weather
 
-Weather data from [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) -
-free, no API key required. The location is detected automatically from
+Weather data: MET Norway (CC BY 4.0) for the current weather
+(temperature and icon), [Open-Meteo.com](https://open-meteo.com/) (CC
+BY 4.0) for the weekly forecast, location search, and as a fallback -
+both free, no API key required. The location is detected automatically
+from
 the device's public IP address (this sends the IP address to the
 detection service; accuracy is only city-level, not an exact address).
 Without a detected location, or to use a different one: press and hold

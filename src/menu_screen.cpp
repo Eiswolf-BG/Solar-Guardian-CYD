@@ -8,6 +8,7 @@
 #include "language_screen.h"
 #include "reset_screen.h"
 #include "yield_values_screen.h"
+#include "files_screen.h"
 #include "help_popup.h"
 #include "layout_check.h"
 #include "i18n.h"
@@ -45,7 +46,7 @@ namespace {
     // Die Zeilenhoehe wird rechnerisch aus ITEM_COUNT ermittelt (statt
     // fest verdrahtet), damit das Menue bei einer geaenderten Zeilenzahl
     // automatisch gleichmaessig verteilt bleibt statt zu ueberlaufen.
-    enum class Action { Networks, Account, ColorPicker, Brightness, Language, YieldValues, Reset, Back };
+    enum class Action { Networks, Account, ColorPicker, Brightness, Language, YieldValues, Files, Reset, Back };
     struct MenuItem {
         I18n::Str labelKey;
         Action action;
@@ -57,6 +58,7 @@ namespace {
         {I18n::Str::MENU_ITEM_BRIGHTNESS, Action::Brightness},
         {I18n::Str::MENU_ITEM_LANGUAGE, Action::Language},
         {I18n::Str::MENU_ITEM_YIELD_VALUES, Action::YieldValues},
+        {I18n::Str::MENU_ITEM_FILES, Action::Files},
         {I18n::Str::MENU_ITEM_RESET, Action::Reset},
         {I18n::Str::BACK, Action::Back},
     };
@@ -136,6 +138,9 @@ void run() {
                     break;
                 case Action::YieldValues:
                     YieldValuesScreen::run();
+                    break;
+                case Action::Files:
+                    FilesScreen::run();
                     break;
                 case Action::Reset:
                     ResetScreen::run();

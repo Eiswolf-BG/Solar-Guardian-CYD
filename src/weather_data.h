@@ -45,6 +45,11 @@ namespace WeatherData {
 
     // Ab hier NUR vom Fetch-Task (Core 0) aufrufen.
     void setCurrent(float tempC, int16_t weatherCode, bool isDay, time_t measuredAt);
+    // Ueberschreibt Temperatur UND Code des aktuellen Wetters (Tag/Nacht
+    // bleibt unberuehrt) - fuer MET Norway, das genauer als Open-Meteo
+    // trifft, siehe met_norway_client.h. Nur gueltig, wenn bereits ein
+    // setCurrent() lief (currentValid).
+    void setCurrentRefined(float tempC, int16_t weatherCode);
     void setDaily(const DayForecast* days, uint8_t count);
     void setLocationSet(bool set);
 }

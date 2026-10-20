@@ -34,6 +34,12 @@ vorausgesetzt werden.
   Englisch (Alex' fester Wunsch für dieses Repo: ein Nutzer des Geräts
   spricht nur wenig Englisch) — gilt für jedes GitHub-Release, ohne
   Ausnahme, auch bei kleinen Patch-Versionen.
+- **README, Release-Notes und Commit-Nachrichten nennen ausschließlich
+  Änderungen, die ein Nutzer am Gerät sieht oder merkt.** Interne
+  Änderungen, Aufräumarbeiten und alles, was mit Zugangs- oder
+  Gerätedaten, Sicherheit oder Datenschutz zu tun hat, werden dort NIE
+  erwähnt. Für solche Änderungen bleibt die Commit-Nachricht neutral
+  (z.B. "Interne Aufräumarbeiten" oder "Verbesserungen").
 - **Keine Geheimnisse im Log.** E-Mail-Adresse, Passwort, WLAN-Passwort,
   MD5-Hash des Passworts, Portal-Token und Meldungstexte aus
   Login-Antworten (die enthalten die E-Mail) werden NIE über den
@@ -233,14 +239,17 @@ Gemeinsame Header: `Content-Type: application/json`,
   .cpp` DIREKT AM GERÄT eingegeben — eigener Screen in der
   Ersteinrichtung (zwischen Konto und "Los geht's") und jederzeit im
   Menü unter "Konto", dort auf das Feld "Seriennummer" tippen (siehe
-  "Bisher fertige Features" unten). Bei einer
-  frischen Ersteinrichtung ist das Feld bewusst LEER (`main.cpp`
-  überschreibt `AppConfig::deviceNo`s Default), nicht der in
-  `Config::DEFAULT_DEVICE_NO` eingebaute Standardwert
-  (`<SERIENNUMMER>`, gehört zu einer bestimmten Anlage) — der
-  bleibt nur als Rückfall für bestehende Geräte, bei denen `device_no`
-  bereits in der Config steht (`AppConfigStore::load()` übernimmt ihn
-  weiterhin, wenn das Feld dort leer ist). Validierung (beide Screens,
+  "Bisher fertige Features" unten). Kein eingebauter Standardwert im
+  Code (Auftrag "Seriennummer aus dem Projekt entfernen", entfernt
+  `Config::DEFAULT_DEVICE_NO`) — `AppConfig::deviceNo` ist standardmäßig
+  leer, `AppConfigStore::load()` übernimmt nur, was bereits in
+  `config.json` steht. Ist ein Konto gespeichert, aber keine
+  Seriennummer, öffnet `main.cpp` nach dem Startlogo einmalig
+  `SerialNumberScreen::runFromAccount()`; ohne Seriennummer macht der
+  Fetch-Task keine Solardaten-Anfragen (`FetchTask::hasDeviceNo`,
+  `SolarData::FetchStatus::NoDeviceNo`, Text `NO_DEVICE_NO_CONFIGURED`)
+  und die entsprechenden Seiten zeigen einen Hinweis statt Werten.
+  Validierung (beide Screens,
   `serial_number_screen.cpp::isValidSerial()`): mind. 8 Zeichen, nur
   A-Z/0-9/"-" (Eingabe wird nach dem Tastatur-Schließen automatisch auf
   Großbuchstaben normalisiert). Ändern im Menü löst `Command::

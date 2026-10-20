@@ -26,6 +26,26 @@ namespace {
         }
         return sum;
     }
+
+    // Sicher schreiben: erst temp-Datei, dann alte entfernen, dann
+    // umbenennen (gleiches Muster wie yield.json/years.json).
+    bool writeCertificateInternal() {
+        if (SD.exists(CERT_TMP)) SD.remove(CERT_TMP);
+        File f = SD.open(CERT_TMP, FILE_WRITE);
+        if (!f) return false;
+        uint16_t sum = simpleChecksum(MAGIC);
+        char sumHex[8];
+        snprintf(sumHex, sizeof(sumHex), "%04X", sum);
+        f.printf("%s\n%s\n", MAGIC, sumHex);
+        f.close();
+        if (SD.exists(CERT_FILE)) SD.remove(CERT_FILE);
+        return SD.rename(CERT_TMP, CERT_FILE);
+    }
+
+    bool removeCertificateInternal() {
+        if (!SD.exists(CERT_FILE)) return true; // schon "aus"
+        return SD.remove(CERT_FILE);
+    }
 }
 
 bool certificateValid() {
@@ -43,25 +63,18 @@ bool certificateValid() {
     return actual == expected;
 }
 
-bool registerTap() {
+bool registerTap(bool& outNowUnlocked) {
     uint32_t now = millis();
     if (tapCount > 0 && now - lastTapMs > TAP_WINDOW_MS) tapCount = 0;
     lastTapMs = now;
     tapCount++;
     if (tapCount >= TAP_GOAL) {
         tapCount = 0;
-        // Sicher schreiben: erst temp-Datei, dann alte entfernen, dann
-        // umbenennen (gleiches Muster wie yield.json/years.json).
-        if (SD.exists(CERT_TMP)) SD.remove(CERT_TMP);
-        File f = SD.open(CERT_TMP, FILE_WRITE);
-        if (!f) return false;
-        uint16_t sum = simpleChecksum(MAGIC);
-        char sumHex[8];
-        snprintf(sumHex, sizeof(sumHex), "%04X", sum);
-        f.printf("%s\n%s\n", MAGIC, sumHex);
-        f.close();
-        if (SD.exists(CERT_FILE)) SD.remove(CERT_FILE);
-        return SD.rename(CERT_TMP, CERT_FILE);
+        bool currentlyUnlocked = certificateValid();
+        bool ok = currentlyUnlocked ? removeCertificateInternal() : writeCertificateInternal();
+        if (!ok) return false; // Zustand bleibt unveraendert (Auftrag)
+        outNowUnlocked = !currentlyUnlocked;
+        return true;
     }
     return false;
 }

@@ -6,9 +6,11 @@
 #include "location_bridge.h"
 #include "epever_client.h"
 #include "weather_client.h"
+#include "met_norway_client.h"
 #include "weather_data.h"
 #include "ip_geolocation_client.h"
 #include "ip_location_data.h"
+#include "device_no_resolution.h"
 #include "fetch_heartbeat.h"
 #include "http_deadline_guard.h"
 #include "config.h"
@@ -44,10 +46,18 @@ namespace {
     String currentDeviceNo;
     String currentToken;
     bool hasAccount = false;
+    // Ohne Seriennummer keine Solardaten-Anfragen (Auftrag "Seriennummer
+    // aus dem Projekt entfernen") - Ertrag/Batterie/Leistungskurve laufen
+    // nur mit hasDeviceNo, damit nie eine leere Nummer an die API geht.
+    // Login + Geraeteliste duerfen aber trotzdem laufen (Auftrag
+    // "Seriennummer automatisch ermitteln") - siehe
+    // runDeviceNoOnlyCycle()/tryResolveEquipmentList() unten.
+    bool hasDeviceNo = false;
     bool accountInitialized = false; // false bis zum ersten applyAccountSnapshot()-Aufruf
     bool needsLogin = false;
     uint8_t consecutiveFailures = 0;
     uint32_t lastFetchAttemptMs = 0;
+    uint32_t lastEquipmentListAttemptMs = 0; // Drosselung, siehe tryResolveEquipmentList()
     time_t lastSentNextFetchAt = -1; // siehe runFetchCycle()-Aufrufstelle, Anti-Flacker-Bremse
     uint32_t lastManualRefreshMs = 0;
     bool forceFetchNow = false;
@@ -83,6 +93,11 @@ namespace {
     float lastChargeStatusValue = 0.0f;
     String lastChargeStatusText;
 
+    // Vorwaertsdeklaration - Definition weiter unten, Aufrufer (u.a.
+    // runBatteryFetch()/runPowerCurveFetch() bei status 5004) stehen im
+    // Code davor.
+    void tryResolveEquipmentList();
+
     void applyAccountSnapshot() {
         AccountBridge::Snapshot snap = AccountBridge::get();
 
@@ -101,12 +116,16 @@ namespace {
         currentPassword = snap.password;
         currentDeviceNo = snap.deviceNo;
         hasAccount = currentEmail.length() > 0 && currentPassword.length() > 0;
+        hasDeviceNo = currentDeviceNo.length() > 0;
         currentToken = ""; // altes Token verwerfen, siehe Auftrag
         needsLogin = hasAccount;
         consecutiveFailures = 0;
         lastFetchAttemptMs = 0; // beim naechsten Tick (mit WLAN) sofort faellig
-        SolarData::setFetchStatus(hasAccount ? SolarData::FetchStatus::LoggingIn
-                                              : SolarData::FetchStatus::NoAccount);
+        SolarData::FetchStatus initialStatus;
+        if (!hasAccount) initialStatus = SolarData::FetchStatus::NoAccount;
+        else if (!hasDeviceNo) initialStatus = SolarData::FetchStatus::NoDeviceNo;
+        else initialStatus = SolarData::FetchStatus::LoggingIn;
+        SolarData::setFetchStatus(initialStatus);
     }
 
     // Wetter-Standort (siehe location_bridge.h) - unabhaengig vom
@@ -150,6 +169,19 @@ namespace {
         bool ok = WeatherClient::fetch(currentLat, currentLon, &httpCode, &responseBytes);
         Serial.printf("[fetch] Wetter: HTTP-Code=%d Antwortgroesse=%u Byte\n", httpCode, (unsigned)responseBytes);
         weatherConsecutiveFailures = ok ? 0 : (uint8_t)(weatherConsecutiveFailures + 1);
+
+        // Aktuelles Wetter zusaetzlich ueber MET Norway verfeinern (trifft
+        // laut Quellenvergleich deutlich besser) - ueberschreibt Temperatur
+        // UND Symbol. Schlaegt es fehl, bleiben die zuletzt gueltigen
+        // (Open-Meteo-)Werte einfach stehen.
+        float metTemp = 0.0f;
+        int16_t metCode = -1;
+        float metCloud = -1.0f;
+        int metHttpCode = -1;
+        size_t metResponseBytes = 0;
+        bool metOk = MetNorwayClient::fetchCurrent(currentLat, currentLon, metTemp, metCode, metCloud, &metHttpCode, &metResponseBytes);
+        Serial.printf("[fetch] MET Norway: HTTP-Code=%d Antwortgroesse=%u Byte\n", metHttpCode, (unsigned)metResponseBytes);
+        if (metOk) WeatherData::setCurrentRefined(metTemp, metCode);
     }
 
     // Batterie-/History-Abfrage (Port 7002) - Authentifizierung ueber den
@@ -177,7 +209,13 @@ namespace {
 
         Serial.printf("[fetch] Port 7002: HTTP-Code=%d status=%d\n", httpCode, apiStatus);
 
-        if (!ok) return false;
+        if (!ok) {
+            // 5004 = "Insufficient permissions", typisch bei einer
+            // falschen/veralteten Seriennummer (Auftrag 2c) - sofort
+            // pruefen (intern gedrosselt).
+            if (apiStatus == 5004) tryResolveEquipmentList();
+            return false;
+        }
 
         time_t measuredAt = result.voltage.valid ? result.voltage.time : time(nullptr);
         SolarData::setBattery(result.voltage.valid ? result.voltage.value : 0.0f,
@@ -275,7 +313,10 @@ namespace {
                           tOld.tm_hour, tOld.tm_min, tNew.tm_hour, tNew.tm_min, (unsigned)count);
         }
 
-        if (!ok) return false;
+        if (!ok) {
+            if (apiStatus == 5004) tryResolveEquipmentList();
+            return false;
+        }
 
         if (count > 0) {
             SolarData::setPower(points[0].watts, points[0].time);
@@ -297,6 +338,61 @@ namespace {
         return true;
     }
 
+    // Holt die Geraeteliste und wendet genau eins von drei Ergebnissen an
+    // (siehe Auftrag "Seriennummer automatisch ermitteln"):
+    // - genau 1 Geraet -> an Core 1 melden (DeviceNoResolution), dort
+    //   uebernommen, falls abweichend
+    // - mehrere Geraete, gespeicherte Nummer passt zu keinem -> nur
+    //   loggen, NICHT raten
+    // - 0 Geraete oder Fehler -> nichts tun
+    // Hoechstens alle Config::EQUIPMENT_LIST_MIN_INTERVAL_MS tatsaechlich
+    // abgefragt, unabhaengig davon, wie oft diese Funktion aufgerufen
+    // wird (Auftrag "Portal nicht belasten").
+    void tryResolveEquipmentList() {
+        uint32_t now = millis();
+        if (lastEquipmentListAttemptMs != 0 && now - lastEquipmentListAttemptMs < Config::EQUIPMENT_LIST_MIN_INTERVAL_MS) return;
+        lastEquipmentListAttemptMs = now;
+
+        if (currentToken.length() == 0) return;
+
+        EpeverClient::EquipmentListResult result;
+        int httpCode = -1, apiStatus = -1;
+        bool ok = EpeverClient::fetchEquipmentList(currentToken, result, &httpCode, &apiStatus);
+        if (!ok) return; // bereits in epever_client.cpp geloggt (nur Codes, keine Inhalte)
+
+        if (result.total == 1 && result.count >= 1) {
+            DeviceNoResolution::setResult(result.gatewayIds[0]);
+        } else if (result.total > 1) {
+            bool matches = false;
+            for (uint8_t i = 0; i < result.count; i++) {
+                if (result.gatewayIds[i] == currentDeviceNo) { matches = true; break; }
+            }
+            if (!matches) {
+                Serial.println("[fetch] Geraeteliste: mehrere Geraete, gespeicherte Nummer passt zu keinem - keine automatische Korrektur");
+            }
+        }
+        // total == 0: nichts zu tun, Zustand bleibt wie bisher.
+    }
+
+    // Login + Geraeteliste, OHNE Ertrag/Batterie/Leistungskurve - laeuft
+    // anstelle von runFetchCycle(), solange keine Seriennummer bekannt
+    // ist (Auftrag 2a: "nach jedem erfolgreichen Login, wenn keine
+    // Seriennummer gespeichert ist").
+    void runDeviceNoOnlyCycle() {
+        if (needsLogin || currentToken.length() == 0) {
+            SolarData::setFetchStatus(SolarData::FetchStatus::LoggingIn);
+            if (!EpeverClient::login(currentEmail, currentPassword, currentToken)) {
+                consecutiveFailures++;
+                SolarData::setFetchStatus(SolarData::FetchStatus::LoginFailed);
+                return;
+            }
+            needsLogin = false;
+        }
+        consecutiveFailures = 0;
+        SolarData::setFetchStatus(SolarData::FetchStatus::NoDeviceNo);
+        tryResolveEquipmentList();
+    }
+
     // Ein kompletter Abfrage-Zyklus: bei Bedarf einloggen, dann Ertrag
     // abfragen. Schlaegt die Ertragsabfrage fehl, wird genau einmal neu
     // eingeloggt und wiederholt (siehe Auftrag). Blockiert waehrend der
@@ -311,6 +407,9 @@ namespace {
                 return;
             }
             needsLogin = false;
+            // Neuer Login -> gespeicherte Seriennummer gegen die
+            // Geraeteliste pruefen (Auftrag 2b, intern gedrosselt).
+            tryResolveEquipmentList();
         }
 
         float today = 0, month = 0, year = 0, total = 0;
@@ -321,6 +420,7 @@ namespace {
             currentToken = "";
             if (EpeverClient::login(currentEmail, currentPassword, currentToken)) {
                 needsLogin = false;
+                tryResolveEquipmentList(); // ebenfalls ein neuer Login
                 ok = EpeverClient::fetchEnergy(currentToken, today, month, year, total);
             } else {
                 needsLogin = true;
@@ -454,7 +554,11 @@ namespace {
                 if (due) {
                     lastFetchAttemptMs = now;
                     forceFetchNow = false;
-                    runFetchCycle();
+                    if (hasDeviceNo) {
+                        runFetchCycle();
+                    } else {
+                        runDeviceNoOnlyCycle();
+                    }
                 }
                 // Geplante naechste Abfrage fuer die Anzeige (Auftrag
                 // "Naechste Abfrage" statt der doppelten "Messung"-Zeile,
@@ -555,6 +659,7 @@ void start() {
     SolarData::init();
     WeatherData::init();
     IpLocationData::init();
+    DeviceNoResolution::init();
     WifiStatus::init();
     FetchHeartbeat::init();
     HttpDeadlineGuard::init();

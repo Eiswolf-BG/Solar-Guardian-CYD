@@ -7,6 +7,15 @@
 #include <Arduino.h>
 
 namespace SerialNumberScreen {
+    // Versucht, die Seriennummer automatisch vom Portal zu holen (Login +
+    // Geraeteliste, synchron/blockierend, eigener kurzer Bildschirm
+    // "Verbinde mit dem Portal") - fuer die Ersteinrichtung, BEVOR der
+    // Fetch-Task laeuft (siehe main.cpp). Liefert true nur bei genau
+    // einem gefundenen Geraet (outDeviceNo gesetzt); sonst false (Login-
+    // Fehler, kein Netz, 0 oder mehrere Geraete) - der Aufrufer faellt
+    // dann auf den manuellen Screen zurueck.
+    bool tryAutoResolve(const String& email, const String& password, String& outDeviceNo);
+
     // Ersteinrichtung: appConfig.deviceNo ist der Arbeitsspeicher fuer die
     // Eingabe (vom Aufrufer VOR dem ersten Aufruf auf "" gesetzt, siehe
     // main.cpp). Rueckgabe true = "Los geht's" bestaetigt (gueltige

@@ -71,9 +71,6 @@ namespace {
 
         appConfig.portalEmail = "";
         appConfig.portalPassword = "";
-        // Bei einer frischen Einrichtung bewusst LEER, NICHT der
-        // eingebaute Standardwert (Config::DEFAULT_DEVICE_NO gehoert zu
-        // einem bestimmten Geraet) - siehe serial_number_screen.h.
         appConfig.deviceNo = "";
         // Standort bleibt in der Ersteinrichtung aussen vor (Auftrag
         // "Standort automatisch, notfalls einmalig per Eingabe") - die
@@ -94,6 +91,18 @@ namespace {
         bool setupFinished = false;
         while (!setupFinished) {
             CredentialsScreen::run(false); // "Weiter" statt "Los geht's" - speichert hier noch nichts
+
+            // Seriennummer automatisch vom Portal holen (Auftrag
+            // "Seriennummer automatisch ermitteln") - gelingt das, wird
+            // der manuelle Screen uebersprungen. Scheitert es (Fehler
+            // oder mehrere Geraete), normal weiter mit dem Screen unten.
+            String autoDeviceNo;
+            if (SerialNumberScreen::tryAutoResolve(appConfig.portalEmail, appConfig.portalPassword, autoDeviceNo)) {
+                appConfig.deviceNo = autoDeviceNo;
+                setupFinished = true;
+                continue;
+            }
+
             bool back = false;
             setupFinished = SerialNumberScreen::runFirstTimeSetup(back);
             if (back) continue;
@@ -184,6 +193,16 @@ void setup() {
     // ist die Zeit hier laengst abgelaufen, die Schleife endet sofort.
     while (!BootLogo::tick()) {
         delay(16);
+    }
+
+    // Konto vorhanden, aber (noch) keine Seriennummer (z.B. nach dem
+    // Entfernen des eingebauten Standardwerts) - einmalig denselben
+    // Screen wie im Menue "Konto" oeffnen, danach normal weiter (siehe
+    // Auftrag "Seriennummer aus dem Projekt entfernen"). Nach dem
+    // Speichern benachrichtigt der Screen selbst den Fetch-Task.
+    if (loadedOk && appConfig.portalEmail.length() > 0 && appConfig.portalPassword.length() > 0 &&
+        appConfig.deviceNo.length() == 0) {
+        SerialNumberScreen::runFromAccount();
     }
 
     MainScreen::enter();

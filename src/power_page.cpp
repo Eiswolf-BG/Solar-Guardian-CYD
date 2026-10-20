@@ -218,6 +218,9 @@ namespace {
             case SolarData::FetchStatus::NoAccount:
                 text = I18n::t(I18n::Str::NO_ACCOUNT_CONFIGURED);
                 break;
+            case SolarData::FetchStatus::NoDeviceNo:
+                text = I18n::t(I18n::Str::NO_DEVICE_NO_CONFIGURED);
+                break;
             case SolarData::FetchStatus::LoggingIn:
                 text = I18n::t(I18n::Str::STATUS_LOGGING_IN);
                 break;

@@ -5,8 +5,10 @@
 #include "app_config.h"
 #include "fetch_task.h"
 #include "account_bridge.h"
+#include "epever_client.h"
 #include "help_popup.h"
 #include "layout_check.h"
+#include "layout_utils.h"
 #include "i18n.h"
 #include "config.h"
 
@@ -92,11 +94,25 @@ namespace {
     Rect drawInputRow(uint16_t accent, const String& value) {
         Rect row = {4, 50, (int16_t)(Config::SCREEN_WIDTH - 8), 40};
         tft.drawRoundRect(row.x, row.y, row.w, row.h, 4, accent);
+        tft.setTextSize(1);
         tft.setCursor((int16_t)(row.x + 8), (int16_t)(row.y + 16));
         tft.print(I18n::t(I18n::Str::SERIAL_NUMBER_TITLE));
+
+        // Wert nie ungeprueft drucken (Auftrag "letzte Stelle abgeschnitten")
+        // - Schrift verkleinert sich automatisch, bis die ganze Nummer in
+        // die Zeile passt, statt ungeprueft ueber den Rahmen hinauszulaufen.
+        String displayValue = value.length() ? value : String(I18n::t(I18n::Str::TAP_HERE));
+        constexpr uint8_t SIZES[] = {1};
+        int16_t maxW = (int16_t)(row.w - 16);
+        LayoutUtils::FitResult fit = LayoutUtils::fitText(tft, displayValue, maxW, 16, SIZES, 1);
         tft.setCursor((int16_t)(row.x + 8), (int16_t)(row.y + 34));
-        tft.print(value.length() ? value : I18n::t(I18n::Str::TAP_HERE));
+        tft.print(fit.text);
+        tft.setTextSize(1);
+
         LayoutCheck::rect("Eingabefeld", row.x, row.y, row.w, row.h);
+        LayoutCheck::containedRect("Eingabefeld-Wert", row.x, row.y, row.w, row.h,
+                                    (int16_t)(row.x + 8), (int16_t)(row.y + 34 - tft.fontHeight()),
+                                    tft.textWidth(fit.text), tft.fontHeight());
         return row;
     }
 
@@ -115,6 +131,42 @@ namespace {
         LayoutCheck::rect("Hinweistext", 8, HINT_TOP, (int16_t)(Config::SCREEN_WIDTH - 16), (int16_t)(n * LINE_H));
         return (int16_t)(HINT_TOP + n * LINE_H);
     }
+}
+
+bool tryAutoResolve(const String& email, const String& password, String& outDeviceNo) {
+    uint16_t accent = Display::systemColor();
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
+    tft.setTextColor(accent, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    const char* msg = I18n::t(I18n::Str::CONNECTING_TO_PORTAL);
+    tft.drawString(msg, Config::SCREEN_WIDTH / 2, Config::SCREEN_HEIGHT / 2);
+    tft.setTextDatum(TL_DATUM);
+    LayoutCheck::begin("Verbinde mit dem Portal");
+    {
+        int16_t w = tft.textWidth(msg);
+        LayoutCheck::rect("Text", (int16_t)(Config::SCREEN_WIDTH / 2 - w / 2),
+                           (int16_t)(Config::SCREEN_HEIGHT / 2 - tft.fontHeight()), w, tft.fontHeight());
+    }
+    LayoutCheck::finish();
+
+    // Blockierend (Ersteinrichtung laeuft noch vor FetchTask::start(),
+    // siehe main.cpp) - die HTTP-Hilfsfunktionen bringen ihr eigenes
+    // Zeitlimit mit (Config::EPEVER_HTTP_TIMEOUT_MS/HTTP_TOTAL_TIMEOUT_MS).
+    String token;
+    if (!EpeverClient::login(email, password, token)) return false;
+
+    EpeverClient::EquipmentListResult result;
+    int httpCode = -1, apiStatus = -1;
+    if (!EpeverClient::fetchEquipmentList(token, result, &httpCode, &apiStatus)) return false;
+
+    if (result.total == 1 && result.count >= 1) {
+        outDeviceNo = result.gatewayIds[0];
+        return true;
+    }
+    // 0 oder mehrere Geraete - kein Raten, Aufrufer faellt auf den
+    // manuellen Screen zurueck.
+    return false;
 }
 
 bool runFirstTimeSetup(bool& outBack) {

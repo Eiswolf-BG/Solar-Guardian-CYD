@@ -11,10 +11,12 @@ namespace EasterEgg {
     bool certificateValid();
 
     // Bei jedem Tipp auf die dafuer vorgesehene Stelle aufrufen - zaehlt
-    // intern mit Zeitfenster, schreibt bei Erreichen der Zielzahl das
-    // Zertifikat und liefert in GENAU diesem Moment true (nur dann soll
-    // der Aufrufer eine Rueckmeldung zeigen).
-    bool registerTap();
+    // intern mit Zeitfenster. Bei Erreichen der Zielzahl wird der
+    // Zustand umgeschaltet (Zertifikat schreiben bzw. loeschen) und bei
+    // Erfolg GENAU in diesem Moment true geliefert (outNowUnlocked =
+    // neuer Zustand, nur dann gueltig). Schlaegt das Schreiben/Loeschen
+    // fehl, bleibt der Zustand unveraendert und es kommt false zurueck.
+    bool registerTap(bool& outNowUnlocked);
 
     // Bei jedem Tipp ausserhalb der dafuer vorgesehenen Stelle aufrufen -
     // setzt die Zaehlung zurueck.

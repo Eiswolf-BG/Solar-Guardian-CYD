@@ -58,4 +58,22 @@ namespace EpeverClient {
     bool fetchPowerCurve(const String& deviceNo, const String& token,
                         PowerCurvePoint* points, uint8_t& outCount,
                         int* outHttpCode, int* outApiStatus);
+
+    constexpr uint8_t EQUIPMENT_LIST_MAX_DEVICES = 9; // entspricht pageSize im Auftrag
+
+    // Nur die Seriennummer (Feld "gatewayId") je Eintrag - die Antwort
+    // enthaelt auch persoenliche Daten (Anschrift/Name/Konto), die hier
+    // bewusst NICHT geparst werden (siehe Auftrag "automatische
+    // Seriennummer-Ermittlung").
+    struct EquipmentListResult {
+        int32_t total = 0; // data.total laut Portal (Gesamtzahl Geraete)
+        uint8_t count = 0; // tatsaechlich gelesene Eintraege (<= EQUIPMENT_LIST_MAX_DEVICES)
+        String gatewayIds[EQUIPMENT_LIST_MAX_DEVICES];
+    };
+
+    // Geraeteliste der Anlage. NIE die Seriennummer oder das Token
+    // loggen (siehe Aufrufer in fetch_task.cpp) - diese Funktion selbst
+    // loggt bei Fehlern nur HTTP-/Portal-Statuscodes.
+    bool fetchEquipmentList(const String& token, EquipmentListResult& out,
+                            int* outHttpCode, int* outApiStatus);
 }

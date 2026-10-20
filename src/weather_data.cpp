@@ -61,6 +61,16 @@ void setCurrent(float tempC, int16_t weatherCode, bool isDay, time_t measuredAt)
     });
 }
 
+void setCurrentRefined(float tempC, int16_t weatherCode) {
+    mutate([&](Data& d) {
+        if (!d.currentValid) return false;
+        bool changed = floatChanged(d.currentTempC, tempC, 0.05f) || d.currentWeatherCode != weatherCode;
+        d.currentTempC = tempC;
+        d.currentWeatherCode = weatherCode;
+        return changed;
+    });
+}
+
 void setDaily(const DayForecast* days, uint8_t count) {
     mutate([&](Data& d) {
         uint8_t n = count > FORECAST_DAYS ? FORECAST_DAYS : count;

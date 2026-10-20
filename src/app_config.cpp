@@ -78,11 +78,12 @@ bool load() {
     }
 
     if (loadedVersion < 4) {
-        // Migration auf Version 4: neues Feld "device_no" mit Standardwert.
-        appConfig.deviceNo = Config::DEFAULT_DEVICE_NO;
+        // Migration auf Version 4: Feld "device_no" existierte noch nicht -
+        // kein eingebauter Standardwert mehr (Auftrag "Seriennummer aus
+        // dem Projekt entfernen"), bleibt leer bis zur Eingabe am Geraet.
+        appConfig.deviceNo = "";
     } else {
-        String dn = String((const char*)(doc["device_no"] | Config::DEFAULT_DEVICE_NO));
-        appConfig.deviceNo = dn.length() > 0 ? dn : String(Config::DEFAULT_DEVICE_NO);
+        appConfig.deviceNo = String((const char*)(doc["device_no"] | ""));
     }
 
     // Optionale Standort-Felder (Auftrag "Standort automatisch, notfalls
