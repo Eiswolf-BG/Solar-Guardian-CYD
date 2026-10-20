@@ -42,7 +42,7 @@ namespace {
         uint16_t accent = Display::systemColor();
         for (uint8_t i = 0; i < BAR_COUNT; i++) {
             int16_t barH = 3 + i * 3;
-            uint16_t color = (i < level) ? accent : TFT_DARKGREY;
+            uint16_t color = (i < level) ? accent : Display::secondaryColor();
             tft.fillRect(x, baseline - barH, BAR_W, barH, color);
             x += BAR_W + BAR_GAP;
         }
@@ -108,7 +108,7 @@ bool run(bool allowCancel, String& outSsid, String& outPassword) {
             uint8_t netIdx = scrollOffset + i;
             Rect r = rowRect(i);
             rowRects[i] = r;
-            tft.drawRoundRect(r.x, r.y, r.w, r.h, 3, TFT_DARKGREY);
+            tft.drawRoundRect(r.x, r.y, r.w, r.h, 3, Display::secondaryColor());
             tft.setCursor((int16_t)(r.x + 8), (int16_t)(r.y + r.h / 2 + 4));
             tft.print(networks[netIdx].ssid);
             drawSignalBars((int16_t)(r.x + r.w - 6), r.y, networks[netIdx].rssi);
@@ -119,10 +119,10 @@ bool run(bool allowCancel, String& outSsid, String& outPassword) {
         Rect upBtn = {(int16_t)(Config::SCREEN_WIDTH - 40), (int16_t)(LIST_TOP + VISIBLE_ROWS * ROW_H + 4), 36, 30};
         Rect downBtn = {4, upBtn.y, 36, 30};
         if (canScrollUp || canScrollDown) {
-            tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accent : TFT_DARKGREY);
+            tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accent : Display::secondaryColor());
             tft.setTextDatum(MC_DATUM);
             tft.drawString("<", downBtn.x + downBtn.w / 2, downBtn.y + downBtn.h / 2);
-            tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accent : TFT_DARKGREY);
+            tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accent : Display::secondaryColor());
             tft.drawString(">", upBtn.x + upBtn.w / 2, upBtn.y + upBtn.h / 2);
             tft.setTextDatum(TL_DATUM);
         }

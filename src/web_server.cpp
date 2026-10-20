@@ -45,26 +45,33 @@ section{display:none;}
 section.active{display:block;}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
 .card{background:var(--card);border:1px solid #242424;border-radius:10px;padding:14px;}
-.card .label{font-size:.78rem;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
-.card .value{font-size:1.7rem;font-weight:600;color:var(--accent);}
-.card .unit{font-size:.9rem;color:var(--dim);margin-left:4px;}
+.card .label{font-size:.78rem;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+.card .value{font-size:1.7rem;font-weight:600;color:var(--dim);}
+.card .unit{font-size:.9rem;color:var(--accent);margin-left:4px;}
 .card .sub{font-size:.85rem;color:var(--dim);margin-top:6px;}
 .weather-hero{display:flex;align-items:center;gap:16px;}
 .weather-hero svg{width:72px;height:72px;flex:none;}
-.weather-hero .temp{font-size:2.2rem;font-weight:600;color:var(--accent);}
+.weather-hero .temp{font-size:2.2rem;font-weight:600;color:var(--dim);}
 #weekRows{display:flex;flex-direction:column;gap:6px;margin-top:14px;}
 .weekRow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid #242424;border-radius:8px;padding:8px 12px;}
 .weekRow svg{width:28px;height:28px;flex:none;}
-.weekRow .day{width:72px;color:var(--text);font-size:.85rem;}
+.weekRow .day{width:72px;color:var(--accent);font-size:.85rem;}
 .weekRow .range{margin-left:auto;font-size:.85rem;color:var(--dim);}
-.weekRow .range b{color:var(--text);}
+.weekRow .range b{color:var(--dim);}
 canvas{width:100%;height:160px;background:#101010;border:1px solid #242424;border-radius:8px;}
-.yearsChart{display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:20px;}
-.yearsChart .bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
-.yearsChart .bar .fill{width:70%;background:var(--dim);border-radius:4px 4px 0 0;}
-.yearsChart .bar.cur .fill{background:var(--accent);}
-.yearsChart .bar .v{font-size:.72rem;color:var(--dim);margin-bottom:4px;}
-.yearsChart .bar .y{font-size:.78rem;color:var(--dim);margin-top:6px;}
+.maxLine{font-size:1rem;margin:6px 0 10px;}
+.maxLine .lbl{color:var(--accent);}
+.maxLine .v{color:var(--dim);font-weight:600;}
+.maxLine .u{color:var(--accent);}
+.subnav{display:flex;gap:8px;margin-bottom:10px;}
+.subnav button{flex:1;padding:8px;background:none;border:1px solid #333;border-radius:6px;color:var(--accent);font-size:.85rem;cursor:pointer;}
+.subnav button.active{background:var(--accent);color:#000;border-color:var(--accent);}
+.barsChart{display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:20px;}
+.barsChart .bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+.barsChart .bar .fill{width:70%;background:var(--accent);opacity:.45;border-radius:4px 4px 0 0;}
+.barsChart .bar.cur .fill{opacity:1;}
+.barsChart .bar .v{font-size:.72rem;color:var(--dim);margin-bottom:4px;}
+.barsChart .bar .y{font-size:.78rem;color:var(--dim);margin-top:6px;}
 footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
 .err{color:#ff5050;}
 </style>
@@ -97,6 +104,10 @@ footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
   </div>
   <canvas id="chart" style="margin-top:14px;"></canvas>
 </section>
+<section id="tab-daily">
+  <div class="maxLine"><span class="lbl" id="lblMax">Max</span>: <span class="v" id="dMax">--</span><span class="u"> W</span></div>
+  <canvas id="dailyChart"></canvas>
+</section>
 <section id="tab-yield">
   <div class="grid">
     <div class="card"><div class="label" id="lblYToday">Heute</div><div class="value"><span id="yToday">--</span><span class="unit">kWh</span></div></div>
@@ -114,8 +125,10 @@ footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
     <div class="card" style="grid-column:1/-1;"><div class="label" id="lblBStatus">Status</div><div class="value" style="font-size:1.2rem;" id="bStatus">--</div></div>
   </div>
 </section>
-<section id="tab-years">
-  <div class="yearsChart" id="yearsChart"></div>
+<section id="tab-history">
+  <div class="subnav" id="histSubnav"></div>
+  <div class="maxLine"><span class="u" id="histUnit">kWh</span></div>
+  <div class="barsChart" id="histChart"></div>
 </section>
 <section id="tab-weather">
   <div class="card weather-hero">
@@ -129,23 +142,30 @@ footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
 <script>
 (function(){
 var L={
- de:{tabs:['Übersicht','Leistung','Ertrag','Batterie','Jahre','Wetter'],
+ de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','Verlauf','Wetter'],
      power:'Leistung',today:'Heute',battery:'Batterie',week:'Woche',month:'Monat',year:'Jahr',
      voltage:'Spannung',current:'Strom',temp:'Temperatur',status:'Status',weather:'Wetter',
      stand:'Stand',next:'Nächste Abfrage',noLoc:'Standort nicht gesetzt',noConn:'Keine Verbindung zum Gerät',
-     wd:['So','Mo','Di','Mi','Do','Fr','Sa'],now:'jetzt'},
- en:{tabs:['Overview','Power','Yield','Battery','Years','Weather'],
+     wd:['So','Mo','Di','Mi','Do','Fr','Sa'],
+     mo:['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
+     now:'jetzt',max:'Max',days:'Tage',months:'Monate',years:'Jahre'},
+ en:{tabs:['Overview','Power','Daily curve','Yield','Battery','History','Weather'],
      power:'Power',today:'Today',battery:'Battery',week:'Week',month:'Month',year:'Year',
      voltage:'Voltage',current:'Current',temp:'Temperature',status:'Status',weather:'Weather',
      stand:'As of',next:'Next update',noLoc:'No location set',noConn:'Lost connection to device',
-     wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],now:'now'}
+     wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+     mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+     now:'now',max:'Max',days:'Days',months:'Months',years:'Years'}
 };
 var lang='de', t=L.de;
 var last={};
 var tabsEl=document.getElementById('tabs');
-var tabIds=['tab-overview','tab-power','tab-yield','tab-battery','tab-years','tab-weather'];
+var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-history','tab-weather'];
 var activeTab=0;
 var lastHist=null;
+var lastDay=null;
+var histPeriod=0; // 0=Tage 1=Monate 2=Jahre
+var lastHistData=null;
 
 function buildTabs(){
   tabsEl.innerHTML='';
@@ -166,9 +186,17 @@ function showTab(){
   });
   // Das Canvas hat waehrend display:none eine Breite/Hoehe von 0 - ein
   // Poll, der in dieser Zeit lief, konnte also nicht zeichnen. Beim
-  // Umschalten auf den Leistungs-Tab deshalb mit den zuletzt bekannten
-  // Werten sofort nachzeichnen, statt auf den naechsten Poll zu warten.
+  // Umschalten auf den jeweiligen Diagramm-Tab deshalb mit den zuletzt
+  // bekannten Werten sofort nachzeichnen, statt auf den naechsten Poll
+  // zu warten. Tage/Tagesverlauf/Verlauf-Tabs holen ihre Daten erst bei
+  // Aktivierung (eigene, kleine Abrufe statt Dauerlast, siehe Auftrag).
   if (activeTab===1) drawChart(lastHist);
+  if (activeTab===2) pollDay();
+  // Bug behoben: der Tage/Monate/Jahre-Unterreiter (histSubnav) wurde nie
+  // gebaut, nur beim Klick auf einen seiner (nie existierenden) Knoepfe -
+  // Monate/Jahre waren dadurch unerreichbar, nur die Standardansicht
+  // "Tage" zeigte ueberhaupt Daten.
+  if (activeTab===5) { buildHistSubnav(); pollHistory(); }
 }
 
 function setText(id,val){
@@ -296,6 +324,120 @@ function drawChart(hist){
   ctx.fillText(t.now,pad.l+cw,h-4);
 }
 
+// ---- Tagesverlauf (05:00-22:00 Uhr) ----
+var DAY_START_MIN=5*60, DAY_END_MIN=22*60, DAY_SPAN_MIN=DAY_END_MIN-DAY_START_MIN;
+function drawDailyChart(day){
+  var cv=document.getElementById('dailyChart');
+  var dpr=window.devicePixelRatio||1;
+  var w=cv.clientWidth, h=cv.clientHeight;
+  if(w<=0||h<=0) return;
+  cv.width=w*dpr; cv.height=h*dpr;
+  var ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  var accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  var pts=(day&&day.pts)||[];
+  if(pts.length<2){
+    ctx.fillStyle='#8a8a8a'; ctx.font='13px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('--', w/2, h/2);
+    return;
+  }
+  var pad={l:44,r:10,t:10,b:20};
+  var cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
+  var maxV=(typeof day.max==='number')?day.max:0;
+  var mag=Math.pow(10,Math.floor(Math.log10(Math.max(maxV,1))));
+  var norm=maxV/mag;
+  var niceMax=(norm<=1?1:norm<=2?2:norm<=5?5:10)*mag;
+  if(niceMax<=0) niceMax=100;
+  // Raster (Hilfslinien) in der gedaempften Sekundaerfarbe, wie am Geraet.
+  ctx.strokeStyle='#242424'; ctx.lineWidth=1;
+  for(var g=1;g<=4;g++){
+    var gy=pad.t+ch-(ch*g/4);
+    ctx.beginPath(); ctx.moveTo(pad.l,gy); ctx.lineTo(pad.l+cw,gy); ctx.stroke();
+  }
+  ctx.fillStyle='#8a8a8a'; ctx.font='11px sans-serif'; ctx.textAlign='right';
+  ctx.fillText(Math.round(niceMax)+' W', pad.l-4, pad.t+8);
+  // Kurve (abgefragter Wert) in der Akzentfarbe, wie am Geraet.
+  ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.beginPath();
+  pts.forEach(function(p,i){
+    var frac=(p[0]-DAY_START_MIN)/DAY_SPAN_MIN; if(frac<0)frac=0; if(frac>1)frac=1;
+    var x=pad.l+frac*cw;
+    var vfrac=Math.max(0,Math.min(1,p[1]/niceMax));
+    var y=pad.t+ch-vfrac*ch;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // "Jetzt"-Linie, nur innerhalb des Anzeigefensters.
+  var now=new Date();
+  var nowMin=now.getHours()*60+now.getMinutes();
+  if(nowMin>=DAY_START_MIN && nowMin<DAY_END_MIN){
+    var nfrac=(nowMin-DAY_START_MIN)/DAY_SPAN_MIN;
+    var nx=pad.l+nfrac*cw;
+    ctx.strokeStyle=accent; ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(nx,pad.t); ctx.lineTo(nx,pad.t+ch); ctx.stroke();
+  }
+  // Zeitachse (05/09/13/17/22) in der gedaempften Sekundaerfarbe.
+  ctx.fillStyle='#8a8a8a'; ctx.textAlign='center'; ctx.font='10px sans-serif';
+  [5,9,13,17,22].forEach(function(hh){
+    var frac=(hh*60-DAY_START_MIN)/DAY_SPAN_MIN;
+    ctx.fillText(String(hh),pad.l+frac*cw,h-4);
+  });
+}
+
+function pollDay(){
+  fetch('/api/day').then(function(r){return r.json();}).then(function(d){
+    lastDay=d;
+    setText('dMax', (typeof d.max==='number')?fmt0(d.max):'--');
+    drawDailyChart(d);
+  }).catch(function(){});
+}
+
+// ---- Tage/Monate/Jahre (Reiter wie am Geraet) ----
+function buildHistSubnav(){
+  var el=document.getElementById('histSubnav');
+  el.innerHTML='';
+  [t.days,t.months,t.years].forEach(function(name,i){
+    var b=document.createElement('button');
+    b.textContent=name;
+    if(i===histPeriod) b.className='active';
+    b.onclick=function(){ histPeriod=i; buildHistSubnav(); renderHistory(lastHistData); };
+    el.appendChild(b);
+  });
+}
+function histLabel(entry){
+  if(histPeriod===0){ // Tage: Datum -> Wochentag
+    var d=new Date(entry.d+'T12:00:00');
+    return isNaN(d.getTime()) ? '' : t.wd[d.getDay()];
+  }
+  if(histPeriod===1){ // Monate: "YYYY-MM" -> Monatskuerzel
+    var mm=parseInt(entry.m.substring(5,7),10);
+    return (mm>=1&&mm<=12) ? t.mo[mm-1] : '';
+  }
+  return String(entry.y); // Jahre
+}
+function renderHistory(data){
+  if(!data) return;
+  var arr=(histPeriod===0?data.days:histPeriod===1?data.months:data.years)||[];
+  var hc=document.getElementById('histChart');
+  hc.innerHTML='';
+  var maxKwh=1; arr.forEach(function(e){ if(e.kwh>maxKwh) maxKwh=e.kwh; });
+  arr.forEach(function(e){
+    var bar=document.createElement('div'); bar.className='bar'+(e.cur?' cur':'');
+    var vEl=document.createElement('div'); vEl.className='v'; vEl.textContent=fmt0(e.kwh);
+    var fill=document.createElement('div'); fill.className='fill';
+    fill.style.height=Math.max(4,(e.kwh/maxKwh)*100)+'%';
+    var yEl=document.createElement('div'); yEl.className='y'; yEl.textContent=histLabel(e);
+    bar.appendChild(vEl); bar.appendChild(fill); bar.appendChild(yEl);
+    hc.appendChild(bar);
+  });
+}
+function pollHistory(){
+  fetch('/api/history').then(function(r){return r.json();}).then(function(d){
+    lastHistData=d;
+    renderHistory(d);
+  }).catch(function(){});
+}
+
 function render(data){
   if(data.lang && data.lang!==lang){ lang=data.lang; t=L[lang]||L.de; buildTabs(); showTab(); }
   document.documentElement.lang=lang;
@@ -361,23 +503,7 @@ function render(data){
     });
   }
 
-  var yearsSig = JSON.stringify(data.years||[]);
-  if (last.yearsSig !== yearsSig){
-    last.yearsSig = yearsSig;
-    var yc=document.getElementById('yearsChart');
-    yc.innerHTML='';
-    var years=data.years||[];
-    var maxKwh=1; years.forEach(function(e){ if(e.kwh>maxKwh) maxKwh=e.kwh; });
-    years.forEach(function(e){
-      var bar=document.createElement('div'); bar.className='bar'+(e.cur?' cur':'');
-      var vEl=document.createElement('div'); vEl.className='v'; vEl.textContent=fmt0(e.kwh);
-      var fill=document.createElement('div'); fill.className='fill';
-      fill.style.height=Math.max(4,(e.kwh/maxKwh)*100)+'%';
-      var yEl=document.createElement('div'); yEl.className='y'; yEl.textContent=e.y;
-      bar.appendChild(vEl); bar.appendChild(fill); bar.appendChild(yEl);
-      yc.appendChild(bar);
-    });
-  }
+  setText('lblMax', t.max);
 
   setText('footerNote','Solar Guardian CYD');
 }
@@ -538,20 +664,85 @@ setInterval(poll,5000);
             o["min"] = d.tempMinC;
         }
 
-        JsonArray years = doc["years"].to<JsonArray>();
-        YieldLedger::YearEntry pastYears[Config::HISTORY_CHART_MAX_BARS];
-        uint8_t pastCount = YieldLedger::pastYears(pastYears, (uint8_t)(Config::HISTORY_CHART_MAX_BARS - 1));
-        for (uint8_t i = 0; i < pastCount; i++) {
-            JsonObject o = years.add<JsonObject>();
-            o["y"] = pastYears[i].year;
-            o["kwh"] = pastYears[i].kwh;
+        String out;
+        serializeJson(doc, out);
+        server.send(200, "application/json", out);
+    }
+
+    // Tagesverlauf (05:00-22:00) - eigener, kleiner Abruf statt Teil von
+    // /api/data (Auftrag "kompakte eigene Abrufe"), damit die oft recht
+    // grosse Punktliste nur geladen wird, wenn der Tagesverlauf-Tab auch
+    // wirklich offen ist. Punkte als [minute, watt]-Zahlenpaare statt
+    // benannter Objekte - spart Bytes pro Punkt.
+    void handleApiDay() {
+        SolarData::Data snap = SolarData::snapshot();
+        JsonDocument doc;
+        float maxW = 0.0f;
+        for (uint16_t i = 0; i < snap.dailyCurveCount; i++) {
+            if ((float)snap.dailyCurve[i].watts > maxW) maxW = (float)snap.dailyCurve[i].watts;
+        }
+        doc["max"] = snap.dailyCurveCount > 0 ? maxW : (float)NAN;
+        JsonArray pts = doc["pts"].to<JsonArray>();
+        for (uint16_t i = 0; i < snap.dailyCurveCount; i++) {
+            JsonArray p = pts.add<JsonArray>();
+            p.add(snap.dailyCurve[i].minutesSinceMidnight);
+            p.add(snap.dailyCurve[i].watts);
+        }
+        String out;
+        serializeJson(doc, out);
+        server.send(200, "application/json", out);
+    }
+
+    // Tage/Monate/Jahre - ebenfalls ein eigener, kleiner Abruf (Auftrag),
+    // nur bei geoeffnetem Verlauf-Tab abgerufen. Gleiche Quellen wie am
+    // Geraet (siehe years_page.cpp).
+    void handleApiHistory() {
+        JsonDocument doc;
+        YieldLedger::Values yv = YieldLedger::current();
+        struct tm nowTm;
+        bool haveNow = getLocalTime(&nowTm, 5);
+
+        JsonArray days = doc["days"].to<JsonArray>();
+        YieldLedger::DayValue dvals[7];
+        uint8_t dcount = YieldLedger::lastDaysIncludingToday(dvals, 7);
+        for (uint8_t i = 0; i < dcount; i++) {
+            JsonObject o = days.add<JsonObject>();
+            o["d"] = dvals[i].date;
+            o["kwh"] = dvals[i].kwh;
+            o["cur"] = (i == (uint8_t)(dcount - 1));
+        }
+
+        JsonArray months = doc["months"].to<JsonArray>();
+        YieldLedger::MonthEntry mvals[6];
+        uint8_t mcount = YieldLedger::pastMonths(mvals, 6);
+        for (uint8_t i = 0; i < mcount; i++) {
+            JsonObject o = months.add<JsonObject>();
+            o["m"] = mvals[i].key;
+            o["kwh"] = mvals[i].kwh;
             o["cur"] = false;
         }
-        struct tm nowTm;
-        if (getLocalTime(&nowTm, 5)) {
+        if (haveNow) {
+            char key[8];
+            snprintf(key, sizeof(key), "%04d-%02d", nowTm.tm_year + 1900, nowTm.tm_mon + 1);
+            JsonObject o = months.add<JsonObject>();
+            o["m"] = key;
+            o["kwh"] = yv.valid ? yv.monthKwh : 0.0f;
+            o["cur"] = true;
+        }
+
+        JsonArray years = doc["years"].to<JsonArray>();
+        YieldLedger::YearEntry yvals[Config::HISTORY_CHART_MAX_BARS];
+        uint8_t ycount = YieldLedger::pastYears(yvals, (uint8_t)(Config::HISTORY_CHART_MAX_BARS - 1));
+        for (uint8_t i = 0; i < ycount; i++) {
+            JsonObject o = years.add<JsonObject>();
+            o["y"] = yvals[i].year;
+            o["kwh"] = yvals[i].kwh;
+            o["cur"] = false;
+        }
+        if (haveNow) {
             JsonObject o = years.add<JsonObject>();
             o["y"] = nowTm.tm_year + 1900;
-            o["kwh"] = yield.valid ? yield.yearKwh : 0.0f;
+            o["kwh"] = yv.valid ? yv.yearKwh : 0.0f;
             o["cur"] = true;
         }
 
@@ -586,6 +777,8 @@ void tick() {
         if (WiFi.status() != WL_CONNECTED) return;
         server.on("/", sendPageChunked);
         server.on("/api/data", handleApiData);
+        server.on("/api/day", handleApiDay);
+        server.on("/api/history", handleApiHistory);
         server.onNotFound(handleNotFound);
         server.begin();
         started = true;

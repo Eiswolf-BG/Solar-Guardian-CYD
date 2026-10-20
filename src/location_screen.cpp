@@ -133,7 +133,7 @@ namespace {
                 if (hasSecondLine) {
                     tft.setTextSize(1);
                     LayoutUtils::FitResult subFit = LayoutUtils::fitText(tft, results[idx].disambiguation, nameMaxW, 14, ROW_SIZES, 1);
-                    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                    tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
                     tft.drawString(subFit.text, (int16_t)(r.x + 8), (int16_t)(r.y + ROW_H * 0.74f));
                 }
                 tft.setTextDatum(TL_DATUM);
@@ -146,10 +146,10 @@ namespace {
             Rect downBtn = {4, upBtn.y, 36, 28};
             if (canScrollUp || canScrollDown) {
                 tft.setTextColor(accentNow, TFT_BLACK);
-                tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accentNow : TFT_DARKGREY);
+                tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accentNow : Display::secondaryColor());
                 tft.setTextDatum(MC_DATUM);
                 tft.drawString("<", (int16_t)(downBtn.x + downBtn.w / 2), (int16_t)(downBtn.y + downBtn.h / 2));
-                tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accentNow : TFT_DARKGREY);
+                tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accentNow : Display::secondaryColor());
                 tft.drawString(">", (int16_t)(upBtn.x + upBtn.w / 2), (int16_t)(upBtn.y + upBtn.h / 2));
                 tft.setTextDatum(TL_DATUM);
                 LayoutCheck::rect("Scroll-runter", downBtn.x, downBtn.y, downBtn.w, downBtn.h);

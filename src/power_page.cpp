@@ -80,17 +80,6 @@ namespace {
 
     int16_t tileWidth() { return (int16_t)((Config::SCREEN_WIDTH - 3 * TILE_GAP) / 2); }
 
-    // Etwa halbe Helligkeit der Systemfarbe fuer die Diagramm-Hilfslinien
-    // (Alex' Wunsch "gedimmte Systemfarbe") - gleiche Kanal-Halbierung wie
-    // in years_page.cpp, hier bewusst lokal dupliziert (siehe CLAUDE.md
-    // Code-Stil: jeder Screen bleibt unabhaengig).
-    uint16_t dimColor(uint16_t c) {
-        uint8_t r = (uint8_t)((c >> 11) & 0x1F) >> 1;
-        uint8_t g = (uint8_t)((c >> 5) & 0x3F) >> 1;
-        uint8_t b = (uint8_t)(c & 0x1F) >> 1;
-        return (uint16_t)((r << 11) | (g << 5) | b);
-    }
-
     // Zahl auf eine "runde" Obergrenze fuer die Y-Achse aufrunden
     // (1-2-5-Schema) - 0/negative Werte (z.B. nachts) bekommen eine feste
     // Mindestskala, damit die Achse nicht kollabiert.
@@ -100,20 +89,6 @@ namespace {
         float norm = v / mag;
         float niceNorm = (norm <= 1.0f) ? 1.0f : (norm <= 2.0f) ? 2.0f : (norm <= 5.0f) ? 5.0f : 10.0f;
         return niceNorm * mag;
-    }
-
-    void formatPower(float watts, char* out, size_t outSize) {
-        char buf[24];
-        if (fabsf(watts) >= 1000.0f) {
-            snprintf(buf, sizeof(buf), "%.2f %s", watts / 1000.0f, I18n::t(I18n::Str::POWER_UNIT_KW));
-        } else {
-            snprintf(buf, sizeof(buf), "%.0f %s", watts, I18n::t(I18n::Str::POWER_UNIT_W));
-        }
-        if (appConfig.language == 0) {
-            for (char* p = buf; *p; p++) if (*p == '.') *p = ',';
-        }
-        strncpy(out, buf, outSize - 1);
-        out[outSize - 1] = 0;
     }
 
     void formatNumber(float value, uint8_t decimals, char* out, size_t outSize) {
@@ -192,20 +167,30 @@ namespace {
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - 4);
 
-        uint16_t valueColor = (valid && !stale) ? accent : TFT_DARKGREY;
-        t.setTextColor(valueColor, TFT_BLACK);
+        // Zahlenwert in Sekundaerfarbe, Einheit in Systemfarbe (Auftrag
+        // "Farbregeln vereinheitlichen") - Groesse weiter anhand der
+        // Gesamtlaenge (Zahl+Einheit) bestimmt, dann als zwei
+        // Farbsegmente nebeneinander gezeichnet.
+        uint16_t numColor = Display::valueColor(valid && !stale, accent);
         String combined = valueStr;
         combined += " ";
         combined += unit;
         LayoutUtils::FitResult fit = fitNumberNoTruncate(t, combined, w, valueZoneH, VALUE_SIZES, 2);
+        t.setTextSize(fit.textSize);
+        int16_t numW = t.textWidth(valueStr);
+        int16_t totalW = t.textWidth(combined);
         int16_t valueCY = (int16_t)(valueZoneTop + valueZoneH / 2);
-        t.setTextDatum(MC_DATUM);
-        t.drawString(fit.text, (int16_t)(w / 2), valueCY);
+        int16_t startX = (int16_t)(w / 2 - totalW / 2);
+        t.setTextDatum(ML_DATUM);
+        t.setTextColor(numColor, TFT_BLACK);
+        t.drawString(valueStr, startX, valueCY);
+        t.setTextColor(accent, TFT_BLACK);
+        t.drawString(String(" ") + unit, (int16_t)(startX + numW), valueCY);
         t.setTextDatum(TL_DATUM);
         {
-            Measured vr = measureCentered(t, (int16_t)(w / 2), valueCY, fit.text, fit.textSize);
+            int16_t th = t.fontHeight();
             LayoutCheck::containedRect("Kachel-Wert", absX, absY, w, h,
-                                        (int16_t)(absX + vr.x), (int16_t)(absY + vr.y), vr.w, vr.h);
+                                        (int16_t)(absX + startX), (int16_t)(absY + valueCY - th / 2), totalW, th);
         }
 
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
@@ -287,27 +272,60 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
     time_t now = time(nullptr);
     bool stale = snap.powerMeasuredAt > 0 &&
                  (now - snap.powerMeasuredAt) > (time_t)(Config::EPEVER_STALE_AFTER_MS / 1000);
-    uint16_t dimAccent = dimColor(accent);
-    uint16_t numColor = (snap.powerValid && !stale) ? accent : TFT_DARKGREY;
+    uint16_t numColor = Display::valueColor(snap.powerValid && !stale, accent);
 
     // Grosse, zentrierte aktuelle Leistung - eigener Off-Screen-Puffer
     // (Auftrag "Flackerfrei zeichnen"), nur bei echter Aenderung des
-    // angezeigten Texts.
+    // angezeigten Texts. Zahlenwert in Sekundaerfarbe, Einheit in
+    // Systemfarbe (Auftrag "Farbregeln vereinheitlichen") - Zahl und
+    // Einheit deshalb getrennt gehalten statt wie vorher ein String.
+    char powerNum[16];
+    char powerUnit[8] = {0};
+    if (snap.powerValid) {
+        float watts = snap.currentPowerW;
+        if (fabsf(watts) >= 1000.0f) {
+            snprintf(powerNum, sizeof(powerNum), "%.2f", watts / 1000.0f);
+            strncpy(powerUnit, I18n::t(I18n::Str::POWER_UNIT_KW), sizeof(powerUnit) - 1);
+        } else {
+            snprintf(powerNum, sizeof(powerNum), "%.0f", watts);
+            strncpy(powerUnit, I18n::t(I18n::Str::POWER_UNIT_W), sizeof(powerUnit) - 1);
+        }
+        if (appConfig.language == 0) {
+            for (char* p = powerNum; *p; p++) if (*p == '.') *p = ',';
+        }
+    } else {
+        strncpy(powerNum, "--", sizeof(powerNum));
+    }
     char powerStr[24];
-    if (snap.powerValid) formatPower(snap.currentPowerW, powerStr, sizeof(powerStr));
-    else strncpy(powerStr, "--", sizeof(powerStr));
-    String powerSig = String(powerStr) + (numColor == accent ? "1" : "0");
+    snprintf(powerStr, sizeof(powerStr), "%s %s", powerNum, powerUnit);
+    String powerSig = String(powerStr);
     int16_t powerZoneTop = (int16_t)(areaTop + POWER_VALUE_OFFSET);
     int16_t powerZoneW = (int16_t)(Config::SCREEN_WIDTH - 20);
     if (powerSig != lastPowerSig) {
         lastPowerSig = powerSig;
         RedrawDiag::log("Leistung-Wert", "Inhalt geaendert");
         TileSprite::drawInto(10, powerZoneTop, powerZoneW, POWER_VALUE_H, [&](TFT_eSPI& t) {
-            t.setTextColor(numColor, TFT_BLACK);
             LayoutUtils::FitResult powerFit = LayoutUtils::fitText(t, powerStr, powerZoneW, POWER_VALUE_H, POWER_SIZES, 3);
-            t.setTextDatum(TC_DATUM);
-            t.drawString(powerFit.text, (int16_t)(powerZoneW / 2), 0);
-            t.setTextDatum(TL_DATUM);
+            t.setTextSize(powerFit.textSize);
+            if (powerFit.text == powerStr) {
+                // Unverkuerzt - Zahl und Einheit getrennt einfaerben.
+                int16_t numW = t.textWidth(powerNum);
+                int16_t totalW = t.textWidth(powerStr);
+                int16_t startX = (int16_t)(powerZoneW / 2 - totalW / 2);
+                t.setTextColor(numColor, TFT_BLACK);
+                t.drawString(powerNum, startX, 0);
+                t.setTextColor(accent, TFT_BLACK);
+                t.drawString(String(" ") + powerUnit, (int16_t)(startX + numW), 0);
+            } else {
+                // Auf kleinster Groesse immer noch zu breit und gekuerzt
+                // (praktisch nie bei diesen Wertebereichen) - dann
+                // einheitlich in Sekundaerfarbe, lieber als Zahl+Einheit
+                // farblich auseinanderzureissen.
+                t.setTextColor(numColor, TFT_BLACK);
+                t.setTextDatum(TC_DATUM);
+                t.drawString(powerFit.text, (int16_t)(powerZoneW / 2), 0);
+                t.setTextDatum(TL_DATUM);
+            }
         });
     }
     LayoutCheck::rect("Leistung", 10, powerZoneTop, powerZoneW, POWER_VALUE_H);
@@ -333,7 +351,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         int16_t lineH = tft.fontHeight();
         int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, standY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.setTextDatum(TC_DATUM);
             t.drawString(standStr, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
             t.setTextDatum(TL_DATUM);
@@ -404,7 +422,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
             int16_t localChartBottom = (int16_t)(chartBottom - chartBlockY);
             int16_t localAxisLabelY = (int16_t)(axisLabelY - chartBlockY);
             if (snap.historyCount < 2) {
-                t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                t.setTextColor(Display::secondaryColor(), TFT_BLACK);
                 t.setTextDatum(MC_DATUM);
                 t.drawString("--", (int16_t)(Config::SCREEN_WIDTH / 2), (int16_t)(localChartTop + CHART_H / 2));
                 t.setTextDatum(TL_DATUM);
@@ -425,8 +443,11 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
             t.setTextDatum(TL_DATUM);
             t.drawString(maxLabel, chartLeft, localAxisLabelY);
 
-            uint16_t gridColor = dimAccent;
-            uint16_t curveColor = (!stale) ? accent : TFT_DARKGREY;
+            // Raster-Hilfslinien in der Sekundaerfarbe, nicht mehr in
+            // einer gedaempften Variante der Systemfarbe (Auftrag
+            // "Farbregeln vereinheitlichen").
+            uint16_t gridColor = Display::secondaryColor();
+            uint16_t curveColor = (!stale) ? accent : Display::secondaryColor();
             for (uint8_t i = 1; i <= 4; i++) {
                 int16_t gy = (int16_t)(localChartBottom - (CHART_H * i) / 4);
                 t.drawFastHLine(chartLeft, gy, (int16_t)(chartRight - chartLeft), gridColor);
@@ -487,7 +508,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         int16_t tmLineH = tft.fontHeight();
         int16_t tmSpriteH = (int16_t)(tmLineH + 2);
         TileSprite::drawInto(0, timeMarksY, Config::SCREEN_WIDTH, tmSpriteH, [&](TFT_eSPI& t) {
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.setTextDatum(TL_DATUM);
             t.drawString("-3h", chartLeft, 0);
             t.setTextDatum(TC_DATUM);
@@ -514,7 +535,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, statusY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
             t.setTextDatum(TC_DATUM);
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.drawString(statusLine, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
             t.setTextDatum(TL_DATUM);
         });

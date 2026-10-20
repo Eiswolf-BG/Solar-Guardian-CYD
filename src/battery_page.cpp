@@ -255,19 +255,31 @@ namespace {
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - 4);
 
-        uint16_t valueColor = (valid && !stale) ? accent : TFT_DARKGREY;
-        t.setTextColor(valueColor, TFT_BLACK);
+        // Zahlenwert in Sekundaerfarbe, Einheit in Systemfarbe (Auftrag
+        // "Farbregeln vereinheitlichen") - Groesse weiter anhand der
+        // Gesamtlaenge (Zahl+Einheit) bestimmt, dann als zwei
+        // Farbsegmente nebeneinander gezeichnet.
+        uint16_t numColor = Display::valueColor(valid && !stale, accent);
         String combined = valueStr;
         if (unit) { combined += " "; combined += unit; }
         LayoutUtils::FitResult fit = fitNumberNoTruncate(t, combined, w, valueZoneH, VALUE_SIZES, 2);
+        t.setTextSize(fit.textSize);
+        int16_t numW = t.textWidth(valueStr);
+        int16_t totalW = t.textWidth(combined);
         int16_t valueCY = (int16_t)(valueZoneTop + valueZoneH / 2);
-        t.setTextDatum(MC_DATUM);
-        t.drawString(fit.text, (int16_t)(w / 2), valueCY);
+        int16_t startX = (int16_t)(w / 2 - totalW / 2);
+        t.setTextDatum(ML_DATUM);
+        t.setTextColor(numColor, TFT_BLACK);
+        t.drawString(valueStr, startX, valueCY);
+        if (unit) {
+            t.setTextColor(accent, TFT_BLACK);
+            t.drawString(String(" ") + unit, (int16_t)(startX + numW), valueCY);
+        }
         t.setTextDatum(TL_DATUM);
         {
-            Measured vr = measureCentered(t, (int16_t)(w / 2), valueCY, fit.text, fit.textSize);
+            int16_t th = t.fontHeight();
             LayoutCheck::containedRect("Kachel-Wert", absX, absY, w, h,
-                                        (int16_t)(absX + vr.x), (int16_t)(absY + vr.y), vr.w, vr.h);
+                                        (int16_t)(absX + startX), (int16_t)(absY + valueCY - th / 2), totalW, th);
         }
 
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
@@ -294,8 +306,10 @@ namespace {
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - 2);
 
-        uint16_t valueColor = (valid && !stale) ? accent : TFT_DARKGREY;
-        t.setTextColor(valueColor, TFT_BLACK);
+        // Klarstellung Auftrag "Farbregel nachziehen": der Ladestatus ist
+        // ein vom Portal abgefragter WERT (auch wenn Text statt Zahl) -
+        // Sekundaerfarbe wie jeder andere abgefragte Wert.
+        t.setTextColor(Display::valueColor(valid && !stale, accent), TFT_BLACK);
         t.setTextSize(render.size);
         int16_t lineH = t.fontHeight();
         int16_t totalH = (int16_t)(render.lineCount * lineH);
@@ -463,21 +477,38 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
     bool haveSoc = snap.batteryValid;
 
     // Ladezustand gross und zentriert - eigener Off-Screen-Puffer.
-    char socStr[8];
-    if (haveSoc) snprintf(socStr, sizeof(socStr), "%.0f %%", (double)snap.batterySocPercent);
-    else strncpy(socStr, "--", sizeof(socStr));
+    // Zahlenwert in Sekundaerfarbe, Einheit "%" in Systemfarbe (Auftrag
+    // "Farbregeln vereinheitlichen").
+    char socNum[8];
+    if (haveSoc) snprintf(socNum, sizeof(socNum), "%.0f", (double)snap.batterySocPercent);
+    else strncpy(socNum, "--", sizeof(socNum));
+    char socStr[12];
+    snprintf(socStr, sizeof(socStr), "%s %%", socNum);
     int16_t socZoneTop = (int16_t)(areaTop + SOC_Y_OFFSET);
     int16_t socZoneW = (int16_t)(Config::SCREEN_WIDTH - 20);
-    String socSig = String(socStr) + ((haveSoc && !stale) ? "1" : "0");
+    uint16_t socNumColor = Display::valueColor(haveSoc && !stale, accent);
+    String socSig = String(socStr);
     if (socSig != lastSocSig) {
         lastSocSig = socSig;
         RedrawDiag::log("Batterie-SOC", "Inhalt geaendert");
         TileSprite::drawInto(10, socZoneTop, socZoneW, SOC_ZONE_H, [&](TFT_eSPI& t) {
-            t.setTextColor((haveSoc && !stale) ? accent : TFT_DARKGREY, TFT_BLACK);
             LayoutUtils::FitResult socFit = LayoutUtils::fitText(t, socStr, socZoneW, SOC_ZONE_H, SOC_SIZES, 3);
-            t.setTextDatum(TC_DATUM);
-            t.drawString(socFit.text, (int16_t)(socZoneW / 2), 0);
-            t.setTextDatum(TL_DATUM);
+            t.setTextSize(socFit.textSize);
+            if (socFit.text == socStr) {
+                int16_t numW = t.textWidth(socNum);
+                int16_t totalW = t.textWidth(socStr);
+                int16_t startX = (int16_t)(socZoneW / 2 - totalW / 2);
+                t.setTextDatum(TL_DATUM);
+                t.setTextColor(socNumColor, TFT_BLACK);
+                t.drawString(socNum, startX, 0);
+                t.setTextColor(accent, TFT_BLACK);
+                t.drawString(" %", (int16_t)(startX + numW), 0);
+            } else {
+                t.setTextColor(socNumColor, TFT_BLACK);
+                t.setTextDatum(TC_DATUM);
+                t.drawString(socFit.text, (int16_t)(socZoneW / 2), 0);
+                t.setTextDatum(TL_DATUM);
+            }
         });
     }
     LayoutCheck::rect("Ladezustand", 10, socZoneTop, socZoneW, SOC_ZONE_H);
@@ -564,7 +595,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         TileSprite::drawInto(8, L.explainTop, (int16_t)(Config::SCREEN_WIDTH - 16), explainSpriteH, [&](TFT_eSPI& t) {
             if (L.explainLineCount > 0) {
                 t.setTextSize(1);
-                t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                t.setTextColor(Display::secondaryColor(), TFT_BLACK);
                 t.setTextDatum(TC_DATUM);
                 for (uint8_t i = 0; i < L.explainLineCount; i++) {
                     t.drawString(L.explainLines[i], (int16_t)((Config::SCREEN_WIDTH - 16) / 2), (int16_t)(i * EXPLAIN_LINE_H));
@@ -596,7 +627,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, L.timestampY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
             t.setTextDatum(TC_DATUM);
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.drawString(statusLine, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
             t.setTextDatum(TL_DATUM);
         });

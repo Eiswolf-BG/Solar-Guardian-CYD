@@ -74,8 +74,7 @@ namespace {
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - UNIT_H);
 
-        uint16_t valueColor = (valid && !stale) ? accent : TFT_DARKGREY;
-        t.setTextColor(valueColor, TFT_BLACK);
+        t.setTextColor(Display::valueColor(valid && !stale, accent), TFT_BLACK);
         LayoutUtils::FitResult fit = LayoutUtils::fitText(t, valStr, w, valueZoneH, VALUE_SIZES, 2);
         t.setTextDatum(MC_DATUM);
         t.drawString(fit.text, (int16_t)(w / 2), (int16_t)(valueZoneTop + valueZoneH / 2));
@@ -195,7 +194,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, statusY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
             t.setTextDatum(TC_DATUM);
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.drawString(statusLine, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
             t.setTextDatum(TL_DATUM);
         });

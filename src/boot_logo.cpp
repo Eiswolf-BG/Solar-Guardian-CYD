@@ -149,13 +149,23 @@ void begin(bool unlockedVariant) {
     }
 
     if (unlockedVariant) {
-        constexpr const char* UNLOCK_TEXT = "Deins";
+        // Zusatzschriftzug bewusst NICHT als lesbarer String im Quelltext
+        // oder in firmware.bin (Auftrag) - einzelne Bytes XOR-
+        // verschluesselt, erst hier zur Laufzeit in einen lokalen Puffer
+        // entschluesselt, nie als zusammenhaengendes String-Literal
+        // irgendwo abgelegt.
+        constexpr uint8_t KEY = 0x5A;
+        constexpr uint8_t ENC[] = {9, 46, 63, 60, 60, 63, 52, 41};
+        char unlockText[sizeof(ENC) + 1];
+        for (uint8_t i = 0; i < sizeof(ENC); i++) unlockText[i] = (char)(ENC[i] ^ KEY);
+        unlockText[sizeof(ENC)] = 0;
+
         // Gleiche Groesse wie der Titel "Solar Guardian" (Auftrag).
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
         tft.setTextSize(2);
-        int16_t w = tft.textWidth(UNLOCK_TEXT);
+        int16_t w = tft.textWidth(unlockText);
         tft.setTextDatum(BC_DATUM);
-        tft.drawString(UNLOCK_TEXT, SHIELD_CX, UNLOCK_TEXT_BASELINE_Y);
+        tft.drawString(unlockText, SHIELD_CX, UNLOCK_TEXT_BASELINE_Y);
         tft.setTextDatum(TL_DATUM);
         LayoutCheck::rect("Zusatzschriftzug", (int16_t)(SHIELD_CX - w / 2), (int16_t)(UNLOCK_TEXT_BASELINE_Y - tft.fontHeight()),
                            w, tft.fontHeight());

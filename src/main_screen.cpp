@@ -205,7 +205,7 @@ namespace {
             int16_t x = barsStartX;
             for (uint8_t i = 0; i < BAR_COUNT; i++) {
                 int16_t barH = 3 + i * 3;
-                uint16_t color = (i < bars) ? accent : TFT_DARKGREY;
+                uint16_t color = (i < bars) ? accent : Display::secondaryColor();
                 t.fillRect(x, HEADER_BASELINE_Y - barH, BAR_W, barH, color);
                 x += BAR_W + BAR_GAP;
             }
@@ -226,7 +226,7 @@ namespace {
             if (i == currentPage) {
                 tft.fillCircle(x, y, DOT_R, accent);
             } else {
-                tft.drawCircle(x, y, DOT_R, TFT_DARKGREY);
+                tft.drawCircle(x, y, DOT_R, Display::secondaryColor());
             }
             x += DOT_GAP;
         }

@@ -21,11 +21,25 @@ namespace Display {
     // im Helligkeit-Menue (brightness_screen.cpp).
     void applyBrightness();
 
-    // Gemeinsame Farblogik fuer einen Wert UND seine Einheit (z.B. "28"
-    // und "W") - beide IMMER dieselbe Farbe (Auftrag "Einheiten in der
-    // Systemfarbe"): Systemfarbe bei einem gueltigen/aktuellen Wert,
-    // sonst gedaempftes Grau. Ueberall verwenden, wo ein Wert und seine
-    // Einheit getrennt gezeichnet werden, statt die Einheit fest verdrahtet
-    // einzufaerben.
+    // Feste, systemweite Gestaltungsregel (Auftrag "Farbregeln
+    // vereinheitlichen"): Systemfarbe (accent) ist fuer Ueberschriften/
+    // Beschriftungen/Einheiten/Rahmen/Symbole/Reiter sowie fuer die Kurve
+    // bzw. Balken eines Graphen reserviert. Die Sekundaerfarbe ist fuer
+    // vom Portal/Wetterdienst ABGEFRAGTE ZAHLENWERTE (Leistung, Spannung,
+    // Strom, Ertrag, Batteriewerte, Temperatur, Tages-Hoechstwert ...),
+    // fuer Raster-Hilfslinien in Graphen und fuer Achsenbeschriftungen/
+    // Zeitachsen sowie Wochentags-/Monats-/Jahreszahlen-Beschriftungen
+    // unter Balken. Aktuell TFT_DARKGREY, zentral hier definiert, damit
+    // sich das spaeter an einer einzigen Stelle aendern laesst.
+    uint16_t secondaryColor();
+
+    // Gemeinsame Farblogik fuer einen abgefragten Zahlenwert: IMMER die
+    // Sekundaerfarbe (der "valid"-Parameter bleibt aus Kompatibilitaets-
+    // gruenden in der Signatur, beeinflusst das Ergebnis aber nicht mehr -
+    // auch ein "--"-Platzhalter bei fehlenden Daten wird in der
+    // Sekundaerfarbe gezeichnet, der Text selbst zeigt bereits die
+    // Ungueltigkeit an). Ueberall verwenden, wo ein abgefragter Zahlenwert
+    // gezeichnet wird. Die zugehoerige Einheit bleibt davon UNABHAENGIG
+    // immer in der Systemfarbe (siehe CLAUDE.md "Farbregeln").
     uint16_t valueColor(bool valid, uint16_t accent);
 }

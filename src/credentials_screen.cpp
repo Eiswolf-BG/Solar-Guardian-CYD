@@ -53,9 +53,9 @@ void run(bool isLastStep) {
         tft.print(appConfig.portalPassword.length() ? appConfig.portalPassword : I18n::t(I18n::Str::TAP_HERE));
 
         bool canGo = appConfig.portalEmail.length() > 0 && appConfig.portalPassword.length() > 0;
-        tft.drawRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, canGo ? accent : TFT_DARKGREY);
+        tft.drawRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, canGo ? accent : Display::secondaryColor());
         if (canGo) tft.fillRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, accent);
-        tft.setTextColor(canGo ? TFT_BLACK : TFT_DARKGREY, canGo ? accent : TFT_BLACK);
+        tft.setTextColor(canGo ? TFT_BLACK : Display::secondaryColor(), canGo ? accent : TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(I18n::t(isLastStep ? I18n::Str::GO_BUTTON : I18n::Str::NEXT_BUTTON), goBtn.x + goBtn.w / 2, goBtn.y + goBtn.h / 2);
         tft.setTextDatum(TL_DATUM);

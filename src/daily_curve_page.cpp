@@ -39,16 +39,6 @@ namespace {
     bool timeMarksDrawn = false;
     uint8_t timeMarksLang = 0xFF;
 
-    // Etwa halbe Helligkeit der Systemfarbe fuer die Diagramm-Hilfslinien
-    // - gleiche Kanal-Halbierung wie in power_page.cpp/years_page.cpp,
-    // hier bewusst lokal dupliziert (siehe CLAUDE.md Code-Stil).
-    uint16_t dimColor(uint16_t c) {
-        uint8_t r = (uint8_t)((c >> 11) & 0x1F) >> 1;
-        uint8_t g = (uint8_t)((c >> 5) & 0x3F) >> 1;
-        uint8_t b = (uint8_t)(c & 0x1F) >> 1;
-        return (uint16_t)((r << 11) | (g << 5) | b);
-    }
-
     // Zahl auf eine "runde" Obergrenze fuer die Y-Achse aufrunden
     // (1-2-5-Schema), gleiche Logik wie power_page.cpp.
     float niceCeil(float v) {
@@ -82,7 +72,6 @@ namespace {
 void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
     SolarData::Data snap = SolarData::snapshot();
     uint16_t accent = Display::systemColor();
-    uint16_t dimAccent = dimColor(accent);
 
     if (forceRedraw) {
         lastMaxSig = "\x01";
@@ -97,32 +86,45 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
     tft.setTextDatum(TL_DATUM);
     LayoutCheck::rect("Titel", 0, areaTop, Config::SCREEN_WIDTH, 16);
 
-    // Tages-Hoechstwert ueber dem Diagramm ("Max: 1234 W", Einheit in der
-    // Systemfarbe wie der Wert selbst - Auftrag "Einheiten in der
-    // Systemfarbe").
+    // Tages-Hoechstwert ueber dem Diagramm ("Max: 1234 W") - Auftrag
+    // "Farbregeln vereinheitlichen": Label "Max:" und Einheit "W" in der
+    // Systemfarbe, der abgefragte Zahlenwert selbst in der Sekundaerfarbe.
     float maxVal = 0.0f;
     for (uint16_t i = 0; i < snap.dailyCurveCount; i++) {
         if ((float)snap.dailyCurve[i].watts > maxVal) maxVal = (float)snap.dailyCurve[i].watts;
     }
-    char maxStr[32];
+    const char* maxLabel = I18n::t(I18n::Str::DAILY_CURVE_MAX_LABEL);
+    char maxNum[16];
+    char maxUnit[8] = {0};
     if (snap.dailyCurveCount > 0) {
-        snprintf(maxStr, sizeof(maxStr), I18n::t(I18n::Str::DAILY_CURVE_MAX_LABEL_FMT), (double)maxVal, I18n::t(I18n::Str::POWER_UNIT_W));
+        snprintf(maxNum, sizeof(maxNum), "%.0f", (double)maxVal);
+        strncpy(maxUnit, I18n::t(I18n::Str::POWER_UNIT_W), sizeof(maxUnit) - 1);
     } else {
-        strncpy(maxStr, "--", sizeof(maxStr));
+        strncpy(maxNum, "--", sizeof(maxNum));
     }
+    char maxFull[40];
+    snprintf(maxFull, sizeof(maxFull), "%s %s %s", maxLabel, maxNum, maxUnit);
     int16_t maxZoneTop = (int16_t)(areaTop + MAX_LABEL_OFFSET);
     int16_t maxZoneW = (int16_t)(Config::SCREEN_WIDTH - 20);
-    uint16_t maxColor = (snap.dailyCurveCount > 0) ? accent : TFT_DARKGREY;
-    String maxSig = String(maxStr) + (maxColor == accent ? "1" : "0");
+    String maxSig = String(maxFull);
     if (maxSig != lastMaxSig) {
         lastMaxSig = maxSig;
         RedrawDiag::log("Tagesverlauf-Max", "Inhalt geaendert");
         TileSprite::drawInto(10, maxZoneTop, maxZoneW, MAX_LABEL_H, [&](TFT_eSPI& t) {
-            t.setTextColor(maxColor, TFT_BLACK);
-            LayoutUtils::FitResult maxFit = fitNumberNoTruncate(t, maxStr, maxZoneW, MAX_LABEL_H, MAX_SIZES, 2);
-            t.setTextDatum(TC_DATUM);
-            t.drawString(maxFit.text, (int16_t)(maxZoneW / 2), 0);
+            LayoutUtils::FitResult maxFit = fitNumberNoTruncate(t, maxFull, maxZoneW, MAX_LABEL_H, MAX_SIZES, 2);
+            t.setTextSize(maxFit.textSize);
+            String labelPart = String(maxLabel) + " ";
+            int16_t labelW = t.textWidth(labelPart);
+            int16_t numW = t.textWidth(maxNum);
+            int16_t totalW = t.textWidth(maxFull);
+            int16_t startX = (int16_t)(maxZoneW / 2 - totalW / 2);
             t.setTextDatum(TL_DATUM);
+            t.setTextColor(accent, TFT_BLACK);
+            t.drawString(labelPart, startX, 0);
+            t.setTextColor(Display::valueColor(snap.dailyCurveCount > 0, accent), TFT_BLACK);
+            t.drawString(maxNum, (int16_t)(startX + labelW), 0);
+            t.setTextColor(accent, TFT_BLACK);
+            t.drawString(String(" ") + maxUnit, (int16_t)(startX + labelW + numW), 0);
         });
     }
     LayoutCheck::rect("Max", 10, maxZoneTop, maxZoneW, MAX_LABEL_H);
@@ -163,7 +165,7 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
             int16_t localChartBottom = (int16_t)(chartBottom - chartBlockY);
             int16_t localAxisLabelY = (int16_t)(axisLabelY - chartBlockY);
             if (snap.dailyCurveCount == 0) {
-                t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                t.setTextColor(Display::secondaryColor(), TFT_BLACK);
                 t.setTextDatum(MC_DATUM);
                 t.drawString(I18n::t(I18n::Str::DAILY_CURVE_EMPTY), (int16_t)(Config::SCREEN_WIDTH / 2), (int16_t)(localChartTop + CHART_H / 2));
                 t.setTextDatum(TL_DATUM);
@@ -181,7 +183,7 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
             t.setTextDatum(TL_DATUM);
             t.drawString(axisLabel, chartLeft, localAxisLabelY);
 
-            uint16_t gridColor = dimAccent;
+            uint16_t gridColor = Display::secondaryColor();
             uint16_t curveColor = accent;
             for (uint8_t i = 1; i <= 4; i++) {
                 int16_t gy = (int16_t)(localChartBottom - (CHART_H * i) / 4);
@@ -240,7 +242,7 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
         int16_t tmLineH = tft.fontHeight();
         int16_t tmSpriteH = (int16_t)(tmLineH + 2);
         TileSprite::drawInto(0, timeMarksY, Config::SCREEN_WIDTH, tmSpriteH, [&](TFT_eSPI& t) {
-            t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            t.setTextColor(Display::secondaryColor(), TFT_BLACK);
             t.setTextDatum(TL_DATUM);
             t.drawString(String(Config::DAILY_CURVE_START_HOUR), chartLeft, 0);
             t.setTextDatum(TC_DATUM);

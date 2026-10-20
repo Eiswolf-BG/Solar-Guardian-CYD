@@ -474,6 +474,25 @@ unabhängige Format-Version (siehe "Ertragsbuch" oben).
 - Systemfarbe für Schrift/Symbole zentral in `appConfig.systemColorIndex`
   gespeichert (`Display::systemColor()` benutzen, nie eine Farbe fest
   verdrahten) — Standard Weiß, änderbar über Menü → Systemfarbe.
+- **Feste Farbregel (Auftrag "Farbregeln vereinheitlichen"/"Farbregel
+  nachziehen"), gilt für JEDEN Screen (Gerät UND WebUI), auch künftige
+  neue:** Die Systemfarbe (`Display::systemColor()`) ist für
+  Überschriften, Beschriftungen, Einheiten (W/kWh/V/A/%/°C ...), Rahmen,
+  Symbole und Reiter reserviert, ebenso für die Kurve bzw. die Balken
+  eines Graphen. Die Sekundärfarbe (`Display::secondaryColor()`, aktuell
+  `TFT_DARKGREY`, in der WebUI `--dim`) ist für ALLE vom Portal/
+  Wetterdienst ABGEFRAGTEN WERTE - Zahlen UND Texte gleichermaßen
+  (Leistung, Spannung, Strom, Ertrag, Batteriewerte, Temperatur,
+  Tages-Höchstwert, aber auch ein textueller Ladestatus wie "Erhaltung"
+  oder ein roher Status-Text vom Portal) -, für Raster-Hilfslinien in
+  Graphen sowie für Achsen-/Zeitachsenbeschriftungen und für Wochentags-/
+  Monats-/Jahreszahlen-Beschriftungen unter Balken. `Display::
+  valueColor(valid, accent)` liefert für einen abgefragten Wert immer die
+  Sekundärfarbe (auch ein "--"-Platzhalter bei fehlenden Daten). NICHT
+  betroffen: reine Beschriftungen, Menü-/Hilfetexte und App-eigene
+  Hinweissätze (z.B. "Nächste Abfrage: HH:MM", "Keine Verbindung") - die
+  beschreiben einen Zustand der App selbst, keinen abgefragten Wert, und
+  bleiben systemfarben bzw. wie bisher.
 - Touch-Ziele auf den fingerfreundlichen Hauptseiten (Hauptbildschirm,
   Netzwerke-Liste, Farbauswahl, Konto) mindestens ca. 40 Pixel groß. Das
   Menü ist bewusst für Stift-Bedienung ausgelegt und darf dichter sein
@@ -520,6 +539,30 @@ Popups, neue wie alte):**
   `drawBody()`, da `drawHeader()` auch separat beim Uhr-Tick läuft), dass
   Uhr/Titel/WLAN-Symbol mit ihrer ECHTEN gemessenen Textbreite in ihre
   Bereiche passen und sich nicht überlappen.
+
+## WebUI (`web_server.cpp`)
+
+- **Feste Regel (Auftrag "WebUI erweitern"):** Die WebUI wird IMMER um
+  alles erweitert, was auch das Gerät bekommt und solartechnisch relevant
+  ist (neue Wert-Screens, Diagramme, Übersichten) - Standard, nicht
+  optional, gilt auch für künftige neue Seiten/Features. NICHT gespiegelt
+  werden Einstellungen und Menüs (Konto, Netzwerke, Farbe, Sprache,
+  Helligkeit, Zurücksetzen ...) - die WebUI bleibt rein lesend.
+- Jede blockierende Vollbild-Schleife (Menü, Dateien, Standort,
+  Netzwerke, Tastatur ...) muss `WebServer_::tick()` in ihrer
+  Warteschleife aufrufen - sonst ist die WebUI nicht erreichbar, solange
+  diese Seite offen ist (einmal als echter Fehler aufgetreten und
+  systemweit behoben). Beim Anlegen einer neuen Vollbild-Schleife daran
+  denken.
+- Eigene, kompakte Endpunkte für neue Datenarten (`/api/day`,
+  `/api/history` ...) statt alles in `/api/data` zu packen - hält die
+  alle 5s abgerufene Haupt-Antwort klein, neue Endpunkte werden nur
+  abgerufen, wenn der jeweilige Tab offen ist.
+- Farbregel in der WebUI sinngemäß wie am Gerät (siehe
+  "Design-Grundsätze"): Kurve/Balken in der Akzentfarbe, Raster/
+  Achsentexte gedämpft (`--dim`), ALLE abgefragten Werte (Zahlen UND
+  Texte, z.B. auch der Batterie-Ladestatus) in `--dim`, Einheiten/
+  Beschriftungen in der Akzentfarbe.
 
 ## Swipe-Struktur (Hauptbildschirm)
 

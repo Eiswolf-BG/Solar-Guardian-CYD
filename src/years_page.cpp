@@ -232,7 +232,7 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
 
     if (count == 0) {
         tft.setTextDatum(TC_DATUM);
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         tft.drawString("--", Config::SCREEN_WIDTH / 2, (int16_t)(chartTop + barMaxH / 2));
         tft.setTextDatum(TL_DATUM);
         return;
@@ -263,7 +263,11 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
         tft.setTextDatum(BC_DATUM);
         tft.drawString(valFit.text, (int16_t)(x + barW / 2), (int16_t)(barY - 2));
 
-        tft.setTextColor(barColor, TFT_BLACK);
+        // Wochentag/Monatskuerzel/Jahreszahl unter dem Balken IMMER in der
+        // Sekundaerfarbe, unabhaengig von aktuell/frueher (Auftrag
+        // "Farbregeln vereinheitlichen") - der Wert ueber dem Balken
+        // bleibt unveraendert in barColor.
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         LayoutUtils::FitResult labelFit = fitNumberNoTruncate(tft, bars[i].label, barW, YEAR_LABEL_H, LABEL_SIZES, 2);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(labelFit.text, (int16_t)(x + barW / 2), (int16_t)(baselineY + 4));

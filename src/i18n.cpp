@@ -221,7 +221,7 @@ namespace {
         // Seite "Tagesverlauf"
         "Tagesverlauf",
         "Zeigt die Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr sowie den heutigen Höchstwert. Die Kurve bleibt abends stehen, bis um 05:00 Uhr der nächste Tag beginnt.",
-        "Max: %.0f %s",
+        "Max:",
         "Noch keine Werte für heute",
     };
 
@@ -440,7 +440,7 @@ namespace {
         // "Daily curve" page
         "Daily curve",
         "Shows the power curve of the whole day from 05:00 to 22:00, plus today's peak value. The curve stays visible in the evening until the next day starts at 05:00.",
-        "Max: %.0f %s",
+        "Max:",
         "No data yet for today",
     };
 

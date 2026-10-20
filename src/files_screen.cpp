@@ -144,7 +144,7 @@ void run() {
         LayoutCheck::rect("Hilfe-Knopf", HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
 
         // Aktueller Pfad klein darunter (zur Orientierung).
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         LayoutUtils::FitResult pathFit = LayoutUtils::fitText(tft, currentPath, (int16_t)(Config::SCREEN_WIDTH - 16), 14, ONE_SIZE, 1);
         tft.drawString(pathFit.text, Config::SCREEN_WIDTH / 2, 30);
@@ -176,7 +176,7 @@ void run() {
 
                 String fullPath = joinPath(currentPath, entries[idx].name);
                 bool protectedEntry = isProtectedPath(fullPath);
-                uint16_t rowColor = protectedEntry ? TFT_DARKGREY : accent;
+                uint16_t rowColor = protectedEntry ? Display::secondaryColor() : accent;
                 tft.drawRoundRect(r.x, r.y, r.w, r.h, 3, rowColor);
 
                 String sizeLabel;
@@ -212,10 +212,10 @@ void run() {
         Rect upBtn = {(int16_t)(Config::SCREEN_WIDTH - 40), (int16_t)(LIST_TOP + VISIBLE_ROWS * ROW_H + 4), 36, 28};
         Rect downBtn = {4, upBtn.y, 36, 28};
         if (canScrollUp || canScrollDown) {
-            tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accent : TFT_DARKGREY);
+            tft.drawRoundRect(downBtn.x, downBtn.y, downBtn.w, downBtn.h, 3, canScrollUp ? accent : Display::secondaryColor());
             tft.setTextDatum(MC_DATUM);
             tft.drawString("<", (int16_t)(downBtn.x + downBtn.w / 2), (int16_t)(downBtn.y + downBtn.h / 2));
-            tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accent : TFT_DARKGREY);
+            tft.drawRoundRect(upBtn.x, upBtn.y, upBtn.w, upBtn.h, 3, canScrollDown ? accent : Display::secondaryColor());
             tft.drawString(">", (int16_t)(upBtn.x + upBtn.w / 2), (int16_t)(upBtn.y + upBtn.h / 2));
             tft.setTextDatum(TL_DATUM);
             LayoutCheck::rect("Scroll-runter", downBtn.x, downBtn.y, downBtn.w, downBtn.h);

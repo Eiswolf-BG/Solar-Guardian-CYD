@@ -226,7 +226,7 @@ namespace I18n {
         // Seite "Tagesverlauf"
         PAGE_DAILY_TITLE,
         HELP_BODY_PAGE_DAILY,
-        DAILY_CURVE_MAX_LABEL_FMT,
+        DAILY_CURVE_MAX_LABEL,
         DAILY_CURVE_EMPTY,
 
         COUNT

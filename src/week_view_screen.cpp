@@ -122,7 +122,7 @@ void run() {
             tft.drawString(titleLines[i], Config::SCREEN_WIDTH / 2, (int16_t)(6 + i * LINE_H));
         }
         int16_t titleBottom = (int16_t)(6 + titleLineCount * LINE_H);
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         int16_t hintY = titleBottom;
         tft.drawString(I18n::t(I18n::Str::LOCATION_CHANGE_HINT), Config::SCREEN_WIDTH / 2, hintY);
         tft.setTextDatum(TL_DATUM);
@@ -166,6 +166,9 @@ void run() {
             snprintf(maxBuf, sizeof(maxBuf), "%.0f", (double)d.tempMaxC);
             snprintf(minBuf, sizeof(minBuf), "%.0f", (double)d.tempMinC);
             String tempLine = String(maxBuf) + "° / " + String(minBuf) + "°";
+            // Abgefragter Temperaturwert in Sekundaerfarbe (Auftrag
+            // "Farbregeln vereinheitlichen").
+            tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
             tft.setTextDatum(ML_DATUM);
             tft.drawString(tempLine, tempX, iconCy);
             tft.setTextDatum(TL_DATUM);
@@ -176,14 +179,21 @@ void run() {
                 int16_t sunAvailW = (int16_t)(r.x + r.w - sunX - 4);
                 char sunBuf[8];
                 formatDecimal1(d.sunshineHours, sunBuf, sizeof(sunBuf));
-                String sunLine = String(sunBuf) + " " + I18n::t(I18n::Str::HOURS_UNIT);
+                String unitPart = String(" ") + I18n::t(I18n::Str::HOURS_UNIT);
+                String sunLine = String(sunBuf) + unitPart;
                 tft.setTextSize(1);
                 // "sonst weglassen" (Auftrag) - nur zeichnen, wenn die
                 // tatsaechliche Pixelbreite in den verbleibenden Platz
                 // passt, sonst bleibt die Zeile ohne Sonnenstunden.
                 if (sunAvailW > 0 && tft.textWidth(sunLine) <= sunAvailW) {
+                    // Abgefragter Zahlenwert in Sekundaerfarbe, Einheit "h"
+                    // in Systemfarbe (Auftrag "Farbregeln vereinheitlichen").
                     tft.setTextDatum(ML_DATUM);
-                    tft.drawString(sunLine, sunX, iconCy);
+                    tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
+                    tft.drawString(sunBuf, sunX, iconCy);
+                    int16_t numW = tft.textWidth(sunBuf);
+                    tft.setTextColor(accent, TFT_BLACK);
+                    tft.drawString(unitPart, (int16_t)(sunX + numW), iconCy);
                     tft.setTextDatum(TL_DATUM);
                     LayoutCheck::rect("Sonnenstunden", sunX, (int16_t)(iconCy - 8), sunAvailW, 16);
                 }

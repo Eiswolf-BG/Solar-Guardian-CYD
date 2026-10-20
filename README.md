@@ -36,16 +36,22 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate bzw.
   Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
   Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
-- **Einheiten** (kWh, W, V, A, %, °C) werden auf allen Seiten in der
-  gewählten Systemfarbe angezeigt, wie die zugehörigen Werte selbst.
+- **Einheitliche Farben** auf allen Seiten: Beschriftungen, Einheiten
+  (kWh, W, V, A, %, °C), Rahmen und Kurven/Balken in der gewählten
+  Systemfarbe. Alle vom Portal oder Wetterdienst abgefragten Werte -
+  Zahlen UND Texte, z.B. Leistung, Spannung, Ertrag, Temperatur,
+  Ladestatus - erscheinen systemweit in einer zweiten, gedämpften Farbe,
+  ebenso das Diagramm-Raster und die Wochentage/Monatsnamen/Jahreszahlen
+  in den Übersichten.
 - **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
   haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
   `/SolarHistory` im SD-Karten-Root und manueller Korrekturmöglichkeit.
 - **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
   die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
   alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
-  Übersicht, Leistung, Ertrag, Batterie, Jahre und Wetter (inklusive
-  Wettersymbolen und Leistungskurve). Rein lesend, aktualisiert sich
+  Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, Verlauf (Tage/
+  Monate/Jahre) und Wetter (inklusive Wettersymbolen und
+  Leistungskurve) - genau wie am Gerät. Rein lesend, aktualisiert sich
   automatisch. Jetzt auch erreichbar, während am Gerät selbst die
   WebUI-Seite (oder eine andere Vollbild-Seite) geöffnet ist.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
@@ -183,16 +189,21 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   the last 7 days, months, or calendar years), and Battery (charge
   level, voltage, current, temperature, charging status with a short
   explanation of all four states).
-- **Units** (kWh, W, V, A, %, °C) are shown in the chosen theme color on
-  every page, matching the values they belong to.
+- **Consistent colors** across every page: labels, units (kWh, W, V, A,
+  %, °C), borders, and chart curves/bars use the chosen theme color.
+  Every value fetched from the portal or weather service - numbers AND
+  text alike, e.g. power, voltage, yield, temperature, charging status -
+  appears system-wide in a second, dimmed color, along with the chart
+  grid and the weekdays/month names/years shown in the overviews.
 - **Yield log**: counts week/month/year itself (the portal's own totals
   are known to have gaps), with a daily backup in the `/SolarHistory`
   folder on the SD card root and manual correction.
 - **Web view**: In the menu under "Networks" → "WebUI" you'll find the
   address to open in a browser on a device in the same WiFi network -
   shows all values large and clean on your phone or PC, with its own
-  tabs for Overview, Power, Yield, Battery, Years, and Weather (including
-  weather icons and the power chart). Read-only, updates automatically.
+  tabs for Overview, Power, Daily curve, Yield, Battery, History (Days/
+  Months/Years), and Weather (including weather icons and the power
+  chart) - just like on the device. Read-only, updates automatically.
   Now also reachable while the WebUI page itself (or any other
   full-screen page) is open on the device.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.

@@ -197,9 +197,10 @@ namespace {
         }
 
         t.setTextSize(1);
-        // Einheit IMMER in derselben Farbe wie der Wert (Auftrag
-        // "Einheiten in der Systemfarbe"), statt fest verdrahtet grau.
-        t.setTextColor(valColor, TFT_BLACK);
+        // Einheit IMMER in der Systemfarbe, unabhaengig vom Wert (Auftrag
+        // "Farbregeln vereinheitlichen" - Einheiten bleiben systemfarben,
+        // nur der abgefragte Zahlenwert selbst ist sekundaer).
+        t.setTextColor(accent, TFT_BLACK);
         int16_t unitLineH = t.fontHeight();
         int16_t unitCY = (int16_t)(h - 6 - unitLineH / 2);
         t.setTextDatum(MC_DATUM);
@@ -227,7 +228,7 @@ namespace {
         int16_t capW = 3, capH = (int16_t)(h / 3);
         int16_t x = (int16_t)(cx - w / 2);
         int16_t y = (int16_t)(cy - h / 2);
-        uint16_t color = valid ? batteryColorFor(pct) : TFT_DARKGREY;
+        uint16_t color = valid ? batteryColorFor(pct) : Display::secondaryColor();
         t.drawRoundRect(x, y, bodyW, h, 2, color);
         t.fillRect((int16_t)(x + bodyW), (int16_t)(cy - capH / 2), capW, capH, color);
         if (valid) {
@@ -261,26 +262,37 @@ namespace {
         }
 
         bool valid = snap.batteryValid;
-        char pctStr[8];
-        if (valid) snprintf(pctStr, sizeof(pctStr), "%.0f %%", (double)snap.batterySocPercent);
-        else strncpy(pctStr, "--", sizeof(pctStr));
+        char pctStr[8];   // nur fuer die Groessenberechnung (inkl. "%")
+        char pctNum[8];   // Zahlenteil allein, Sekundaerfarbe
+        if (valid) {
+            snprintf(pctStr, sizeof(pctStr), "%.0f %%", (double)snap.batterySocPercent);
+            snprintf(pctNum, sizeof(pctNum), "%.0f", (double)snap.batterySocPercent);
+        } else {
+            strncpy(pctStr, "--", sizeof(pctStr));
+            strncpy(pctNum, "--", sizeof(pctNum));
+        }
 
         constexpr int16_t LABEL_H = 22;
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - 6);
         int16_t valueCY = (int16_t)(valueZoneTop + valueZoneH / 2);
 
-        t.setTextColor(valid ? accent : TFT_DARKGREY, TFT_BLACK);
         LayoutUtils::FitResult fit = fitNumberNoTruncate(t, pctStr, (int16_t)(w - 26), valueZoneH, VALUE_SIZES, 2);
         t.setTextSize(fit.textSize);
-        int16_t textW = t.textWidth(fit.text);
+        int16_t textW = t.textWidth(pctStr);
         int16_t iconW = 20, iconH = 11;
         int16_t totalW = (int16_t)(iconW + 6 + textW);
         int16_t startX = (int16_t)(w / 2 - totalW / 2);
 
         drawBatteryIcon(t, (int16_t)(startX + iconW / 2), valueCY, iconW, iconH, snap.batterySocPercent, valid);
+        // Zahlenwert in Sekundaerfarbe, Einheit "%" in Systemfarbe (Auftrag
+        // "Farbregeln vereinheitlichen").
         t.setTextDatum(ML_DATUM);
-        t.drawString(fit.text, (int16_t)(startX + iconW + 6), valueCY);
+        t.setTextColor(Display::valueColor(valid, accent), TFT_BLACK);
+        t.drawString(pctNum, (int16_t)(startX + iconW + 6), valueCY);
+        int16_t numW = t.textWidth(pctNum);
+        t.setTextColor(accent, TFT_BLACK);
+        t.drawString(" %", (int16_t)(startX + iconW + 6 + numW), valueCY);
         t.setTextDatum(TL_DATUM);
         {
             int16_t th = t.fontHeight();
@@ -401,20 +413,31 @@ namespace {
         // verfeinert, siehe fetch_task.cpp::runWeatherFetch().
         char tempStr[16];
         formatDecimal(weather.currentTempC, 1, tempStr, sizeof(tempStr));
-        String tempLine = String(tempStr) + " " + I18n::t(I18n::Str::CELSIUS_UNIT);
+        String unitStr = String(" ") + I18n::t(I18n::Str::CELSIUS_UNIT);
+        String tempLine = String(tempStr) + unitStr;
 
         constexpr int16_t TEMP_ZONE_H = 22;
         int16_t tempZoneTop = (int16_t)(h - TEMP_ZONE_H - 4);
-        t.setTextColor(accent, TFT_BLACK);
+        // Groesse anhand der Gesamtlaenge (Zahl+Einheit) bestimmen, dann
+        // als zwei Farbsegmente nebeneinander zeichnen: Zahlenwert
+        // sekundaer, Einheit "°C" systemfarben (Auftrag "Farbregeln
+        // vereinheitlichen").
         LayoutUtils::FitResult fit = fitNumberNoTruncate(t, tempLine, w, TEMP_ZONE_H, VALUE_SIZES, 2);
+        t.setTextSize(fit.textSize);
+        int16_t numW = t.textWidth(tempStr);
+        int16_t totalW = t.textWidth(tempLine);
         int16_t tempCY = (int16_t)(tempZoneTop + TEMP_ZONE_H / 2);
-        t.setTextDatum(MC_DATUM);
-        t.drawString(fit.text, (int16_t)(w / 2), tempCY);
+        int16_t startX = (int16_t)(w / 2 - totalW / 2);
+        t.setTextDatum(ML_DATUM);
+        t.setTextColor(Display::valueColor(weather.currentValid, accent), TFT_BLACK);
+        t.drawString(tempStr, startX, tempCY);
+        t.setTextColor(accent, TFT_BLACK);
+        t.drawString(unitStr, (int16_t)(startX + numW), tempCY);
         t.setTextDatum(TL_DATUM);
         {
-            Measured mr = measureCentered(t, (int16_t)(w / 2), tempCY, fit.text, fit.textSize);
+            int16_t th = t.fontHeight();
             LayoutCheck::containedRect("Kachel-Temperatur", absX, absY, w, h,
-                                        (int16_t)(absX + mr.x), (int16_t)(absY + mr.y), mr.w, mr.h);
+                                        (int16_t)(absX + startX), (int16_t)(absY + tempCY - th / 2), totalW, th);
         }
     }
 

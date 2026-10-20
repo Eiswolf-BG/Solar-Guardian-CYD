@@ -118,7 +118,7 @@ namespace {
     }
 
     int16_t drawHint(uint16_t accent) {
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         String lines[HINT_MAX_LINES];
         uint8_t n = wrapLines(I18n::t(I18n::Str::SERIAL_NUMBER_HINT), (int16_t)(Config::SCREEN_WIDTH - 16), lines, HINT_MAX_LINES);
         constexpr int16_t HINT_TOP = 100;
@@ -192,9 +192,9 @@ bool runFirstTimeSetup(bool& outBack) {
         tft.setTextDatum(TL_DATUM);
         LayoutCheck::rect("Zurueck-Knopf", backBtn.x, backBtn.y, backBtn.w, backBtn.h);
 
-        tft.drawRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, valid ? accent : TFT_DARKGREY);
+        tft.drawRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, valid ? accent : Display::secondaryColor());
         if (valid) tft.fillRoundRect(goBtn.x, goBtn.y, goBtn.w, goBtn.h, 4, accent);
-        tft.setTextColor(valid ? TFT_BLACK : TFT_DARKGREY, valid ? accent : TFT_BLACK);
+        tft.setTextColor(valid ? TFT_BLACK : Display::secondaryColor(), valid ? accent : TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(I18n::t(I18n::Str::GO_BUTTON), goBtn.x + goBtn.w / 2, goBtn.y + goBtn.h / 2);
         tft.setTextDatum(TL_DATUM);
@@ -240,7 +240,7 @@ void runFromAccount() {
         // Kleiner Hinweis direkt ueber dem Feld (Auftrag "Seriennummer
         // zu Konto verschieben") - sagt, dass das Feld antippbar ist,
         // auch wenn schon ein Wert eingetragen ist.
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::SERIAL_NUMBER_TAP_HINT), Config::SCREEN_WIDTH / 2, 32);
         tft.setTextDatum(TL_DATUM);

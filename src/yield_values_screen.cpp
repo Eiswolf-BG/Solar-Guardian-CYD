@@ -181,7 +181,7 @@ void run() {
                                         (int16_t)(yearBtn.y + yearBtn.h / 2 - th / 2), tw, th);
         }
 
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(Display::secondaryColor(), TFT_BLACK);
         tft.setTextDatum(TC_DATUM);
         tft.drawString(I18n::t(I18n::Str::VALUE_INCLUDING_TODAY_NOTE), Config::SCREEN_WIDTH / 2, noteY);
         tft.setTextDatum(TL_DATUM);
