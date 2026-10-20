@@ -183,7 +183,8 @@ namespace {
         constexpr int16_t UNIT_H = 20;
         int16_t valueZoneTop = LABEL_H;
         int16_t valueZoneH = (int16_t)(h - LABEL_H - UNIT_H - 4);
-        t.setTextColor(valid ? accent : TFT_DARKGREY, TFT_BLACK);
+        uint16_t valColor = Display::valueColor(valid, accent);
+        t.setTextColor(valColor, TFT_BLACK);
         LayoutUtils::FitResult fit = fitNumberNoTruncate(t, numberStr, w, valueZoneH, VALUE_SIZES, 2);
         int16_t valueCY = (int16_t)(valueZoneTop + valueZoneH / 2);
         t.setTextDatum(MC_DATUM);
@@ -196,7 +197,9 @@ namespace {
         }
 
         t.setTextSize(1);
-        t.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        // Einheit IMMER in derselben Farbe wie der Wert (Auftrag
+        // "Einheiten in der Systemfarbe"), statt fest verdrahtet grau.
+        t.setTextColor(valColor, TFT_BLACK);
         int16_t unitLineH = t.fontHeight();
         int16_t unitCY = (int16_t)(h - 6 - unitLineH / 2);
         t.setTextDatum(MC_DATUM);

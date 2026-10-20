@@ -30,9 +30,12 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Leistung/Ertrag/Batterie antippen springt zur jeweiligen Wisch-Seite.
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
   -Strom als Kacheln, Kurve der letzten 3 Stunden), Ertrag (Heute, Woche
-  als gleitendes 7-Tage-Fenster, Monat, Jahr), Jahre (Balkengrafik der
-  letzten Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
+  als gleitendes 7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare
+  Reiter Tage/Monate/Jahre, je eine Balkengrafik der letzten 7 Tage,
+  Monate bzw. Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
   Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
+- **Einheiten** (kWh, W, V, A, %, °C) werden auf allen Seiten in der
+  gewählten Systemfarbe angezeigt, wie die zugehörigen Werte selbst.
 - **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
   haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
   `/SolarHistory` im SD-Karten-Root, manueller Korrekturmöglichkeit und
@@ -112,7 +115,7 @@ Menü unter "Konto", dort auf das Feld "Seriennummer" tippen. Sie landet
 in `device_no` in
 `/SolarGuardian/config.json` auf der SD-Karte. Man findet sie im
 Solar-Guardian-Portal auf der Geräteseite; die Adresszeile dort enthält
-`devid=` gefolgt von der Seriennummer. Die Startwerte für die Seite
+`devid=` gefolgt von der Seriennummer. Die Startwerte für den Reiter
 "Jahre" (Vorjahresertrag) stehen in `years.json` auf der SD-Karte und
 können dort direkt angepasst werden.
 
@@ -132,8 +135,8 @@ den jeweiligen Ermittlungsdienst; die Genauigkeit liegt nur auf
 Stadt-Ebene, nicht auf die genaue Adresse). Ohne erkannten Standort oder
 für einen anderen Ort: die Wetterkachel auf der Übersicht lange gedrückt
 halten - dort lässt sich der Standort einmalig von Hand per Ortsname oder
-Postleitzahl setzen (liefert die Suche genau einen Treffer, wird er
-automatisch übernommen, sonst zur Auswahl eine Liste gezeigt) oder die
+Postleitzahl setzen (die Suche zeigt immer eine antippbare Trefferliste
+zur Auswahl, auch bei nur einem Treffer) oder die
 automatische Ermittlung erneut anstoßen; ein von Hand gesetzter Standort
 wird danach nicht mehr automatisch überschrieben. Wer lieber direkt
 Koordinaten eintragen möchte, kann `location_lat`/`location_lon` auch
@@ -172,10 +175,12 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   that swipe page.
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
   current as tiles, a chart of the last 3 hours), Yield (Today, Week as a
-  rolling 7-day window, Month, Year), Years (bar chart of the last
-  calendar years), and Battery (charge level, voltage, current,
-  temperature, charging status with a short explanation of all four
-  states).
+  rolling 7-day window, Month, Year), History (three tappable tabs Days/
+  Months/Years, each a bar chart of the last 7 days, months, or calendar
+  years), and Battery (charge level, voltage, current, temperature,
+  charging status with a short explanation of all four states).
+- **Units** (kWh, W, V, A, %, °C) are shown in the chosen theme color on
+  every page, matching the values they belong to.
 - **Yield log**: counts week/month/year itself (the portal's own totals
   are known to have gaps), with a daily backup in the `/SolarHistory`
   folder on the SD card root, manual correction, and an import of older
@@ -252,7 +257,7 @@ screen during first-time setup, or any time afterward under Menu →
 `device_no` in `/SolarGuardian/
 config.json` on the SD card. You can find it on the device page in the
 Solar Guardian portal; its address bar contains `devid=` followed by the
-serial number. The seed values for the "Years" page (previous years'
+serial number. The seed values for the "Years" tab (previous years'
 yield) live in `years.json` on the SD card and can be edited there
 directly.
 
@@ -272,8 +277,8 @@ detection service; accuracy is only city-level, not an exact address).
 Without a detected location, or to use a different one: press and hold
 the weather tile on the Overview - there you can set the location by
 hand once (place
-name or postal code; if the search returns exactly one match it's used
-automatically, otherwise you pick from a list) or trigger automatic
+name or postal code; the search always shows a tappable list of matches
+to pick from, even with just one result) or trigger automatic
 detection again; a manually set location is never overwritten
 automatically afterward. If you'd rather enter coordinates directly, you
 can also set `location_lat`/`location_lon` straight in

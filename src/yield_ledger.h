@@ -54,6 +54,29 @@ namespace YieldLedger {
     };
     uint8_t pastYears(YearEntry* out, uint8_t maxCount);
 
+    // Fuer die Seite "Jahre", Reiter "Monate": bis zu maxCount gespeicherte
+    // VORMONATE (ohne den laufenden Monat, der kommt live aus current()),
+    // aufsteigend nach Monat sortiert, neueste zuerst ausgewaehlt falls
+    // mehr als maxCount Monate gespeichert sind. Liest months.json frisch
+    // bei jedem Aufruf (kleine Datei, siehe Config::SD_MONTHS_FILE).
+    struct MonthEntry {
+        char key[8] = {0}; // "YYYY-MM"
+        float kwh = 0.0f;
+    };
+    uint8_t pastMonths(MonthEntry* out, uint8_t maxCount);
+
+    // Fuer die Seite "Jahre", Reiter "Tage": bis zu maxCount abgeschlossene
+    // Vortage (aeltester zuerst) PLUS der heutige, noch laufende Tag als
+    // letzter Eintrag - zusammen das gleiche gleitende Fenster, das auch
+    // current().weekKwh aufsummiert, hier aber als Einzelwerte statt nur
+    // die Summe. Liefert 0, falls das Ertragsbuch noch nicht initialisiert
+    // ist (siehe current().valid).
+    struct DayValue {
+        char date[11] = {0}; // "YYYY-MM-DD"
+        float kwh = 0.0f;
+    };
+    uint8_t lastDaysIncludingToday(DayValue* out, uint8_t maxCount);
+
     // Steigt bei jeder gespeicherten Aenderung (Tages-/Monats-/
     // Jahreswechsel, manuelle Korrektur, Jahresabschluss in years.json) -
     // z.B. fuer years_page.cpp's update(), um zu wissen, wann neu

@@ -418,7 +418,10 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
 
             char maxLabel[16];
             snprintf(maxLabel, sizeof(maxLabel), "%.0f %s", (double)axisMax, I18n::t(I18n::Str::POWER_UNIT_W));
-            t.setTextColor(dimAccent, TFT_BLACK);
+            // Achsenbeschriftung (enthaelt die Einheit) in voller
+            // Systemfarbe, nicht gedaempft (Auftrag "Einheiten in der
+            // Systemfarbe") - die Gitterlinien selbst bleiben gedaempft.
+            t.setTextColor(accent, TFT_BLACK);
             t.setTextDatum(TL_DATUM);
             t.drawString(maxLabel, chartLeft, localAxisLabelY);
 

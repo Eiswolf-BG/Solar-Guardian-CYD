@@ -90,7 +90,20 @@ namespace Config {
     // ---- Jahresuebersicht (Seite "Jahre", siehe seed_years.h) ----
     constexpr const char* SD_YEARS_FILE     = "/SolarGuardian/years.json";
     constexpr const char* SD_YEARS_TMP_FILE = "/SolarGuardian/years.json.tmp";
-    constexpr uint8_t YEARS_CHART_MAX_BARS  = 6; // laufendes Jahr + bis zu 5 fruehere
+
+    // Monatsuebersicht (Reiter "Monate" auf der Seite "Jahre") - bewusst
+    // in /SolarHistory (nicht /SolarGuardian), analog zum Tagesertrag-
+    // Backup: ein Werksreset (loescht nur /SolarGuardian) soll die
+    // Monatshistorie nicht mitreissen. Wird NUR bei einem echten
+    // Kalendermonatswechsel geschrieben (siehe yield_ledger.cpp
+    // handleDayChange()), nie rueckwirkend erraten.
+    constexpr const char* SD_MONTHS_FILE     = "/SolarHistory/months.json";
+    constexpr const char* SD_MONTHS_TMP_FILE = "/SolarHistory/months.json.tmp";
+
+    // Balkenanzahl fuer alle 3 Reiter der Seite "Jahre" (Tage/Monate/
+    // Jahre) - jeweils laufende Periode + bis zu 6 fruehere, siehe Auftrag
+    // "immer die letzten 7".
+    constexpr uint8_t HISTORY_CHART_MAX_BARS = 7;
 
     // ---- Wisch-Navigation zwischen den Hauptseiten (Auftrag "Wischgeste
     // empfindlicher" - vorher musste man "gewaltig druecken", dann in

@@ -17,7 +17,7 @@ namespace {
         {I18n::Str::PAGE_HOME_TITLE, HomePage::draw, HomePage::update, HomePage::onTap, HomePage::onLongPress, I18n::Str::HELP_BODY_PAGE_HOME},
         {I18n::Str::PAGE_POWER_TITLE, PowerPage::draw, PowerPage::update, PowerPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_POWER},
         {I18n::Str::PAGE_YIELD_TITLE, YieldPage::draw, YieldPage::update, YieldPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YIELD},
-        {I18n::Str::PAGE_YEARS_TITLE, YearsPage::draw, YearsPage::update, nullptr, nullptr, I18n::Str::HELP_BODY_PAGE_YEARS},
+        {I18n::Str::PAGE_YEARS_TITLE, YearsPage::draw, YearsPage::update, YearsPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YEARS},
         {I18n::Str::PAGE_BATTERY_TITLE, BatteryPage::draw, BatteryPage::update, BatteryPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_BATTERY},
     };
     constexpr uint8_t PAGE_COUNT = sizeof(PAGES) / sizeof(PAGES[0]);

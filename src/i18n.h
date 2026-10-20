@@ -214,6 +214,15 @@ namespace I18n {
         // Startlogo
         BOOT_LOGO_SUBTITLE,
 
+        // Seite "Jahre": Reiter Tage/Monate/Jahre
+        YEARS_TAB_DAYS,
+        YEARS_TAB_MONTHS,
+        YEARS_TAB_YEARS,
+
+        // Monatskuerzel (Reiter "Monate")
+        MONTH_JAN, MONTH_FEB, MONTH_MAR, MONTH_APR, MONTH_MAY, MONTH_JUN,
+        MONTH_JUL, MONTH_AUG, MONTH_SEP, MONTH_OCT, MONTH_NOV, MONTH_DEC,
+
         COUNT
     };
 

@@ -47,4 +47,8 @@ void applyBrightness() {
     ledcWrite(BACKLIGHT_LEDC_CHANNEL, duty);
 }
 
+uint16_t valueColor(bool valid, uint16_t accent) {
+    return valid ? accent : TFT_DARKGREY;
+}
+
 }

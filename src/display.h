@@ -20,4 +20,12 @@ namespace Display {
     // beleuchtung an - einmal bei begin() und erneut nach jeder Aenderung
     // im Helligkeit-Menue (brightness_screen.cpp).
     void applyBrightness();
+
+    // Gemeinsame Farblogik fuer einen Wert UND seine Einheit (z.B. "28"
+    // und "W") - beide IMMER dieselbe Farbe (Auftrag "Einheiten in der
+    // Systemfarbe"): Systemfarbe bei einem gueltigen/aktuellen Wert,
+    // sonst gedaempftes Grau. Ueberall verwenden, wo ein Wert und seine
+    // Einheit getrennt gezeichnet werden, statt die Einheit fest verdrahtet
+    // einzufaerben.
+    uint16_t valueColor(bool valid, uint16_t accent);
 }

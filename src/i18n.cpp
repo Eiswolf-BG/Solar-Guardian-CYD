@@ -189,7 +189,7 @@ namespace {
         "Zeigt das Wetter (antippen für die Wochenvorhersage), die aktuelle Leistung, den heutigen Ertrag und den Ladezustand der Batterie auf einen Blick. Leistung, Ertrag und Batterie antippen springt zur jeweiligen Seite.",
         "Zeigt, wie viel Strom die Solarmodule gerade liefern, dazu Spannung und Strom der Module und den Verlauf der letzten 3 Stunden. Die Werte kommen vom Solarregler über das Solar-Guardian-Portal und aktualisieren sich alle 5 Minuten. Nachts ist 0 W normal.",
         "Zeigt den erzeugten Strom heute, in den letzten 7 Tagen (heute und die 6 Tage davor), in diesem Monat und in diesem Jahr. Woche, Monat und Jahr zählt das Gerät selbst, weil die Summen des Portals Lücken haben. Die Werte aktualisieren sich alle 5 Minuten.",
-        "Zeigt den Ertrag pro Kalenderjahr. Das laufende Jahr zählt das Gerät selbst, die Vorjahre sind gespeichert.",
+        "Zeigt den Ertrag der letzten 7 Tage, Monate oder Jahre - oben die Reiter antippen, um umzuschalten. Die laufende Periode zählt das Gerät selbst, frühere Perioden sind gespeichert.",
         "Zeigt Ladezustand, Spannung, Strom, Temperatur und Ladestatus, aktualisiert alle 5 Minuten. Kein Laden: nicht geladen. Erhaltung: fast voll. Schnellladen: volle Leistung. Ausgleich: kurz höhere Spannung, gleicht die Zellen aus, normal.",
         "Das Menü mit allen Einstellungen.",
         "Bis zu 3 WLAN-Netzwerke speichern und verwalten.",
@@ -208,6 +208,15 @@ namespace {
 
         // Startlogo
         "wacht über deine Anlage",
+
+        // Seite "Jahre": Reiter
+        "Tage",
+        "Monate",
+        "Jahre",
+
+        // Monatskuerzel
+        "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+        "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
     };
 
     constexpr const char* EN[] = {
@@ -393,7 +402,7 @@ namespace {
         "Shows the weather (tap for the week forecast), the current power output, today's yield, and the battery charge level at a glance. Tap Power, Yield, or Battery to jump to that page.",
         "Shows how much power the solar panels are currently delivering, plus their voltage and current and the curve of the last 3 hours. The values come from the solar controller via the Solar Guardian portal and refresh every 5 minutes. 0 W at night is normal.",
         "Shows the power generated today, in the last 7 days (today and the 6 days before), this month, and this year. The device counts week, month, and year itself because the portal's totals have gaps. The values refresh every 5 minutes.",
-        "Shows the yield per calendar year. The device counts the current year itself, previous years are stored.",
+        "Shows the yield of the last 7 days, months, or years - tap the tabs at the top to switch. The device counts the current period itself, earlier periods are stored.",
         "Shows charge level, voltage, current, temperature, and charging status, refreshed every 5 minutes. Not charging: no charge now. Float: almost full. Boost: full power. Equalize: brief higher voltage that balances the cells, normal.",
         "The menu with all settings.",
         "Save and manage up to 3 WiFi networks.",
@@ -412,6 +421,15 @@ namespace {
 
         // Startlogo
         "watching over your system",
+
+        // "Years" page: tabs
+        "Days",
+        "Months",
+        "Years",
+
+        // Month abbreviations
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     };
 
     static_assert(sizeof(DE) / sizeof(DE[0]) == (size_t)Str::COUNT, "DE table size mismatch - add/remove an entry to match enum Str");

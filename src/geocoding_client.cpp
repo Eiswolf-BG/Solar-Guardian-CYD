@@ -81,6 +81,33 @@ namespace {
         return place;
     }
 
+    // Zusatzzeile zur Unterscheidung mehrerer Treffer (Auftrag) - Ortsteil
+    // (suburb/city_district/hamlet, falls nicht bereits der Hauptname),
+    // dann Landkreis (county), dann Bundesland (state), kommagetrennt.
+    // Leer, wenn nichts davon vorhanden ist. NIE Koordinaten/Strassen.
+    String buildDisambiguation(JsonObject r, const String& primaryPlace) {
+        JsonObject addr = r["address"];
+        String parts[3];
+        uint8_t n = 0;
+
+        constexpr const char* DISTRICT_KEYS[] = {"suburb", "city_district", "hamlet"};
+        for (const char* k : DISTRICT_KEYS) {
+            String v = String((const char*)(addr[k] | ""));
+            if (v.length() && v != primaryPlace) { parts[n++] = v; break; }
+        }
+        String county = String((const char*)(addr["county"] | ""));
+        if (county.length() && county != primaryPlace) parts[n++] = county;
+        String state = String((const char*)(addr["state"] | ""));
+        if (state.length() && state != primaryPlace) parts[n++] = state;
+
+        String out;
+        for (uint8_t i = 0; i < n; i++) {
+            if (out.length()) out += ", ";
+            out += parts[i];
+        }
+        return out;
+    }
+
     // Ein einzelner Nominatim-Abruf - gibt true bei HTTP 200 + gueltigem
     // JSON zurueck (auch wenn 0 Treffer), false bei Netzwerk-/JSON-Fehler.
     // Entfernt doppelte Namen (gleicher gebauter Anzeigename) direkt hier.
@@ -102,6 +129,7 @@ namespace {
         addr["city_district"] = true;
         addr["hamlet"] = true;
         addr["county"] = true;
+        addr["state"] = true;
         addr["postcode"] = true;
 
         JsonDocument doc;
@@ -112,9 +140,13 @@ namespace {
         for (JsonObject r : results) {
             if (outCount >= MAX_RESULTS) break;
             String name = buildName(r);
+            String disambiguation = buildDisambiguation(r, name);
+            // Dedupe auf Name UND Zusatzzeile zusammen - zwei Orte mit
+            // gleichem Hauptnamen, aber unterschiedlichem Ortsteil/
+            // Landkreis, bleiben so als eigene Treffer erhalten.
             bool duplicate = false;
             for (uint8_t i = 0; i < outCount; i++) {
-                if (out[i].name == name) { duplicate = true; break; }
+                if (out[i].name == name && out[i].disambiguation == disambiguation) { duplicate = true; break; }
             }
             if (duplicate) continue;
 
@@ -125,6 +157,7 @@ namespace {
             String latStr = String((const char*)(r["lat"] | ""));
             String lonStr = String((const char*)(r["lon"] | ""));
             out[outCount].name = name;
+            out[outCount].disambiguation = disambiguation;
             out[outCount].lat = latStr.toFloat();
             out[outCount].lon = lonStr.toFloat();
             outCount++;
@@ -148,6 +181,21 @@ SearchStatus search(const String& query, Result* out, uint8_t& outCount) {
         // finden, die der Verwaltungs-Grenzen-Treffer nicht abdeckt) -
         // zusammen ergeben sie die vollstaendigere Trefferliste (Auftrag
         // "alle gefundenen Orte als Auswahlliste").
+        //
+        // Untersucht (Auftrag "warum falscher Ort"): Live getestet mit
+        // mehreren oeffentlichen Beispiel-PLZ - sowohl "postalcode=" als
+        // auch "q=<Ziffern>" liefern bei Nominatim fuer eine reine PLZ
+        // IMMER genau EIN "boundary/postal_code"-Verwaltungspolygon, nie
+        // eine Liste der Ortsteile darin - das ist eine strukturelle
+        // Nominatim-Einschraenkung, keine Fehlkonfiguration hier (laesst
+        // sich mit dieser API nicht umgehen). Der gezeigte Name kann
+        // deshalb ein kleinerer Ortsteil statt des erwarteten Hauptorts
+        // sein. Die Abhilfe ist NICHT mehr automatisches Uebernehmen
+        // (siehe location_screen.cpp) plus eine Zusatzzeile mit Ortsteil/
+        // Landkreis/Bundesland (buildDisambiguation()), damit auch ein
+        // einzelner Treffer als das erkennbar ist, was er wirklich ist -
+        // stimmt er nicht, kann man stattdessen gezielt per Ortsname
+        // suchen (normale Textsuche liefert echte Mehrfachtreffer).
         constexpr const char* COUNTRIES[] = {"de", "at", "ch"};
         bool anyRequestSucceeded = false;
         for (const char* cc : COUNTRIES) {

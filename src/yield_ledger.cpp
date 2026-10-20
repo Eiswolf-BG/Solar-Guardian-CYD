@@ -150,6 +150,51 @@ namespace {
         revisionCounter++;
     }
 
+    // Analog zu ensureYearsFileExists()/writeYearToYearsFile(), aber fuer
+    // die Monatshistorie (Reiter "Monate", Config::SD_MONTHS_FILE). Seedet
+    // beim allerersten Anlegen mit den bereits bekannten, echten
+    // Monatssummen aus dem historischen Import (SteffenImport::
+    // MONTHS_JAN_SEP_2026, siehe steffen_import.h) statt mit erfundenen
+    // Werten - das sind die einzigen Vormonate, die zum Zeitpunkt dieses
+    // Features bereits zuverlaessig bekannt sind (Auftrag "nur bereits
+    // vorhandene Werte nutzen").
+    void ensureMonthsFileExists() {
+        if (SD.exists(Config::SD_MONTHS_FILE)) return;
+        JsonDocument doc;
+        for (uint8_t i = 0; i < SteffenImport::MONTHS_JAN_SEP_2026_COUNT; i++) {
+            char key[8];
+            snprintf(key, sizeof(key), "2026-%02u", (unsigned)(i + 1));
+            doc[key] = SteffenImport::MONTHS_JAN_SEP_2026[i];
+        }
+        if (SD.exists(Config::SD_MONTHS_TMP_FILE)) SD.remove(Config::SD_MONTHS_TMP_FILE);
+        File f = SD.open(Config::SD_MONTHS_TMP_FILE, FILE_WRITE);
+        if (!f) return;
+        bool ok = serializeJson(doc, f) > 0;
+        f.close();
+        if (!ok) { SD.remove(Config::SD_MONTHS_TMP_FILE); return; }
+        SD.rename(Config::SD_MONTHS_TMP_FILE, Config::SD_MONTHS_FILE);
+    }
+
+    void writeMonthToMonthsFile(const char* monthKey, float kwh) {
+        ensureMonthsFileExists();
+        JsonDocument doc;
+        if (SD.exists(Config::SD_MONTHS_FILE)) {
+            File f = SD.open(Config::SD_MONTHS_FILE, FILE_READ);
+            if (f) { deserializeJson(doc, f); f.close(); }
+        }
+        doc[monthKey] = kwh;
+
+        if (SD.exists(Config::SD_MONTHS_TMP_FILE)) SD.remove(Config::SD_MONTHS_TMP_FILE);
+        File f = SD.open(Config::SD_MONTHS_TMP_FILE, FILE_WRITE);
+        if (!f) return;
+        bool ok = serializeJson(doc, f) > 0;
+        f.close();
+        if (!ok) { SD.remove(Config::SD_MONTHS_TMP_FILE); return; }
+        if (SD.exists(Config::SD_MONTHS_FILE)) SD.remove(Config::SD_MONTHS_FILE);
+        SD.rename(Config::SD_MONTHS_TMP_FILE, Config::SD_MONTHS_FILE);
+        revisionCounter++;
+    }
+
     void handleDayChange(const char* newDateStr, const struct tm& /*nowTm*/) {
         if (!state.initialized) {
             strncpy(state.currentDate, newDateStr, sizeof(state.currentDate) - 1);
@@ -180,6 +225,13 @@ namespace {
             strncpy(state.yearKey, newYearKey, sizeof(state.yearKey) - 1);
         }
         if (strcmp(state.monthKey, newMonthKey) != 0) {
+            // state.monthBase enthaelt an dieser Stelle bereits den
+            // soeben abgeschlossenen Tag (siehe Addition weiter oben) -
+            // das ist exakt die Endsumme des alten Monats.
+            if (state.monthKey[0]) {
+                writeMonthToMonthsFile(state.monthKey, state.monthBase);
+                Serial.printf("[yield] Monatswechsel: %s abgeschlossen mit %.2f kWh\n", state.monthKey, (double)state.monthBase);
+            }
             state.monthBase = 0.0f;
             strncpy(state.monthKey, newMonthKey, sizeof(state.monthKey) - 1);
             Serial.println("[yield] Neuer Monat");
@@ -545,6 +597,54 @@ uint8_t pastYears(YearEntry* out, uint8_t maxCount) {
     uint8_t take = (uint8_t)(n < maxCount ? n : maxCount);
     for (uint8_t i = 0; i < take; i++) out[i] = all[take - 1 - i];
     return take;
+}
+
+uint8_t pastMonths(MonthEntry* out, uint8_t maxCount) {
+    ensureMonthsFileExists();
+    File f = SD.open(Config::SD_MONTHS_FILE, FILE_READ);
+    if (!f) return 0;
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) return 0;
+
+    constexpr uint8_t MAX_READ = 64;
+    MonthEntry all[MAX_READ];
+    uint8_t n = 0;
+    for (JsonPair kv : doc.as<JsonObject>()) {
+        if (n >= MAX_READ) break;
+        strncpy(all[n].key, kv.key().c_str(), sizeof(all[n].key) - 1);
+        all[n].kwh = kv.value().as<float>();
+        n++;
+    }
+    // Absteigend nach Monatsschluessel sortieren ("YYYY-MM" sortiert als
+    // Text bereits korrekt chronologisch, einfacher Bubble-Sort, n ist
+    // klein).
+    for (uint8_t i = 0; i < n; i++) {
+        for (uint8_t j = (uint8_t)(i + 1); j < n; j++) {
+            if (strcmp(all[j].key, all[i].key) > 0) { MonthEntry tmp = all[i]; all[i] = all[j]; all[j] = tmp; }
+        }
+    }
+
+    uint8_t take = (uint8_t)(n < maxCount ? n : maxCount);
+    for (uint8_t i = 0; i < take; i++) out[i] = all[take - 1 - i];
+    return take;
+}
+
+uint8_t lastDaysIncludingToday(DayValue* out, uint8_t maxCount) {
+    if (!state.initialized) return 0;
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < state.lastDaysCount && n < maxCount; i++) {
+        strncpy(out[n].date, state.lastDays[i].date, sizeof(out[n].date) - 1);
+        out[n].kwh = state.lastDays[i].kwh;
+        n++;
+    }
+    if (n < maxCount) {
+        strncpy(out[n].date, state.currentDate, sizeof(out[n].date) - 1);
+        out[n].kwh = state.todayMax;
+        n++;
+    }
+    return n;
 }
 
 uint32_t revision() { return revisionCounter; }

@@ -10,58 +10,148 @@
 namespace YearsPage {
 
 namespace {
-    constexpr int16_t UNIT_LABEL_Y_OFFSET = 24;
-    constexpr int16_t CHART_TOP_OFFSET = 46; // nach Titel (y+6..+23) und "kWh"-Zeile (y+24..+41)
-    // Platz fuer Wert (ueber dem Balken) bzw. Jahreszahl (unter der
-    // Grundlinie) - mind. Schrifthoehe (17px bei Size 1, siehe
-    // AppFont11pt yAdvance) + 2*4px Innenabstand = 25, hier mit etwas
-    // Reserve. Zahlen/Jahreszahlen werden NIE gekuerzt (siehe CLAUDE.md
-    // Layout-Regel) - zu knapp bemessene Zonen fuehrten frueher dazu, dass
-    // selbst die kleinste Schriftgroesse die Hoehe nicht erfuellte und
-    // fitText() deshalb staendig mit "..." kuerzte.
+    struct Rect {
+        int16_t x, y, w, h;
+        bool contains(int16_t px, int16_t py) const {
+            return px >= x && px < x + w && py >= y && py < y + h;
+        }
+    };
+
+    enum class Tab : uint8_t { Days = 0, Months = 1, Years = 2 };
+
+    // Zuletzt gewaehlter Reiter - bleibt bis zum naechsten Neustart
+    // erhalten (Auftrag "beim Wiederoeffnen der Seite beibehalten"),
+    // startet mit "Jahre" (bisheriges alleiniges Verhalten dieser Seite).
+    Tab activeTab = Tab::Years;
+
+    constexpr int16_t SIDE_MARGIN = 6;
+    constexpr int16_t TAB_GAP = 4;
+    constexpr int16_t TAB_BAR_TOP_OFFSET = 2;
+    constexpr int16_t TAB_BAR_H = 32;
+    constexpr int16_t UNIT_LABEL_Y_OFFSET = 46; // unter dem Reiterbalken
+    constexpr int16_t CHART_TOP_OFFSET = 62;    // nach Reiterbalken + "kWh"-Zeile
     constexpr int16_t VALUE_LABEL_H = 28;
     constexpr int16_t YEAR_LABEL_H = 28;
-    constexpr int16_t SIDE_MARGIN = 6;
     constexpr int16_t BAR_GAP = 6;
-    constexpr uint8_t MAX_BARS = Config::YEARS_CHART_MAX_BARS;
+    constexpr uint8_t MAX_BARS = Config::HISTORY_CHART_MAX_BARS;
     constexpr uint8_t VALUE_SIZES[] = {2, 1};
-    constexpr uint8_t YEAR_SIZES[] = {2, 1};
+    constexpr uint8_t LABEL_SIZES[] = {2, 1};
+
+    constexpr I18n::Str WEEKDAY_STRS[7] = {
+        I18n::Str::WEEKDAY_SUN, I18n::Str::WEEKDAY_MON, I18n::Str::WEEKDAY_TUE, I18n::Str::WEEKDAY_WED,
+        I18n::Str::WEEKDAY_THU, I18n::Str::WEEKDAY_FRI, I18n::Str::WEEKDAY_SAT,
+    };
+    constexpr I18n::Str MONTH_STRS[12] = {
+        I18n::Str::MONTH_JAN, I18n::Str::MONTH_FEB, I18n::Str::MONTH_MAR, I18n::Str::MONTH_APR,
+        I18n::Str::MONTH_MAY, I18n::Str::MONTH_JUN, I18n::Str::MONTH_JUL, I18n::Str::MONTH_AUG,
+        I18n::Str::MONTH_SEP, I18n::Str::MONTH_OCT, I18n::Str::MONTH_NOV, I18n::Str::MONTH_DEC,
+    };
 
     uint32_t lastSeenRevision = 0xFFFFFFFFu;
     int8_t lastSeenMinute = -1;
     bool firstCheck = true;
 
     struct Bar {
-        int year;
+        String label; // Wochentag/Monatskuerzel/Jahreszahl, je nach Reiter
         float kwh;
         bool isCurrent;
     };
 
-    // Liefert bis zu MAX_BARS Balken, aufsteigend nach Jahr sortiert,
-    // das laufende Jahr immer als letzter (rechtester) Balken.
-    uint8_t collectBars(Bar* out) {
+    // Reiterbalken-Rechtecke - 3 gleich breite Felder. areaTop muss mit
+    // dem areaTop aus draw()/onTap() uebereinstimmen (beide kommen von
+    // main_screen.cpp's BODY_TOP).
+    Rect tabRect(int16_t areaTop, uint8_t index) {
+        int16_t totalW = (int16_t)(Config::SCREEN_WIDTH - 2 * SIDE_MARGIN - 2 * TAB_GAP);
+        int16_t w = (int16_t)(totalW / 3);
+        int16_t x = (int16_t)(SIDE_MARGIN + index * (w + TAB_GAP));
+        int16_t y = (int16_t)(areaTop + TAB_BAR_TOP_OFFSET);
+        return {x, y, w, TAB_BAR_H};
+    }
+
+    // Tage: abgeschlossene Vortage + der heutige, noch laufende Tag
+    // (letzter/rechtester Balken) - gleiches Fenster wie current().weekKwh,
+    // hier als Einzelwerte (siehe yield_ledger.h).
+    uint8_t collectDayBars(Bar* out) {
+        YieldLedger::DayValue days[Config::HISTORY_CHART_MAX_BARS];
+        uint8_t n = YieldLedger::lastDaysIncludingToday(days, Config::HISTORY_CHART_MAX_BARS);
+        for (uint8_t i = 0; i < n; i++) {
+            out[i].kwh = days[i].kwh;
+            out[i].isCurrent = (i == (uint8_t)(n - 1));
+            int y, m, d;
+            if (sscanf(days[i].date, "%d-%d-%d", &y, &m, &d) == 3) {
+                struct tm dt = {};
+                dt.tm_year = y - 1900; dt.tm_mon = m - 1; dt.tm_mday = d; dt.tm_hour = 12;
+                mktime(&dt); // normalisiert tm_wday
+                uint8_t wday = (dt.tm_wday >= 0 && dt.tm_wday <= 6) ? (uint8_t)dt.tm_wday : 0;
+                out[i].label = I18n::t(WEEKDAY_STRS[wday]);
+            } else {
+                out[i].label = "?";
+            }
+        }
+        return n;
+    }
+
+    // Monate: gespeicherte Vormonate (months.json) + der laufende Monat
+    // live aus current() - gleiches Prinzip wie die bisherige Jahre-Logik.
+    uint8_t collectMonthBars(Bar* out) {
         struct tm nowTm;
         if (!getLocalTime(&nowTm, 5)) return 0;
-        int currentYear = nowTm.tm_year + 1900;
 
-        YieldLedger::YearEntry past[Config::YEARS_CHART_MAX_BARS];
-        uint8_t pastCount = YieldLedger::pastYears(past, (uint8_t)(MAX_BARS - 1));
+        YieldLedger::MonthEntry past[Config::HISTORY_CHART_MAX_BARS];
+        uint8_t pastCount = YieldLedger::pastMonths(past, (uint8_t)(MAX_BARS - 1));
 
         uint8_t n = 0;
         for (uint8_t i = 0; i < pastCount; i++) {
-            out[n].year = past[i].year;
+            int y, m;
             out[n].kwh = past[i].kwh;
             out[n].isCurrent = false;
+            if (sscanf(past[i].key, "%d-%d", &y, &m) == 2 && m >= 1 && m <= 12) {
+                out[n].label = I18n::t(MONTH_STRS[m - 1]);
+            } else {
+                out[n].label = "?";
+            }
             n++;
         }
-        out[n].year = currentYear;
-        out[n].kwh = YieldLedger::current().yearKwh;
+        out[n].kwh = YieldLedger::current().monthKwh;
         out[n].isCurrent = true;
+        out[n].label = I18n::t(MONTH_STRS[nowTm.tm_mon]);
         n++;
         return n;
     }
 
-    // Etwa halbe Helligkeit der Systemfarbe fuer fruehere Jahre (Alex'
+    // Jahre: unveraendertes bisheriges Verhalten (years.json + laufendes
+    // Jahr live), jetzt auf MAX_BARS=7 statt vormals 6 Balken erweitert.
+    uint8_t collectYearBars(Bar* out) {
+        struct tm nowTm;
+        if (!getLocalTime(&nowTm, 5)) return 0;
+        int currentYear = nowTm.tm_year + 1900;
+
+        YieldLedger::YearEntry past[Config::HISTORY_CHART_MAX_BARS];
+        uint8_t pastCount = YieldLedger::pastYears(past, (uint8_t)(MAX_BARS - 1));
+
+        uint8_t n = 0;
+        for (uint8_t i = 0; i < pastCount; i++) {
+            out[n].kwh = past[i].kwh;
+            out[n].isCurrent = false;
+            out[n].label = String(past[i].year);
+            n++;
+        }
+        out[n].kwh = YieldLedger::current().yearKwh;
+        out[n].isCurrent = true;
+        out[n].label = String(currentYear);
+        n++;
+        return n;
+    }
+
+    uint8_t collectBars(Bar* out) {
+        switch (activeTab) {
+            case Tab::Days: return collectDayBars(out);
+            case Tab::Months: return collectMonthBars(out);
+            case Tab::Years: default: return collectYearBars(out);
+        }
+    }
+
+    // Etwa halbe Helligkeit der Systemfarbe fuer fruehere Perioden (Alex'
     // Wunsch) - RGB565-Kanaele je einzeln halbieren, statt ein fest
     // verdrahtetes Grau zu nehmen.
     uint16_t dimColor(uint16_t c) {
@@ -71,13 +161,11 @@ namespace {
         return (uint16_t)((r << 11) | (g << 5) | b);
     }
 
-    // Wie LayoutUtils::fitText(), aber OHNE "..."-Kuerzung - Zahlen und
-    // Jahreszahlen duerfen nie gekuerzt werden (siehe CLAUDE.md
-    // Layout-Regel). Passt selbst die kleinste uebergebene Groesse nicht
-    // mehr vollstaendig in die Zone, wird trotzdem die komplette Zahl bei
-    // der kleinsten Groesse gezeichnet, statt Ziffern abzuschneiden -
-    // bei den hier realistischen Wertebereichen (ganze kWh/Jahr,
-    // 4-stellig) bleibt das ein rein theoretischer Fall.
+    // Wie LayoutUtils::fitText(), aber OHNE "..."-Kuerzung - Zahlen duerfen
+    // nie gekuerzt werden (siehe CLAUDE.md Layout-Regel). Passt selbst die
+    // kleinste uebergebene Groesse nicht mehr vollstaendig in die Zone,
+    // wird trotzdem die komplette Zahl bei der kleinsten Groesse
+    // gezeichnet, statt Ziffern abzuschneiden.
     LayoutUtils::FitResult fitNumberNoTruncate(TFT_eSPI& t, const String& text, int16_t maxW, int16_t maxH,
                                                 const uint8_t* sizes, uint8_t sizeCount) {
         constexpr int16_t pad = 4;
@@ -93,6 +181,27 @@ namespace {
         t.setTextSize(smallest);
         return {smallest, text};
     }
+
+    void drawTabBar(int16_t areaTop, uint16_t accent) {
+        constexpr I18n::Str TAB_LABELS[3] = {I18n::Str::YEARS_TAB_DAYS, I18n::Str::YEARS_TAB_MONTHS, I18n::Str::YEARS_TAB_YEARS};
+        for (uint8_t i = 0; i < 3; i++) {
+            Rect r = tabRect(areaTop, i);
+            bool active = ((uint8_t)activeTab == i);
+            if (active) {
+                tft.fillRect(r.x, r.y, r.w, r.h, accent);
+                tft.setTextColor(TFT_BLACK, accent);
+            } else {
+                tft.fillRect(r.x, r.y, r.w, r.h, TFT_BLACK);
+                tft.drawRect(r.x, r.y, r.w, r.h, accent);
+                tft.setTextColor(accent, TFT_BLACK);
+            }
+            LayoutUtils::FitResult fit = LayoutUtils::fitText(tft, I18n::t(TAB_LABELS[i]), (int16_t)(r.w - 4), (int16_t)(r.h - 4), LABEL_SIZES, 2);
+            tft.setTextDatum(MC_DATUM);
+            tft.drawString(fit.text, (int16_t)(r.x + r.w / 2), (int16_t)(r.y + r.h / 2));
+            tft.setTextDatum(TL_DATUM);
+            LayoutCheck::rect("Reiter", r.x, r.y, r.w, r.h);
+        }
+    }
 }
 
 void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
@@ -100,28 +209,22 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
     uint16_t dimAccent = dimColor(accent);
 
     tft.setTextSize(1);
+    drawTabBar(areaTop, accent);
+
     tft.setTextDatum(TC_DATUM);
     tft.setTextColor(accent, TFT_BLACK);
-    tft.drawString(I18n::t(I18n::Str::PAGE_YEARS_TITLE), Config::SCREEN_WIDTH / 2, (int16_t)(areaTop + 6));
-    LayoutCheck::rect("Titel", 0, areaTop, Config::SCREEN_WIDTH, 16);
-
-    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.drawString(I18n::t(I18n::Str::KWH_UNIT), Config::SCREEN_WIDTH / 2, (int16_t)(areaTop + UNIT_LABEL_Y_OFFSET));
     tft.setTextDatum(TL_DATUM);
     LayoutCheck::rect("Einheit", 0, (int16_t)(areaTop + UNIT_LABEL_Y_OFFSET), Config::SCREEN_WIDTH, 16);
 
-    Bar bars[Config::YEARS_CHART_MAX_BARS];
+    Bar bars[Config::HISTORY_CHART_MAX_BARS];
     uint8_t count = collectBars(bars);
 
     int16_t chartTop = (int16_t)(areaTop + CHART_TOP_OFFSET);
     // Feste Fusszone (Seitenpunkte + "?"-Knopf, siehe main_screen.cpp) PLUS
-    // mind. 8px Abstand (Alex' Wunsch) - das Diagramm darf diese Linie nie
-    // unterschreiten. WICHTIG: ausgehend von SCREEN_HEIGHT, nicht von
-    // areaTop+areaHeight (= BODY_TOP+BODY_H) - letzteres liegt bereits
-    // DOTS_H (16px) oberhalb von SCREEN_HEIGHT, eine fruehere Version
-    // dieser Formel subtrahierte PAGE_FOOTER_RESERVED_H dadurch effektiv
-    // doppelt und war unnoetig streng (betraf nur Sicherheitsabstand,
-    // keine echte Ueberlappung).
+    // mind. 8px Abstand - das Diagramm darf diese Linie nie unterschreiten.
+    // WICHTIG: ausgehend von SCREEN_HEIGHT, nicht von areaTop+areaHeight
+    // (= BODY_TOP+BODY_H) - siehe Config::PAGE_FOOTER_RESERVED_H.
     int16_t contentBottom = (int16_t)(Config::SCREEN_HEIGHT - Config::PAGE_FOOTER_RESERVED_H - 8);
     int16_t baselineY = (int16_t)(contentBottom - YEAR_LABEL_H);
     int16_t barMaxH = (int16_t)(baselineY - chartTop - VALUE_LABEL_H);
@@ -160,12 +263,10 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool /*forceRedraw*/) {
         tft.setTextDatum(BC_DATUM);
         tft.drawString(valFit.text, (int16_t)(x + barW / 2), (int16_t)(barY - 2));
 
-        char yearBuf[8];
-        snprintf(yearBuf, sizeof(yearBuf), "%d", bars[i].year);
         tft.setTextColor(barColor, TFT_BLACK);
-        LayoutUtils::FitResult yearFit = fitNumberNoTruncate(tft, yearBuf, barW, YEAR_LABEL_H, YEAR_SIZES, 2);
+        LayoutUtils::FitResult labelFit = fitNumberNoTruncate(tft, bars[i].label, barW, YEAR_LABEL_H, LABEL_SIZES, 2);
         tft.setTextDatum(TC_DATUM);
-        tft.drawString(yearFit.text, (int16_t)(x + barW / 2), (int16_t)(baselineY + 4));
+        tft.drawString(labelFit.text, (int16_t)(x + barW / 2), (int16_t)(baselineY + 4));
         tft.setTextDatum(TL_DATUM);
 
         LayoutCheck::rect("Balken", x, chartTop, barW, (int16_t)(contentBottom - chartTop));
@@ -185,6 +286,19 @@ bool update() {
         lastSeenMinute = minute;
     }
     return changed;
+}
+
+bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
+    for (uint8_t i = 0; i < 3; i++) {
+        Rect r = tabRect(areaTop, i);
+        if (r.contains(x, y)) {
+            Tab tapped = (Tab)i;
+            if (tapped == activeTab) return false;
+            activeTab = tapped;
+            return true;
+        }
+    }
+    return false;
 }
 
 }

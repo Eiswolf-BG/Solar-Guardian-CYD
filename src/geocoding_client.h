@@ -16,10 +16,14 @@
 
 namespace GeocodingClient {
 
-    constexpr uint8_t MAX_RESULTS = 5;
+    constexpr uint8_t MAX_RESULTS = 8;
 
     struct Result {
-        String name; // vollstaendiger Anzeigename (Ort, Region, Land)
+        String name; // vollstaendiger Anzeigename (Ort, Region, Land) - fuer appConfig.locationName
+        // Zusatzzeile zur Unterscheidung mehrerer Treffer (Ortsteil,
+        // Landkreis, Bundesland, kommagetrennt) - leer, wenn nichts davon
+        // vorhanden ist. NIE Koordinaten/Strassen (Auftrag).
+        String disambiguation;
         float lat = 0.0f;
         float lon = 0.0f;
     };

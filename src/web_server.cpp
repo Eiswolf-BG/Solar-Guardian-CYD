@@ -539,8 +539,8 @@ setInterval(poll,5000);
         }
 
         JsonArray years = doc["years"].to<JsonArray>();
-        YieldLedger::YearEntry pastYears[Config::YEARS_CHART_MAX_BARS];
-        uint8_t pastCount = YieldLedger::pastYears(pastYears, (uint8_t)(Config::YEARS_CHART_MAX_BARS - 1));
+        YieldLedger::YearEntry pastYears[Config::HISTORY_CHART_MAX_BARS];
+        uint8_t pastCount = YieldLedger::pastYears(pastYears, (uint8_t)(Config::HISTORY_CHART_MAX_BARS - 1));
         for (uint8_t i = 0; i < pastCount; i++) {
             JsonObject o = years.add<JsonObject>();
             o["y"] = pastYears[i].year;
