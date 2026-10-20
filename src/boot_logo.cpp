@@ -39,8 +39,14 @@ namespace {
     constexpr float RAY_STROKE = 2.0f; // halbe Breite -> ~4px gesamt
     constexpr uint8_t RAY_COUNT = 8;
 
-    constexpr int16_t TITLE_BASELINE_Y = 275;
-    constexpr int16_t SUBTITLE_BASELINE_Y = 299;
+    // Abstand von der Schild-Unterkante bis zur OBERKANTE der Titel-
+    // Schrift (Auftrag) - die tatsaechliche Baseline wird daraus zur
+    // Laufzeit berechnet (haengt von der Schriftgroesse/-hoehe ab, siehe
+    // begin()), nicht als feste Zahl hinterlegt.
+    constexpr int16_t TITLE_GAP_BELOW_SHIELD = 10;
+    // Bisheriger Abstand zwischen den beiden Baselines (Titel/Untertitel)
+    // bleibt gleich (Auftrag "gleicher Abstand wie bisher").
+    constexpr int16_t TITLE_TO_SUBTITLE_GAP = 24;
     constexpr int16_t UNLOCK_TEXT_BASELINE_Y = 40;
 
     uint32_t startMs = 0;
@@ -110,27 +116,35 @@ void begin(bool unlockedVariant) {
     LayoutCheck::rect("Schild", SHIELD_LEFT_X, shieldTopY,
                        (int16_t)(SHIELD_RIGHT_X - SHIELD_LEFT_X), SHIELD_H);
 
+    // Schild-Unterkante aus der Geometrie (haengt von der Variante ab,
+    // siehe shieldTopY oben) - Titel/Untertitel ruecken relativ dazu
+    // nach oben (Auftrag), keine festen Bildschirm-Y-Werte mehr.
+    int16_t shieldBottomY = (int16_t)(shieldTopY + SHIELD_H);
+
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     constexpr const char* TITLE_TEXT = "Solar Guardian";
     tft.setTextSize(2);
+    int16_t titleBaselineY = (int16_t)(shieldBottomY + TITLE_GAP_BELOW_SHIELD + tft.fontHeight());
     {
         int16_t titleW = tft.textWidth(TITLE_TEXT);
         tft.setTextDatum(BC_DATUM);
-        tft.drawString(TITLE_TEXT, SHIELD_CX, TITLE_BASELINE_Y);
+        tft.drawString(TITLE_TEXT, SHIELD_CX, titleBaselineY);
         tft.setTextDatum(TL_DATUM);
-        LayoutCheck::rect("Titel", (int16_t)(SHIELD_CX - titleW / 2), (int16_t)(TITLE_BASELINE_Y - tft.fontHeight()),
+        LayoutCheck::rect("Titel", (int16_t)(SHIELD_CX - titleW / 2), (int16_t)(titleBaselineY - tft.fontHeight()),
                            titleW, tft.fontHeight());
     }
 
+    int16_t subtitleBaselineY = (int16_t)(titleBaselineY + TITLE_TO_SUBTITLE_GAP);
+    Serial.printf("[boot] Logo shieldBottom=%d titleBaseline=%d subtitleBaseline=%d\n", shieldBottomY, titleBaselineY, subtitleBaselineY); // TEMP-TEST, wieder entfernen
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
     tft.setTextSize(1);
     {
         const char* subtitle = I18n::t(I18n::Str::BOOT_LOGO_SUBTITLE);
         int16_t subW = tft.textWidth(subtitle);
         tft.setTextDatum(BC_DATUM);
-        tft.drawString(subtitle, SHIELD_CX, SUBTITLE_BASELINE_Y);
+        tft.drawString(subtitle, SHIELD_CX, subtitleBaselineY);
         tft.setTextDatum(TL_DATUM);
-        LayoutCheck::rect("Untertitel", (int16_t)(SHIELD_CX - subW / 2), (int16_t)(SUBTITLE_BASELINE_Y - tft.fontHeight()),
+        LayoutCheck::rect("Untertitel", (int16_t)(SHIELD_CX - subW / 2), (int16_t)(subtitleBaselineY - tft.fontHeight()),
                            subW, tft.fontHeight());
     }
 
