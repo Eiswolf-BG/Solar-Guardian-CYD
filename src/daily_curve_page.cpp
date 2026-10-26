@@ -36,6 +36,7 @@ namespace {
 
     String lastMaxSig = "\x01";
     String lastChartSig = "\x01";
+    String lastProgressSig = "\x01";
     bool timeMarksDrawn = false;
     uint8_t timeMarksLang = 0xFF;
 
@@ -76,6 +77,7 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
     if (forceRedraw) {
         lastMaxSig = "\x01";
         lastChartSig = "\x01";
+        lastProgressSig = "\x01";
         timeMarksDrawn = false;
     }
 
@@ -155,7 +157,6 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
             snprintf(buf, sizeof(buf), ",%u:%u", (unsigned)snap.dailyCurve[i].minutesSinceMidnight, (unsigned)snap.dailyCurve[i].watts);
             chartSig += buf;
         }
-        if (haveNow) { char nb[8]; snprintf(nb, sizeof(nb), "|%d", nowTm.tm_hour * 60 + nowTm.tm_min); chartSig += nb; }
     }
     if (chartSig != lastChartSig) {
         lastChartSig = chartSig;
@@ -205,19 +206,6 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
                 if (havePrev) t.drawLine(prevX, prevY, px, py, curveColor);
                 prevX = px; prevY = py; havePrev = true;
             }
-
-            // "Jetzt"-Markierung: senkrechte Linie bei der aktuellen
-            // Uhrzeit, NUR solange diese tatsaechlich im Anzeigefenster
-            // liegt (vor 05:00/nach 22:00 ist die Kurve der abgeschlossene
-            // Vortag und braucht keine "Jetzt"-Linie, siehe Auftrag).
-            if (haveNow) {
-                uint16_t nowMinute = (uint16_t)(nowTm.tm_hour * 60 + nowTm.tm_min);
-                if (nowMinute >= WINDOW_START_MIN && nowMinute < WINDOW_END_MIN) {
-                    float nowFrac = (float)(nowMinute - WINDOW_START_MIN) / (float)WINDOW_SPAN_MIN;
-                    int16_t nowX = (int16_t)(chartLeft + nowFrac * (chartRight - chartLeft));
-                    t.drawFastVLine(nowX, localChartTop, CHART_H, curveColor);
-                }
-            }
         });
     }
     {
@@ -256,6 +244,47 @@ void draw(int16_t areaTop, int16_t /*areaHeight*/, bool forceRedraw) {
         LayoutCheck::bufferRect("Zeitmarken-Puffer", Config::SCREEN_WIDTH, tmSpriteH, Config::SCREEN_WIDTH, tmLineH);
     }
     LayoutCheck::rect("Zeitmarken", 0, timeMarksY, Config::SCREEN_WIDTH, 16);
+
+    // Fortschrittsbalken (Auftrag "Fortschrittsbalken im Tagesverlauf-
+    // Screen am Geraet") - ersetzt die vorherige senkrechte "Jetzt"-Linie
+    // im Diagramm (wurde faelschlich fuer einen Grafikfehler gehalten).
+    // Gleicher Zeitbereich/gleiche Breite wie das Diagramm (05:00-22:00
+    // Uhr), direkt unter der Zeitachse. Vor 05:00 leer, ab 22:00 voll -
+    // das deckt den Nachtmodus automatisch mit ab (22:00-04:30 liegt
+    // komplett in der "danach"/"davor"-Klemmung, kein Sonderfall noetig).
+    constexpr int16_t PROGRESS_GAP = 2;
+    constexpr int16_t PROGRESS_H = 9;
+    tft.setTextSize(1); // nie vom Aufrufer erben, siehe CLAUDE.md "Schriftzustand"
+    int16_t progressY = (int16_t)(timeMarksY + (tft.fontHeight() + 2) + PROGRESS_GAP);
+    float nowFracClamped = 0.0f;
+    if (haveNow) {
+        uint16_t nowMinute = (uint16_t)(nowTm.tm_hour * 60 + nowTm.tm_min);
+        if (nowMinute <= WINDOW_START_MIN) nowFracClamped = 0.0f;
+        else if (nowMinute >= WINDOW_END_MIN) nowFracClamped = 1.0f;
+        else nowFracClamped = (float)(nowMinute - WINDOW_START_MIN) / (float)WINDOW_SPAN_MIN;
+    }
+    String progressSig = String(haveNow ? (nowTm.tm_hour * 60 + nowTm.tm_min) : -1);
+    if (progressSig != lastProgressSig) {
+        lastProgressSig = progressSig;
+        TileSprite::drawInto(0, progressY, Config::SCREEN_WIDTH, PROGRESS_H, [&](TFT_eSPI& t) {
+            uint16_t dim = Display::secondaryColor();
+            t.drawRect(chartLeft, 0, (int16_t)(chartRight - chartLeft), PROGRESS_H, dim);
+            int16_t fillW = (int16_t)((chartRight - chartLeft - 2) * nowFracClamped);
+            if (fillW > 0) t.fillRect((int16_t)(chartLeft + 1), 1, fillW, (int16_t)(PROGRESS_H - 2), accent);
+            // Kleine Stundenstriche ohne Beschriftung, fuer jede volle
+            // Stunde zwischen 05 und 22 Uhr (Auftrag).
+            for (uint8_t hh = Config::DAILY_CURVE_START_HOUR; hh <= Config::DAILY_CURVE_END_HOUR; hh++) {
+                int16_t tx = (int16_t)(chartLeft + (chartRight - chartLeft) * (hh - Config::DAILY_CURVE_START_HOUR) / (Config::DAILY_CURVE_END_HOUR - Config::DAILY_CURVE_START_HOUR));
+                t.drawFastVLine(tx, 0, 2, dim);
+            }
+        });
+        LayoutCheck::bufferRect("Fortschrittsbalken-Puffer", Config::SCREEN_WIDTH, PROGRESS_H, Config::SCREEN_WIDTH, PROGRESS_H);
+    }
+    LayoutCheck::rect("Fortschrittsbalken", 0, progressY, Config::SCREEN_WIDTH, PROGRESS_H);
+    // Kein Platz mehr fuer eine zusaetzliche Uhrzeit-Beschriftung am
+    // Fuellende (nur ca. 2px Luft bis zur Fusszone bei dieser
+    // Bildschirmgroesse) - bewusst weggelassen (Auftrag erlaubt das
+    // ausdruecklich), siehe Bericht.
 }
 
 bool update() {

@@ -172,7 +172,7 @@ namespace {
 
         // Zuruecksetzen
         "Zurücksetzen",
-        "Alle Einstellungen, Netzwerke, Zugangsdaten und die gezählten Ertragswerte (Monat, Jahr, Vorjahreswerte, Ertragsprotokoll) werden gelöscht. Der Ordner SolarHistory bleibt erhalten. Das Gerät startet danach neu mit der Ersteinrichtung.",
+        "Alle Einstellungen, Netzwerke und Zugangsdaten werden gelöscht. Die gezählten Ertragswerte (Monat, Jahr, Vorjahreswerte, Ertragsprotokoll) im Ordner SolarHistory bleiben erhalten. Das Gerät startet danach neu mit der Ersteinrichtung.",
         "OK, löschen",
         "Lösche...",
         "Löschen fehlgeschlagen",
@@ -391,7 +391,7 @@ namespace {
 
         // Factory reset
         "Factory reset",
-        "All settings, networks, account details and your counted yield values (month, year, previous years, the yield log) will be deleted. The SolarHistory folder is kept. The device will then restart into first-time setup.",
+        "All settings, networks and account details will be deleted. Your counted yield values (month, year, previous years, the yield log) in the SolarHistory folder are kept. The device will then restart into first-time setup.",
         "OK, delete",
         "Deleting...",
         "Deletion failed",

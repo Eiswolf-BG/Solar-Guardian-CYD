@@ -13,6 +13,7 @@
 #include "device_no_resolution.h"
 #include "fetch_heartbeat.h"
 #include "http_deadline_guard.h"
+#include "day_window.h"
 #include "config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -59,6 +60,20 @@ namespace {
     uint32_t lastFetchAttemptMs = 0;
     uint32_t lastEquipmentListAttemptMs = 0; // Drosselung, siehe tryResolveEquipmentList()
     time_t lastSentNextFetchAt = -1; // siehe runFetchCycle()-Aufrufstelle, Anti-Flacker-Bremse
+    // Tagesfenster/Nachtmodus (Auftrag): Datum des Abends, fuer den die
+    // Abschlussabfrage bereits erfolgreich war - leer = noch nicht. Wird
+    // beim naechsten Tageswechsel automatisch "veraltet" (siehe
+    // DayWindow::currentNightEveningDate(), Vergleich in taskFn()).
+    char finalQueryDoneDate[11] = {0};
+#ifdef NIGHT_MODE_DIAG_TEST
+    // Logzeilen fuer die Abschlussabfrage/den Nachtmodus (Auftrag "knappe
+    // Logzeilen fuer heute Abend", NUR in der lokalen Testversion aktiv) -
+    // je ein Datum/Flag, damit die jeweilige Meldung nur EINMAL pro
+    // Abend/Uebergang erscheint statt bei jedem einzelnen
+    // Schleifendurchlauf.
+    char finalQueryStartLoggedDate[11] = {0};
+    bool nightPauseLogged = false;
+#endif
     uint32_t lastManualRefreshMs = 0;
     bool forceFetchNow = false;
     bool firstFetchHeapLogged = false;
@@ -294,7 +309,14 @@ namespace {
         struct tm nowTm;
         localtime_r(&now, &nowTm);
         struct tm dayTm = nowTm;
-        if (nowTm.tm_hour < Config::DAILY_CURVE_START_HOUR) {
+        // Seit Auftrag "Tagesfenster mit Nachtmodus": der Kurven-Tag
+        // wechselt schon um DAY_START_HOUR:DAY_START_MINUTE (04:30), nicht
+        // erst um DAILY_CURVE_START_HOUR (05:00) - die Kurve startet damit
+        // zeitgleich mit dem neuen Ertragsbuch-Tag wieder leer. Die
+        // tatsaechlich dargestellte Achse (05-22 Uhr, siehe
+        // daily_curve_page.cpp) bleibt davon unberuehrt, da start/end
+        // weiterhin ueber DAILY_CURVE_START_HOUR/END_HOUR berechnet werden.
+        if (DayWindow::minutesOfDay(nowTm) < (uint16_t)(Config::DAY_START_HOUR * 60 + Config::DAY_START_MINUTE)) {
             time_t yesterday = now - 24L * 3600L;
             localtime_r(&yesterday, &dayTm);
         }
@@ -680,20 +702,86 @@ namespace {
             bool justConnected = wifiConnected && !wifiWasConnected;
             if (hasAccount && wifiConnected) {
                 uint32_t now = millis();
-                uint32_t interval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
-                                     ? Config::EPEVER_RETRY_INTERVAL_MS
-                                     : Config::EPEVER_FETCH_INTERVAL_MS;
-                bool due = forceFetchNow || justConnected || lastFetchAttemptMs == 0 ||
-                           (now - lastFetchAttemptMs >= interval);
-                if (due) {
-                    lastFetchAttemptMs = now;
-                    forceFetchNow = false;
-                    if (hasDeviceNo) {
-                        runFetchCycle();
-                    } else {
-                        runDeviceNoOnlyCycle();
+                time_t nowEpoch = time(nullptr);
+                struct tm nowTm;
+                // Ohne gueltige NTP-Zeit gibt es KEINEN Nachtmodus (Auftrag
+                // 3g) - getLocalTime() schlaegt dann fehl, hasValidTime
+                // bleibt false, der Rest verhaelt sich wie vorher (immer
+                // Tagesfenster-Takt).
+                bool hasValidTime = getLocalTime(&nowTm, 5);
+                bool inNightWindow = hasValidTime && DayWindow::isNightWindow(nowTm);
+                bool inFinalQueryWindow = hasValidTime && DayWindow::isFinalQueryWindow(nowTm);
+
+                char eveningDate[11] = {0};
+                if (hasValidTime) DayWindow::currentNightEveningDate(nowEpoch, nowTm, eveningDate, sizeof(eveningDate));
+                bool finalQueryAlreadyDoneTonight = hasValidTime && finalQueryDoneDate[0] &&
+                                                     strcmp(finalQueryDoneDate, eveningDate) == 0;
+
+                bool allowFetch = !inNightWindow && !(inFinalQueryWindow && finalQueryAlreadyDoneTonight);
+
+#ifdef NIGHT_MODE_DIAG_TEST
+                // Logzeilen (Auftrag): Eintritt/Ende des Nachtmodus, je
+                // nur einmal pro Uebergang.
+                if (hasValidTime) {
+                    if (inNightWindow && !nightPauseLogged) {
+                        nightPauseLogged = true;
+                        char hhmm[6];
+                        struct tm nt; localtime_r(&nowEpoch, &nt);
+                        snprintf(hhmm, sizeof(hhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+                        Serial.printf("[fetch] Nachtmodus-Pause beginnt um %s - keine Abfragen bis 04:30\n", hhmm);
+                    } else if (!inNightWindow && nightPauseLogged) {
+                        nightPauseLogged = false;
+                        Serial.println("[fetch] Nachtmodus Ende - Abfragen ab 04:30 wieder aktiv");
                     }
                 }
+
+                if (inFinalQueryWindow && !finalQueryAlreadyDoneTonight &&
+                    (!finalQueryStartLoggedDate[0] || strcmp(finalQueryStartLoggedDate, eveningDate) != 0)) {
+                    strncpy(finalQueryStartLoggedDate, eveningDate, sizeof(finalQueryStartLoggedDate) - 1);
+                    Serial.println("[fetch] Abschlussabfrage (ab 22:30) beginnt");
+                }
+#endif
+
+                if (allowFetch) {
+                    uint32_t interval;
+                    if (inFinalQueryWindow) {
+                        // Abschlussabfrage (22:30-22:55): schnellerer Takt
+                        // als normal, unabhaengig vom Kurzfehler-Zaehler.
+                        interval = Config::FINAL_QUERY_RETRY_INTERVAL_MS;
+                    } else {
+                        interval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
+                                   ? Config::EPEVER_RETRY_INTERVAL_MS
+                                   : Config::EPEVER_FETCH_INTERVAL_MS;
+                    }
+                    bool due = forceFetchNow || justConnected || lastFetchAttemptMs == 0 ||
+                               (now - lastFetchAttemptMs >= interval);
+                    if (due) {
+                        lastFetchAttemptMs = now;
+                        forceFetchNow = false;
+                        if (hasDeviceNo) {
+                            runFetchCycle();
+                        } else {
+                            runDeviceNoOnlyCycle();
+                        }
+                        // consecutiveFailures==0 nach dem Versuch heisst
+                        // "erfolgreich" (jeder Fehlschlag zaehlt ihn hoch,
+                        // siehe runFetchCycle()) - Abschlussabfrage dieses
+                        // Abends ist damit erledigt, siehe Auftrag 3c/3d.
+                        if (inFinalQueryWindow && consecutiveFailures == 0) {
+                            strncpy(finalQueryDoneDate, eveningDate, sizeof(finalQueryDoneDate) - 1);
+                            SolarData::setFinalQueryDoneDate(eveningDate);
+#ifdef NIGHT_MODE_DIAG_TEST
+                            SolarData::Data s = SolarData::snapshot();
+                            char hhmm[6];
+                            struct tm nt; localtime_r(&nowEpoch, &nt);
+                            snprintf(hhmm, sizeof(hhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+                            Serial.printf("[fetch] Abschlussabfrage erfolgreich: %.2f kWh um %s\n",
+                                          (double)s.dailySourceKwh, hhmm);
+#endif
+                        }
+                    }
+                }
+
                 // Geplante naechste Abfrage fuer die Anzeige (Auftrag
                 // "Naechste Abfrage" statt der doppelten "Messung"-Zeile,
                 // siehe power_page.cpp/battery_page.cpp) - NACH dem
@@ -704,12 +792,25 @@ namespace {
                 // Versuchs - die Formel gilt damit fuer beide Faelle
                 // (gerade abgefragt oder noch wartend) gleich.
                 {
-                    uint32_t nextInterval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
-                                             ? Config::EPEVER_RETRY_INTERVAL_MS
-                                             : Config::EPEVER_FETCH_INTERVAL_MS;
-                    int32_t msUntilNext = (int32_t)(lastFetchAttemptMs + nextInterval - now);
-                    if (msUntilNext < 0) msUntilNext = 0;
-                    time_t candidateNextAt = time(nullptr) + (time_t)(msUntilNext / 1000);
+                    time_t candidateNextAt;
+                    if (!allowFetch) {
+                        // Nachtmodus (oder Abschlussabfrage dieses Abends
+                        // schon erledigt) - naechste Abfrage ist erst der
+                        // naechste Tagesbeginn.
+                        candidateNextAt = hasValidTime ? DayWindow::nextDayStartEpoch(nowEpoch) : 0;
+                    } else {
+                        uint32_t nextInterval;
+                        if (inFinalQueryWindow) {
+                            nextInterval = Config::FINAL_QUERY_RETRY_INTERVAL_MS;
+                        } else {
+                            nextInterval = (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES)
+                                           ? Config::EPEVER_RETRY_INTERVAL_MS
+                                           : Config::EPEVER_FETCH_INTERVAL_MS;
+                        }
+                        int32_t msUntilNext = (int32_t)(lastFetchAttemptMs + nextInterval - now);
+                        if (msUntilNext < 0) msUntilNext = 0;
+                        candidateNextAt = nowEpoch + (time_t)(msUntilNext / 1000);
+                    }
                     // NUR bei echter Aenderung schreiben - SolarData::
                     // setNextFetchAt() erhoeht IMMER changeCounter, auch
                     // wenn der Wert gleich bleibt. Ohne diese Bremse lief

@@ -18,6 +18,8 @@
 #include "tile_sprite.h"
 #include "networks_screen.h"
 #include "easter_egg.h"
+#include "yield_ledger.h"
+#include "moon_icon.h"
 #include "i18n.h"
 #include "config.h"
 #include <WiFi.h>
@@ -94,6 +96,8 @@ namespace {
     // bei einer echten Aenderung keine sichtbare Luecke mehr.
     char lastDrawnHeaderClock[6] = "\x01";
     uint8_t lastDrawnHeaderBars = 0xFF;
+    bool lastDrawnHeaderNightMode = false;
+    bool lastDrawnHeaderNightModeKnown = false;
 
     // Verstecktes Zusatzfeature (siehe easter_egg.h) - Rueckmeldung per
     // Blinken der Uhrzeit, zeitgesteuert statt mit delay(). Feste,
@@ -139,10 +143,23 @@ namespace {
         return {zx, zy, zw, zh};
     }
 
+    // Kleine Halbmondsichel zwischen "Solar Guardian"-Knopf und WLAN-
+    // Symbol (ca. 24px freier Platz dort, siehe MENU_BTN/wifiIconTapZone())
+    // - ueberschneidet sich dadurch garantiert mit keinem der drei anderen
+    // Kopfzeilen-Elemente (Auftrag "Tagesfenster mit Nachtmodus").
+    Rect moonIconZone() {
+        constexpr int16_t R = 6;
+        int16_t cx = (int16_t)(MENU_BTN.x + MENU_BTN.w + 12);
+        int16_t cy = HEADER_BASELINE_Y - 2;
+        return {(int16_t)(cx - R), (int16_t)(cy - R), (int16_t)(2 * R), (int16_t)(2 * R)};
+    }
+
     void drawHeader(bool force) {
         uint16_t accent = Display::systemColor();
         uint8_t bars = WifiScan::signalBars();
-        bool changed = force || strcmp(lastClockText, lastDrawnHeaderClock) != 0 || bars != lastDrawnHeaderBars;
+        bool nightMode = YieldLedger::isNightModeConfirmedNow();
+        bool changed = force || strcmp(lastClockText, lastDrawnHeaderClock) != 0 || bars != lastDrawnHeaderBars ||
+                       !lastDrawnHeaderNightModeKnown || nightMode != lastDrawnHeaderNightMode;
         // Eigene begin()/finish()-Pruefung nur fuer die drei Kopfzeilen-
         // Elemente untereinander (Auftrag) - unabhaengig von der Seiten-
         // Pruefung in drawBody(), da drawHeader() auch separat (Uhr-Tick)
@@ -174,11 +191,17 @@ namespace {
             Rect wz = wifiIconTapZone();
             LayoutCheck::rect("WLAN-Tippflaeche", wz.x, wz.y, wz.w, wz.h);
         }
+        if (nightMode) {
+            Rect mz = moonIconZone();
+            LayoutCheck::rect("Mondsichel", mz.x, mz.y, mz.w, mz.h);
+        }
         LayoutCheck::finish();
 
         if (!changed) return;
         strncpy(lastDrawnHeaderClock, lastClockText, sizeof(lastDrawnHeaderClock));
         lastDrawnHeaderBars = bars;
+        lastDrawnHeaderNightMode = nightMode;
+        lastDrawnHeaderNightModeKnown = true;
 
         TileSprite::drawInto(0, 0, Config::SCREEN_WIDTH, HEADER_H, [&](TFT_eSPI& t) {
             t.setTextSize(1);
@@ -208,6 +231,11 @@ namespace {
                 uint16_t color = (i < bars) ? accent : Display::secondaryColor();
                 t.fillRect(x, HEADER_BASELINE_Y - barH, BAR_W, barH, color);
                 x += BAR_W + BAR_GAP;
+            }
+
+            if (nightMode) {
+                Rect mz = moonIconZone();
+                MoonIcon::draw(t, (int16_t)(mz.x + mz.w / 2), (int16_t)(mz.y + mz.h / 2), (int16_t)(mz.w / 2), accent);
             }
         });
     }

@@ -20,6 +20,7 @@
 #include "web_server.h"
 #include "boot_logo.h"
 #include "easter_egg.h"
+#include "portal_day_probe.h"
 #include <esp_system.h>
 
 namespace {
@@ -214,5 +215,8 @@ void loop() {
     MainScreen::tick();
     FetchWatchdog::tick();
     WebServer_::tick();
+#ifdef PORTAL_DAY_PROBE
+    PortalDayProbe::tick();
+#endif
     delay(10);
 }

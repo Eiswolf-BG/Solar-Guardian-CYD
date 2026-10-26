@@ -4,7 +4,31 @@
 // irgendwo im Code verstreut.
 #include <Arduino.h>
 
+// Rein lokale Diagnose-Messung (siehe portal_day_probe.h) - NIE
+// committen/veroeffentlichen (siehe CLAUDE.md). Diese eine Zeile
+// auskommentieren schaltet die Messung komplett ab (Code wird dann nicht
+// mitgebaut).
+// Messung (5 Naechte) ausgewertet und abgeschaltet - Ergebnis: Portal-
+// Tageswechsel UTC+2 fest, 23:00 Uhr lokal seit der Winterzeit-Umstellung
+// am 25.10. (siehe Tagesfenster-Logik unten).
+// #define PORTAL_DAY_PROBE 1
+
+// Knappe serielle Logzeilen fuer den ersten echten Nachtmodus-Testlauf
+// (Abschlussabfrage/Bestaetigung/Nachtmodus-Ein-Aus/Tageswechsel/
+// abgelehntes Datum) - NUR fuer eine lokale Testversion, NIE im Release
+// (siehe CLAUDE.md "Standard-Workflow"). Diese Zeile bleibt im normalen
+// Arbeitsstand auskommentiert; nur fuer den einen Testflash lokal
+// aktivieren, nie committen.
+// #define NIGHT_MODE_DIAG_TEST 1
+
 namespace Config {
+
+    // Firmware-Version, einzige zentrale Stelle (Auftrag "WebUI
+    // erweitern" - Versions-/Verbindungsanzeige). MUSS bei jedem Release
+    // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
+    // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
+    // beide Stellen zusammen pflegen, nicht nur eine davon.
+    constexpr const char* FW_VERSION = "1.7";
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----
@@ -55,9 +79,16 @@ namespace Config {
     constexpr uint8_t MAX_WIFI_SLOTS = 3;
 
     // ---- Ertragsbuch (siehe yield_ledger.h/.cpp und CLAUDE.md) ----
-    constexpr const char* SD_YIELD_FILE     = "/SolarGuardian/yield.json";
-    constexpr const char* SD_YIELD_TMP_FILE = "/SolarGuardian/yield.json.tmp";
-    constexpr const char* SD_YIELD_DAYS_CSV = "/SolarGuardian/days.csv";
+    // Seit Auftrag "Ordneraufteilung SD-Karte" in /SolarHistory (reine
+    // Solardaten, bleiben bei einem Zuruecksetzen erhalten) - vorher in
+    // /SolarGuardian, SD_YIELD_FILE_OLD/SD_YIELD_DAYS_CSV_OLD/
+    // SD_YEARS_FILE_OLD dienen nur noch der einmaligen Migration beim
+    // Start, siehe sd_storage.cpp::migrateSolarDataFolder().
+    constexpr const char* SD_YIELD_FILE     = "/SolarHistory/yield.json";
+    constexpr const char* SD_YIELD_TMP_FILE = "/SolarHistory/yield.json.tmp";
+    constexpr const char* SD_YIELD_DAYS_CSV = "/SolarHistory/days.csv";
+    constexpr const char* SD_YIELD_FILE_OLD     = "/SolarGuardian/yield.json";
+    constexpr const char* SD_YIELD_DAYS_CSV_OLD = "/SolarGuardian/days.csv";
     constexpr uint32_t YIELD_SAVE_MIN_INTERVAL_MS = 60UL * 1000UL;
     constexpr float YIELD_DAILY_MIN_KWH = 0.0f;
     constexpr float YIELD_DAILY_MAX_KWH = 200.0f;
@@ -79,8 +110,11 @@ namespace Config {
     constexpr const char* SD_HISTORY_BACKUP_FILE_OLD = "/SolarGuardian/History/tagesertrag.json";
 
     // ---- Jahresuebersicht (Seite "Jahre") ----
-    constexpr const char* SD_YEARS_FILE     = "/SolarGuardian/years.json";
-    constexpr const char* SD_YEARS_TMP_FILE = "/SolarGuardian/years.json.tmp";
+    // Seit Auftrag "Ordneraufteilung SD-Karte" in /SolarHistory, siehe
+    // Kommentar bei SD_YIELD_FILE oben.
+    constexpr const char* SD_YEARS_FILE     = "/SolarHistory/years.json";
+    constexpr const char* SD_YEARS_TMP_FILE = "/SolarHistory/years.json.tmp";
+    constexpr const char* SD_YEARS_FILE_OLD = "/SolarGuardian/years.json";
 
     // Monatsuebersicht (Reiter "Monate" auf der Seite "Jahre") - bewusst
     // in /SolarHistory (nicht /SolarGuardian), analog zum Tagesertrag-
@@ -181,6 +215,28 @@ namespace Config {
     constexpr uint32_t EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS = 30UL * 1000UL;
     constexpr uint32_t EPEVER_STALE_AFTER_MS = 30UL * 60UL * 1000UL;    // Werte gelten danach als veraltet
     constexpr const char* EPEVER_BATTERY_URL = "https://hncloudapi.epsolarpv.com:7002/history/getSampleDataPoint";
+
+    // ---- Tagesfenster/Nachtmodus (Auftrag "Tagesfenster mit Nachtmodus")
+    // ----
+    // Ergebnis der mehrtaegigen PORTAL_DAY_PROBE-Messung (siehe
+    // portal_day_probe.h, Code bleibt abgeschaltet liegen): das Portal
+    // wechselt seinen "aktuellen Tag" taeglich in einer festen Zeitzone
+    // UTC+2 um 00:00 Uhr dort - das war bis zur Winterzeit-Umstellung am
+    // 25.10.2026 exakt Mitternacht lokaler Zeit, seitdem 23:00 Uhr lokal.
+    // Die App fragt deshalb nur noch zwischen DAY_START und DAY_END ab,
+    // die Abschlussabfrage (DAY_END bis FINAL_QUERY_DEADLINE) liegt damit
+    // sicher VOR diesem Portal-Wechsel, unabhaengig von Zeitzone/Sommer-
+    // oder Winterzeit - siehe day_window.h.
+    constexpr uint8_t DAY_START_HOUR = 4;
+    constexpr uint8_t DAY_START_MINUTE = 30;
+    constexpr uint8_t DAY_END_HOUR = 22;
+    constexpr uint8_t DAY_END_MINUTE = 30;
+    constexpr uint8_t FINAL_QUERY_DEADLINE_HOUR = 22;
+    constexpr uint8_t FINAL_QUERY_DEADLINE_MINUTE = 55;
+    // "alle paar Minuten" erneut versuchen, falls die Abschlussabfrage
+    // zunaechst fehlschlaegt (schneller als der normale 5-Minuten-Takt,
+    // aber nicht so aggressiv wie der normale Kurzfehler-Takt).
+    constexpr uint32_t FINAL_QUERY_RETRY_INTERVAL_MS = 3UL * 60UL * 1000UL;
 
     // ---- Tagesverlauf (Seite "Tagesverlauf", ganztaegige Leistungskurve
     // ueber die gleiche Port-7002-Abfrage wie die 3h-Kurve, siehe

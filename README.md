@@ -31,11 +31,16 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
   -Strom als Kacheln, Kurve der letzten 3 Stunden), Tagesverlauf
   (Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr mit dem
-  Tages-Höchstwert in Watt), Ertrag (Heute, Woche als gleitendes
+  Tages-Höchstwert in Watt, darunter ein Fortschrittsbalken, der sich
+  über den Tag füllt), Ertrag (Heute, Woche als gleitendes
   7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare Reiter Tage/
   Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate bzw.
   Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
   Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
+- **Nachtmodus**: Die Abfrage läuft nur noch zwischen 04:30 und
+  22:30 Uhr - danach eine Abschlussabfrage, bestätigt per Abgleich mit
+  dem Tages-Backup. Bestätigt erscheint im Kopfbereich eine kleine
+  Mondsichel, bis die Abfrage um 04:30 Uhr wieder beginnt.
 - **Einheitliche Farben** auf allen Seiten: Beschriftungen, Einheiten
   (kWh, W, V, A, %, °C), Rahmen und Kurven/Balken in der gewählten
   Systemfarbe. Alle vom Portal oder Wetterdienst abgefragten Werte -
@@ -46,14 +51,22 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 - **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
   haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
   `/SolarHistory` im SD-Karten-Root und manueller Korrekturmöglichkeit.
+  Dieser Ordner enthält alle Solardaten und bleibt bei einem
+  Zurücksetzen erhalten - nur die Einstellungen werden dabei gelöscht.
 - **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
   die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
   alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
   Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, Verlauf (Tage/
-  Monate/Jahre) und Wetter (inklusive Wettersymbolen und
-  Leistungskurve) - genau wie am Gerät. Rein lesend, aktualisiert sich
-  automatisch. Jetzt auch erreichbar, während am Gerät selbst die
-  WebUI-Seite (oder eine andere Vollbild-Seite) geöffnet ist.
+  Monate/Jahre), Wetter (inklusive Wettersymbolen und
+  Leistungskurve) und Daten (Dateien auf der SD-Karte ansehen,
+  bearbeiten und löschen - außer dem geschützten Ordner
+  `/SolarHistory`) - genau wie am Gerät. Jetzt auch erreichbar, während
+  am Gerät selbst die WebUI-Seite (oder eine andere Vollbild-Seite)
+  geöffnet ist. Eine kleine Statuszeile unten zeigt Version,
+  Verbindung zum Gerät und Portal-Status. Der Tagesverlauf hat
+  ebenfalls einen Fortschrittsbalken mit stündlicher Zeitachse, die
+  Tage-Ansicht zeigt den genauen Tagesertrag mit zwei
+  Nachkommastellen in richtiger, lückenloser Reihenfolge.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
@@ -184,11 +197,16 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
   current as tiles, a chart of the last 3 hours), Daily curve (the power
   curve of the whole day from 05:00 to 22:00, with today's peak value in
-  watts), Yield (Today, Week as a rolling 7-day window, Month, Year),
+  watts and, below it, a progress bar that fills up over the day), Yield
+  (Today, Week as a rolling 7-day window, Month, Year),
   History (three tappable tabs Days/Months/Years, each a bar chart of
   the last 7 days, months, or calendar years), and Battery (charge
   level, voltage, current, temperature, charging status with a short
   explanation of all four states).
+- **Night mode**: fetching now only runs between 04:30 and 22:30 -
+  followed by a final query, confirmed by comparing it against the
+  day's backup. Once confirmed, a small crescent moon appears in the
+  header until fetching resumes at 04:30.
 - **Consistent colors** across every page: labels, units (kWh, W, V, A,
   %, °C), borders, and chart curves/bars use the chosen theme color.
   Every value fetched from the portal or weather service - numbers AND
@@ -197,15 +215,22 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   grid and the weekdays/month names/years shown in the overviews.
 - **Yield log**: counts week/month/year itself (the portal's own totals
   are known to have gaps), with a daily backup in the `/SolarHistory`
-  folder on the SD card root and manual correction.
+  folder on the SD card root and manual correction. This folder holds
+  all solar data and survives a factory reset - only the settings get
+  deleted.
 - **Web view**: In the menu under "Networks" → "WebUI" you'll find the
   address to open in a browser on a device in the same WiFi network -
   shows all values large and clean on your phone or PC, with its own
   tabs for Overview, Power, Daily curve, Yield, Battery, History (Days/
-  Months/Years), and Weather (including weather icons and the power
-  chart) - just like on the device. Read-only, updates automatically.
-  Now also reachable while the WebUI page itself (or any other
-  full-screen page) is open on the device.
+  Months/Years), Weather (including weather icons and the power
+  chart), and Data (view, edit, and delete files on the SD card -
+  except the protected `/SolarHistory` folder) - just like on the
+  device. Now also reachable while the WebUI page itself (or any other
+  full-screen page) is open on the device. A small status line at the
+  bottom shows the version, the connection to the device, and the
+  portal status. The daily curve also has a progress bar with an
+  hourly time axis, and the Days view shows the exact daily yield with
+  two decimal places in correct, gapless order.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.

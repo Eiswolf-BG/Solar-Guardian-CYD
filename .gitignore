@@ -17,3 +17,7 @@ History/
 # Foto-Originale (unverkleinert, mit EXIF) - nur die verkleinerten
 # Kopien in docs/images werden committet, siehe README-Workflow.
 /images/
+
+# Native Testumgebung (Auftrag "Tests am Rechner statt am Geraet") - rein
+# lokal, nie committen.
+/test/

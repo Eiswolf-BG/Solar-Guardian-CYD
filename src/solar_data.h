@@ -124,6 +124,14 @@ namespace SolarData {
         char statusText[64] = {0}; // Klartext-Fehlermeldung, leer = kein Fehler
         FetchStatus fetchStatus = FetchStatus::NoAccount;
 
+        // Tagesfenster/Nachtmodus (Auftrag "Tagesfenster mit Nachtmodus",
+        // siehe day_window.h): "YYYY-MM-DD" des Abends, fuer den die
+        // Abschlussabfrage (22:30-22:55) in DIESER Sitzung bereits
+        // erfolgreich war - leer, solange noch keine. Core 1
+        // (yield_ledger.cpp) nutzt das zusammen mit dem History-Backup,
+        // um den Nachtmodus zu bestaetigen (Mondsymbol, siehe CLAUDE.md).
+        char finalQueryDoneDate[11] = {0};
+
         // Steigt bei JEDEM erfolgreich abgeschlossenen Ertrags-/Batterie-
         // Abfragezyklus UNBEDINGT (anders als changeCounter unten, der nur
         // bei echter Wertaenderung steigt) - fetch_watchdog.cpp nutzt das,
@@ -181,6 +189,7 @@ namespace SolarData {
     void setDailySource(float kwh, time_t measuredAt, bool fromDatapoint);
     void setLastSuccessfulFetch(time_t epoch);
     void setNextFetchAt(time_t epoch);
+    void setFinalQueryDoneDate(const char* dateStr);
     void setStatusText(const char* text);
     void setFetchStatus(FetchStatus status);
 }

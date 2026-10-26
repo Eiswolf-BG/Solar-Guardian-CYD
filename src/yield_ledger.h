@@ -82,4 +82,13 @@ namespace YieldLedger {
     // z.B. fuer years_page.cpp's update(), um zu wissen, wann neu
     // gezeichnet werden muss.
     uint32_t revision();
+
+    // Tagesfenster/Nachtmodus (Auftrag "Tagesfenster mit Nachtmodus"):
+    // true nur zwischen 22:55 und 04:30 lokal UND wenn die Abschlussabfrage
+    // fuer den vergangenen Abend bestaetigt ist (siehe CLAUDE.md) - steuert
+    // die Mondsichel+"Nachtmodus"-Anzeige auf den Seiten, die "Naechste
+    // Abfrage:" zeigen (power_page.cpp/battery_page.cpp) und in der WebUI.
+    // Rein aus Uhrzeit + gespeicherten Daten abgeleitet, funktioniert auch
+    // direkt nach einem Neustart mitten in der Nacht, ohne neue Abfrage.
+    bool isNightModeConfirmedNow();
 }

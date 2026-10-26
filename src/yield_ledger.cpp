@@ -1,9 +1,11 @@
 #include "yield_ledger.h"
 #include "solar_data.h"
+#include "day_window.h"
 #include "config.h"
 #include <SD.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <math.h>
 
 namespace YieldLedger {
 
@@ -69,8 +71,47 @@ namespace {
         state.lastDaysCount = keptCount;
     }
 
+    // Fehlerursache "Tage in falscher Reihenfolge" (Auftrag): frueher
+    // haengte diese Funktion jeden Tag blind ans ENDE des Arrays an, auch
+    // wenn sein Datum chronologisch VOR bereits vorhandenen Eintraegen lag
+    // (z.B. beim Nachladen aus days.csv nach einem Neustart, wenn ein
+    // aelterer Tag in yield.json fehlte) - dadurch landete ein
+    // "ueberholter" Tag mitten in der eigentlich aufsteigend sortierten
+    // Liste (siehe Screenshot/Git-Historie: "Mi Do Fr Sa Di So Mo" statt
+    // "Di Mi Do Fr Sa So Mo"). Die SUMME (current().weekKwh) war davon
+    // nicht betroffen (Reihenfolge ist fuer eine Summe egal), nur die
+    // Anzeige auf der Geraete-Seite "Jahre"/Reiter "Tage" und in der
+    // WebUI (beide lesen lastDays in Array-Reihenfolge). "YYYY-MM-DD"
+    // sortiert als reiner String bereits korrekt chronologisch, deshalb
+    // reicht ein einfacher strcmp()-Sortierdurchlauf. pushLastDay() haelt
+    // das Array jetzt nach JEDEM Aufruf sortiert UND dupliziert kein
+    // Datum mehr (Auftrag "keine Duplikate pro Datum") - unabhaengig
+    // davon, in welcher Reihenfolge die Tage eintreffen.
+    void sortLastDaysByDate() {
+        for (uint8_t i = 1; i < state.lastDaysCount; i++) {
+            DayEntry key = state.lastDays[i];
+            int8_t j = (int8_t)(i - 1);
+            while (j >= 0 && strcmp(state.lastDays[j].date, key.date) > 0) {
+                state.lastDays[j + 1] = state.lastDays[j];
+                j--;
+            }
+            state.lastDays[j + 1] = key;
+        }
+    }
+
     void pushLastDay(const char* dateStr, float kwh) {
+        for (uint8_t i = 0; i < state.lastDaysCount; i++) {
+            if (strcmp(state.lastDays[i].date, dateStr) == 0) {
+                state.lastDays[i].kwh = kwh; // Datum schon vorhanden - Wert aktualisieren statt duplizieren
+                sortLastDaysByDate();
+                return;
+            }
+        }
         if (state.lastDaysCount >= Config::YIELD_ROLLING_WEEK_DAYS) {
+            // Sortiert entfernt das Array garantiert den CHRONOLOGISCH
+            // aeltesten Eintrag (Index 0), nicht einfach den zuletzt
+            // physisch angehaengten.
+            sortLastDaysByDate();
             for (uint8_t i = 1; i < state.lastDaysCount; i++) state.lastDays[i - 1] = state.lastDays[i];
             state.lastDaysCount = Config::YIELD_ROLLING_WEEK_DAYS - 1;
         }
@@ -78,6 +119,7 @@ namespace {
         state.lastDays[state.lastDaysCount].date[10] = 0;
         state.lastDays[state.lastDaysCount].kwh = kwh;
         state.lastDaysCount++;
+        sortLastDaysByDate();
     }
 
     bool save() {
@@ -191,6 +233,13 @@ namespace {
             strncpy(state.currentDate, newDateStr, sizeof(state.currentDate) - 1);
             return;
         }
+
+        // Knappe Logzeile fuer jeden Tageswechsel (Auftrag "Logzeilen fuer
+        // heute Abend") - bisher gab es dafuer nur bei einer Luecke >1 Tag
+        // ueberhaupt eine Meldung.
+#ifdef NIGHT_MODE_DIAG_TEST
+        Serial.printf("[yield] Tageswechsel: %s -> %s (%.2f kWh)\n", state.currentDate, newDateStr, (double)state.todayMax);
+#endif
 
         long gapDays = daysBetweenDateStrings(state.currentDate, newDateStr);
 
@@ -320,6 +369,11 @@ namespace {
         doc["datum"] = dateStr;
         doc["zeit"] = timeStr;
         doc["kwh"] = roundf(kwh * 100.0f) / 100.0f;
+        // Nachtmodus-Bestaetigung (Auftrag "Tagesfenster mit Nachtmodus")
+        // faengt bei jedem normalen Tagesschreiben bewusst wieder bei false
+        // an - erst die Abschlussabfrage-Pruefung am Abend setzt sie
+        // gezielt auf true (siehe refreshNightModeConfirmation() unten).
+        doc["bestaetigt"] = false;
 
         if (SD.exists(Config::SD_HISTORY_BACKUP_TMP)) SD.remove(Config::SD_HISTORY_BACKUP_TMP);
         File wf = SD.open(Config::SD_HISTORY_BACKUP_TMP, FILE_WRITE);
@@ -332,6 +386,92 @@ namespace {
         SD.rename(Config::SD_HISTORY_BACKUP_TMP, Config::SD_HISTORY_BACKUP_FILE);
 
         Serial.printf("[yield] History-Backup geschrieben: %s, %.2f kWh\n", dateStr, (double)kwh);
+    }
+
+    // Patcht NUR das "bestaetigt"-Feld der bestehenden Backup-Datei (Datum/
+    // Zeit/kWh bleiben unangetastet) - no-op, falls die Datei fehlt oder zu
+    // einem anderen Datum gehoert (z.B. noch nicht geschrieben, weil die
+    // Abschlussabfrage komplett fehlgeschlagen ist).
+    void setHistoryBackupConfirmed(const char* dateStr, bool confirmed) {
+        if (!SD.exists(Config::SD_HISTORY_BACKUP_FILE)) return;
+        File rf = SD.open(Config::SD_HISTORY_BACKUP_FILE, FILE_READ);
+        if (!rf) return;
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, rf);
+        rf.close();
+        if (err) return;
+        String backupDate = String((const char*)(doc["datum"] | ""));
+        if (backupDate != dateStr) return;
+        doc["bestaetigt"] = confirmed;
+
+        if (SD.exists(Config::SD_HISTORY_BACKUP_TMP)) SD.remove(Config::SD_HISTORY_BACKUP_TMP);
+        File wf = SD.open(Config::SD_HISTORY_BACKUP_TMP, FILE_WRITE);
+        if (!wf) return;
+        bool ok = serializeJson(doc, wf) > 0;
+        wf.close();
+        if (!ok) { SD.remove(Config::SD_HISTORY_BACKUP_TMP); return; }
+        SD.remove(Config::SD_HISTORY_BACKUP_FILE);
+        SD.rename(Config::SD_HISTORY_BACKUP_TMP, Config::SD_HISTORY_BACKUP_FILE);
+    }
+
+    // Nachtmodus-Zustand (Mondsichel) - Cache, damit nicht bei jedem Tick
+    // erneut die SD-Karte gelesen werden muss, aber IMMER aus Uhrzeit +
+    // gespeicherten Daten ableitbar (Auftrag 3g), nie nur aus dem RAM:
+    // nightConfirmedCacheDate ist der Abend ("YYYY-MM-DD"), fuer den
+    // nightConfirmedCache zuletzt ermittelt wurde.
+    char nightConfirmedCacheDate[11] = {0};
+    bool nightConfirmedCache = false;
+
+    // Einmal pro Abend/Nacht ausgefuehrt (idempotent ueber
+    // nightConfirmedCacheDate): entweder eine FRISCHE Pruefung (Auftrag
+    // 3d, wenn die Abschlussabfrage in DIESER Sitzung lief) oder, falls das
+    // Geraet erst waehrend der Nacht neu gestartet ist, die zuletzt
+    // gespeicherte Bestaetigung direkt aus der Backup-Datei uebernehmen -
+    // in beiden Faellen OHNE Abhaengigkeit von RAM-Zustand aus der Zeit vor
+    // einem moeglichen Neustart.
+    void refreshNightModeConfirmation(time_t nowEpoch, const struct tm& nowTm) {
+        char eveningDate[11];
+        DayWindow::currentNightEveningDate(nowEpoch, nowTm, eveningDate, sizeof(eveningDate));
+        if (nightConfirmedCacheDate[0] && strcmp(nightConfirmedCacheDate, eveningDate) == 0) return;
+
+        SolarData::Data snap = SolarData::snapshot();
+        bool freshSignalThisSession = snap.finalQueryDoneDate[0] &&
+                                       strcmp(snap.finalQueryDoneDate, eveningDate) == 0;
+
+        bool confirmed = false;
+        if (SD.exists(Config::SD_HISTORY_BACKUP_FILE)) {
+            File rf = SD.open(Config::SD_HISTORY_BACKUP_FILE, FILE_READ);
+            if (rf) {
+                JsonDocument doc;
+                DeserializationError err = deserializeJson(doc, rf);
+                rf.close();
+                if (!err) {
+                    String backupDate = String((const char*)(doc["datum"] | ""));
+                    bool backupMatchesTonight = (backupDate == eveningDate);
+                    if (freshSignalThisSession) {
+                        float backupKwh = doc["kwh"] | -1.0f;
+                        confirmed = backupMatchesTonight && snap.dailySourceValid &&
+                                    fabsf(backupKwh - snap.dailySourceKwh) < 0.01f;
+                    } else {
+                        confirmed = backupMatchesTonight && (doc["bestaetigt"] | false);
+                    }
+                }
+            }
+        }
+
+        if (freshSignalThisSession) {
+            setHistoryBackupConfirmed(eveningDate, confirmed);
+#ifdef NIGHT_MODE_DIAG_TEST
+            if (confirmed) {
+                Serial.printf("[yield] Nachtmodus bestaetigt fuer %s\n", eveningDate);
+            } else {
+                Serial.printf("[yield] Nachtmodus NICHT bestaetigt fuer %s (Abschlussabfrage fehlgeschlagen oder Backup weicht ab)\n", eveningDate);
+            }
+#endif
+        }
+
+        strncpy(nightConfirmedCacheDate, eveningDate, sizeof(nightConfirmedCacheDate) - 1);
+        nightConfirmedCache = confirmed;
     }
 
     void backfillLastDaysFromCsv(const char* todayStr) {
@@ -356,6 +496,7 @@ namespace {
         }
         f.close();
         pruneLastDays(todayStr);
+        sortLastDaysByDate();
     }
 
 }
@@ -401,6 +542,11 @@ void init() {
             state.lastDays[state.lastDaysCount].kwh = o["kwh"] | 0.0f;
             state.lastDaysCount++;
         }
+        // Auftrag "Tage in falscher Reihenfolge": unabhaengig davon, in
+        // welcher Reihenfolge yield.json die Tage gespeichert hatte (auch
+        // aeltere, vor diesem Fix geschriebene Dateien) - beim Laden
+        // IMMER neu sortieren, bevor irgendeine Seite/die WebUI sie liest.
+        sortLastDaysByDate();
     } else {
         // Migration auf Version 3: "Gesamt" (und eine evtl. vorhandene
         // Kalenderwoche aus Version 2) entfallen restlos - letzteTage
@@ -420,6 +566,25 @@ void tick() {
     struct tm nowTm;
     if (!getLocalTime(&nowTm, 5)) return; // ohne gueltige NTP-Zeit wird nichts gezaehlt
 
+    // Datumsschutz (Auftrag, freigegeben): eine Uhr ohne plausibles Jahr
+    // gilt als nicht synchronisiert - das Ertragsbuch verarbeitet dann
+    // GAR NICHTS (genau wie ganz ohne NTP-Zeit oben), bis sich die Uhr
+    // wieder in einem plausiblen Bereich befindet. Kein pauschaler
+    // Sprung-Schutz - ein echter mehrtaegiger Ausfall hat weiterhin ein
+    // plausibles Jahr und wird dadurch nicht blockiert.
+    int currentYear = nowTm.tm_year + 1900;
+    if (currentYear < 2024 || currentYear > 2099) {
+#ifdef NIGHT_MODE_DIAG_TEST
+        static uint32_t lastImplausibleYearWarnMs = 0;
+        uint32_t warnNow = millis();
+        if (lastImplausibleYearWarnMs == 0 || warnNow - lastImplausibleYearWarnMs >= 60000) {
+            lastImplausibleYearWarnMs = warnNow;
+            Serial.printf("[yield] Unplausibles Datum abgelehnt: Uhr nicht synchronisiert (Jahr=%d) - Ertragsbuch verarbeitet nichts\n", currentYear);
+        }
+#endif
+        return;
+    }
+
     char todayStr[11];
     snprintf(todayStr, sizeof(todayStr), "%04d-%02d-%02d",
              nowTm.tm_year + 1900, nowTm.tm_mon + 1, nowTm.tm_mday);
@@ -428,12 +593,43 @@ void tick() {
         restoreAttempted = true;
         tryRestoreFromBackup(todayStr);
         if (state.lastDaysCount < Config::YIELD_ROLLING_WEEK_DAYS) backfillLastDaysFromCsv(todayStr);
+#ifdef NIGHT_MODE_DIAG_TEST
+        // Logzeile "Neustart im Nachtmodus" (Auftrag) - nur HIER beim
+        // allerersten tick() nach dem Start sinnvoll zu pruefen.
+        if (DayWindow::isNightWindow(nowTm)) {
+            Serial.println("[yield] Neustart erfolgte im Nachtmodus - keine Abfrage bis 04:30");
+        }
+#endif
     }
 
     if (!state.seeded) {
         trySeedFromPortal(nowTm, todayStr);
     } else if (strncmp(todayStr, state.currentDate, sizeof(todayStr)) != 0) {
-        handleDayChange(todayStr, nowTm);
+        // Datumsschutz: ein Datum VOR dem gespeicherten wird ignoriert
+        // (z.B. ein kurzer Rueckwaertssprung der Uhr nach einem NTP-
+        // Ausrutscher) - kein pauschaler Sprung-Schutz, ein echter
+        // mehrtaegiger VORWAERTS-Ausfall bleibt dadurch erlaubt.
+        if (state.currentDate[0] && strcmp(todayStr, state.currentDate) < 0) {
+#ifdef NIGHT_MODE_DIAG_TEST
+            static uint32_t lastBackwardWarnMs = 0;
+            uint32_t warnNow = millis();
+            if (lastBackwardWarnMs == 0 || warnNow - lastBackwardWarnMs >= 60000) {
+                lastBackwardWarnMs = warnNow;
+                Serial.printf("[yield] Unplausibles Datum abgelehnt: Rueckwaertssprung (gespeichert=%s, gemeldet=%s)\n",
+                              state.currentDate, todayStr);
+            }
+#endif
+        } else {
+            handleDayChange(todayStr, nowTm);
+        }
+    }
+
+    // Tagesfenster/Nachtmodus (Auftrag): waehrend der Nacht (22:55-04:30)
+    // einmal pro Abend die Mondsicht-Bestaetigung ableiten/aktualisieren -
+    // siehe refreshNightModeConfirmation() oben, komplett unabhaengig vom
+    // sonstigen Ertragsbuch-Ablauf.
+    if (DayWindow::isNightWindow(nowTm)) {
+        refreshNightModeConfirmation(time(nullptr), nowTm);
     }
 
     SolarData::Data snap = SolarData::snapshot();
@@ -576,5 +772,22 @@ uint8_t lastDaysIncludingToday(DayValue* out, uint8_t maxCount) {
 }
 
 uint32_t revision() { return revisionCounter; }
+
+bool isNightModeConfirmedNow() {
+    time_t now = time(nullptr);
+    struct tm nowTm;
+    if (!getLocalTime(&nowTm, 5)) return false;
+    if (!DayWindow::isNightWindow(nowTm)) return false;
+
+    char eveningDate[11];
+    DayWindow::currentNightEveningDate(now, nowTm, eveningDate, sizeof(eveningDate));
+    if (!nightConfirmedCacheDate[0] || strcmp(nightConfirmedCacheDate, eveningDate) != 0) {
+        // Cache noch nicht fuer diesen Abend gefuellt (z.B. diese Funktion
+        // wird vor dem naechsten tick() aufgerufen) - sofort einmalig
+        // nachholen, rein lesend/ableitend.
+        refreshNightModeConfirmation(now, nowTm);
+    }
+    return nightConfirmedCache;
+}
 
 }

@@ -547,7 +547,14 @@ Popups, neue wie alte):**
   ist (neue Wert-Screens, Diagramme, Übersichten) - Standard, nicht
   optional, gilt auch für künftige neue Seiten/Features. NICHT gespiegelt
   werden Einstellungen und Menüs (Konto, Netzwerke, Farbe, Sprache,
-  Helligkeit, Zurücksetzen ...) - die WebUI bleibt rein lesend.
+  Helligkeit, Zurücksetzen ...) - die WebUI bleibt rein lesend. **Eine
+  Ausnahme (Auftrag "WebUI-Reiter Daten"):** der Reiter "Daten"
+  (`web_files.h/.cpp`) ist ein Datei-Explorer für die SD-Karte und darf
+  dort lesen, bearbeiten und löschen - der Ordner `/SolarHistory` ist
+  dabei für JEDE Operation zentral gesperrt (`web_files.cpp::
+  isLockedPath()`, pfadnormalisiert, case-insensitiv), siehe dessen
+  eigene Kommentare. Diese eine Ausnahme gilt NUR für diesen Reiter -
+  alle anderen Endpunkte/Seiten bleiben rein lesend wie bisher.
 - Jede blockierende Vollbild-Schleife (Menü, Dateien, Standort,
   Netzwerke, Tastatur ...) muss `WebServer_::tick()` in ihrer
   Warteschleife aufrufen - sonst ist die WebUI nicht erreichbar, solange
@@ -563,6 +570,14 @@ Popups, neue wie alte):**
   Achsentexte gedämpft (`--dim`), ALLE abgefragten Werte (Zahlen UND
   Texte, z.B. auch der Batterie-Ladestatus) in `--dim`, Einheiten/
   Beschriftungen in der Akzentfarbe.
+- **Versionsanzeige (Auftrag "WebUI erweitern", Versions-/
+  Verbindungszeile im Footer):** `Config::FW_VERSION` (`config.h`) ist die
+  EINZIGE Stelle im Firmware-Code für die Versionsnummer, die WebUI zeigt
+  sie direkt (`/api/data`-Feld `fwv`) - KEINE zweite, separat zu
+  pflegende Versionsnummer im WebUI-Code selbst anlegen. **Muss bei jedem
+  Release händisch mit der Versionsnummer im Web-Flasher-Manifest
+  (`manifest.json` im Wurzelverzeichnis) übereinstimmen** - beide Stellen
+  zusammen pflegen, nicht nur eine davon vergessen.
 
 ## Swipe-Struktur (Hauptbildschirm)
 

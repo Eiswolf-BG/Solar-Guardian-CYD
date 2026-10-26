@@ -262,6 +262,14 @@ void setNextFetchAt(time_t epoch) {
     });
 }
 
+void setFinalQueryDoneDate(const char* dateStr) {
+    mutate([&](Data& d) {
+        bool changed = strncmp(d.finalQueryDoneDate, dateStr, sizeof(d.finalQueryDoneDate) - 1) != 0;
+        strncpy(d.finalQueryDoneDate, dateStr, sizeof(d.finalQueryDoneDate) - 1);
+        return changed;
+    });
+}
+
 void setStatusText(const char* text) {
     mutate([&](Data& d) {
         bool changed = strncmp(d.statusText, text, sizeof(d.statusText) - 1) != 0;

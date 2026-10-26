@@ -1,4 +1,5 @@
 #include "web_server.h"
+#include "web_files.h"
 #include "solar_data.h"
 #include "weather_data.h"
 #include "yield_ledger.h"
@@ -10,6 +11,7 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <time.h>
+#include <math.h>
 
 namespace WebServer_ {
 
@@ -73,6 +75,26 @@ canvas{width:100%;height:160px;background:#101010;border:1px solid #242424;borde
 .barsChart .bar .v{font-size:.72rem;color:var(--dim);margin-bottom:4px;}
 .barsChart .bar .y{font-size:.78rem;color:var(--dim);margin-top:6px;}
 footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
+footer div{margin-top:3px;}
+.statusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#555;}
+.statusDot.ok{background:#39ff14;}
+.statusDot.bad{background:#ff3b3b;}
+.filesHint{color:var(--dim);font-size:.78rem;margin-bottom:8px;}
+.filesPath{color:var(--accent);font-size:.85rem;margin-bottom:6px;word-break:break-all;}
+.filesRow{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid #222;cursor:pointer;}
+.filesRow .fname{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.filesRow .fname.dir{color:var(--accent);font-weight:bold;}
+.filesRow .fsize{color:var(--dim);font-size:.78rem;}
+.filesRow button{background:none;border:1px solid #444;color:#ff6b6b;border-radius:4px;font-size:.75rem;padding:3px 7px;}
+#filesMoreBtn{margin-top:8px;width:100%;padding:8px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:6px;}
+#filesViewer{margin-top:12px;border-top:1px solid #333;padding-top:10px;}
+.filesViewerHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.filesViewerHead span{color:var(--accent);word-break:break-all;}
+#filesCloseBtn{background:none;border:none;color:var(--dim);font-size:1.3rem;cursor:pointer;}
+#filesEditor{width:100%;background:#101010;color:var(--dim);border:1px solid #333;border-radius:6px;font-family:monospace;font-size:.8rem;padding:8px;box-sizing:border-box;}
+#filesTruncHint{color:var(--dim);font-size:.78rem;margin-bottom:6px;}
+.filesViewerActions{margin-top:8px;}
+#filesSaveBtn{background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 16px;}
 .err{color:#ff5050;}
 </style>
 </head>
@@ -137,30 +159,62 @@ footer{text-align:center;color:var(--dim);font-size:.72rem;padding:16px;}
   </div>
   <div id="weekRows"></div>
 </section>
+<section id="tab-files">
+  <div class="filesHint" id="filesHint"></div>
+  <div class="filesPath" id="filesPath"></div>
+  <div id="filesList"></div>
+  <button id="filesMoreBtn" style="display:none;"></button>
+  <div id="filesViewer" style="display:none;">
+    <div class="filesViewerHead">
+      <span id="filesViewerName"></span>
+      <button id="filesCloseBtn">×</button>
+    </div>
+    <div id="filesTruncHint" style="display:none;"></div>
+    <textarea id="filesEditor" rows="14"></textarea>
+    <div class="filesViewerActions">
+      <button id="filesSaveBtn"></button>
+    </div>
+  </div>
+</section>
 </main>
-<footer id="footerNote">Solar Guardian CYD</footer>
+<footer>
+  <div><span id="footerConnDot" class="statusDot"></span><span id="footerConnText"></span></div>
+  <div id="footerPortalText"></div>
+</footer>
 <script>
 (function(){
 var L={
- de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','Verlauf','Wetter'],
+ de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','Verlauf','Wetter','Daten'],
      power:'Leistung',today:'Heute',battery:'Batterie',week:'Woche',month:'Monat',year:'Jahr',
      voltage:'Spannung',current:'Strom',temp:'Temperatur',status:'Status',weather:'Wetter',
      stand:'Stand',next:'Nächste Abfrage',noLoc:'Standort nicht gesetzt',noConn:'Keine Verbindung zum Gerät',
      wd:['So','Mo','Di','Mi','Do','Fr','Sa'],
      mo:['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
-     now:'jetzt',max:'Max',days:'Tage',months:'Monate',years:'Jahre'},
- en:{tabs:['Overview','Power','Daily curve','Yield','Battery','History','Weather'],
+     now:'jetzt',max:'Max',days:'Tage',months:'Monate',years:'Jahre',
+     nightMode:'Nachtmodus',connected:'Verbunden',noConnShort:'Keine Verbindung',portalOk:'Portal OK',portalDown:'Portal nicht erreichbar',
+     filesHint:'Alles auf der SD-Karte außer dem Ordner SolarHistory (Solardaten, geschützt). Änderungen an Einstellungsdateien wirken erst nach einem Neustart des Geräts.',
+     filesUp:'.. (nach oben)',filesMore:'Weitere laden',filesDelete:'Löschen',filesDeleteConfirm:'Diese Datei wirklich löschen?',
+     filesDeleteSettingsWarn:'Diese Datei gehört zu den Geräte-Einstellungen - nach dem Löschen muss das Gerät ggf. neu eingerichtet werden. Wirklich löschen?',
+     filesSave:'Speichern',filesSaved:'Gespeichert',filesSaveFailed:'Speichern fehlgeschlagen',filesTruncated:'Datei ist größer als 16 KB - nur der Anfang wird angezeigt (nicht bearbeitbar).',
+     filesBinary:'Keine Textvorschau für diesen Dateityp.',filesEmpty:'Ordner ist leer.'},
+ en:{tabs:['Overview','Power','Daily curve','Yield','Battery','History','Weather','Data'],
      power:'Power',today:'Today',battery:'Battery',week:'Week',month:'Month',year:'Year',
      voltage:'Voltage',current:'Current',temp:'Temperature',status:'Status',weather:'Weather',
      stand:'As of',next:'Next update',noLoc:'No location set',noConn:'Lost connection to device',
      wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
      mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-     now:'now',max:'Max',days:'Days',months:'Months',years:'Years'}
+     now:'now',max:'Max',days:'Days',months:'Months',years:'Years',
+     nightMode:'Night mode',connected:'Connected',noConnShort:'No connection',portalOk:'Portal OK',portalDown:'Portal unreachable',
+     filesHint:'Everything on the SD card except the SolarHistory folder (solar data, protected). Changes to settings files only take effect after restarting the device.',
+     filesUp:'.. (up)',filesMore:'Load more',filesDelete:'Delete',filesDeleteConfirm:'Really delete this file?',
+     filesDeleteSettingsWarn:'This file belongs to the device settings - after deleting it, the device may need to be set up again. Really delete?',
+     filesSave:'Save',filesSaved:'Saved',filesSaveFailed:'Save failed',filesTruncated:'File is larger than 16 KB - only the start is shown (not editable).',
+     filesBinary:'No text preview for this file type.',filesEmpty:'Folder is empty.'}
 };
 var lang='de', t=L.de;
 var last={};
 var tabsEl=document.getElementById('tabs');
-var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-history','tab-weather'];
+var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-history','tab-weather','tab-files'];
 var activeTab=0;
 var lastHist=null;
 var lastDay=null;
@@ -197,7 +251,103 @@ function showTab(){
   // Monate/Jahre waren dadurch unerreichbar, nur die Standardansicht
   // "Tage" zeigte ueberhaupt Daten.
   if (activeTab===5) { buildHistSubnav(); pollHistory(); }
+  if (activeTab===7) filesInit();
 }
+
+// ---- Reiter "Daten" (Datei-Explorer, Auftrag "WebUI-Reiter Daten") ----
+var filesCurrentPath='/';
+var filesCurrentPage=0;
+var filesHintSet=false;
+function filesIsSettingsPath(p){ return p.indexOf('/SolarGuardian')===0; }
+function filesFmtSize(n){
+  if (n<1024) return n+' B';
+  if (n<1024*1024) return (n/1024).toFixed(1)+' KB';
+  return (n/1024/1024).toFixed(1)+' MB';
+}
+function filesInit(){
+  if (!filesHintSet) { filesHintSet=true; setText('filesHint', t.filesHint); }
+  filesLoad('/', 0);
+}
+function filesLoad(path, page){
+  filesCurrentPath=path; filesCurrentPage=page;
+  fetch('/api/files/list?path='+encodeURIComponent(path)+'&page='+page)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ filesRender(d, page>0); })
+    .catch(function(){});
+}
+function filesRender(d, append){
+  setText('filesPath', d.path);
+  var list=document.getElementById('filesList');
+  if (!append) list.innerHTML='';
+  if (!append && d.path!=='/') {
+    var up=document.createElement('div'); up.className='filesRow';
+    var parent = d.path.substring(0, d.path.lastIndexOf('/')) || '/';
+    up.innerHTML='<span class="fname dir">'+t.filesUp+'</span>';
+    up.onclick=function(){ filesLoad(parent, 0); };
+    list.appendChild(up);
+  }
+  if (!append && d.entries.length===0 && d.path==='/') {
+    // nichts - Wurzel hat i.d.R. immer SolarGuardian.
+  }
+  d.entries.forEach(function(e){
+    var row=document.createElement('div'); row.className='filesRow';
+    var full = (d.path==='/'?'':d.path) + '/' + e.name;
+    var nameEl=document.createElement('span'); nameEl.className='fname'+(e.dir?' dir':''); nameEl.textContent=e.name;
+    row.appendChild(nameEl);
+    if (!e.dir) {
+      var sizeEl=document.createElement('span'); sizeEl.className='fsize'; sizeEl.textContent=filesFmtSize(e.size);
+      row.appendChild(sizeEl);
+      var delBtn=document.createElement('button'); delBtn.textContent=t.filesDelete;
+      delBtn.onclick=function(ev){ ev.stopPropagation(); filesDelete(full); };
+      row.appendChild(delBtn);
+      nameEl.onclick=function(){ filesOpen(full); };
+    } else {
+      row.onclick=function(){ filesLoad(full, 0); };
+    }
+    list.appendChild(row);
+  });
+  var moreBtn=document.getElementById('filesMoreBtn');
+  if (d.hasMore) { moreBtn.style.display='block'; moreBtn.textContent=t.filesMore; moreBtn.onclick=function(){ filesLoad(d.path, filesCurrentPage+1); }; }
+  else moreBtn.style.display='none';
+}
+function filesOpen(path){
+  fetch('/api/files/read?path='+encodeURIComponent(path)).then(function(r){
+    if (!r.ok) return null;
+    return r.json();
+  }).then(function(d){
+    if (!d) return;
+    document.getElementById('filesViewer').style.display='block';
+    document.getElementById('filesViewerName').textContent=path;
+    var editor=document.getElementById('filesEditor');
+    var truncHint=document.getElementById('filesTruncHint');
+    var saveBtn=document.getElementById('filesSaveBtn');
+    saveBtn.textContent=t.filesSave;
+    if (d.truncated) {
+      truncHint.style.display='block'; truncHint.textContent=t.filesTruncated;
+      editor.value=d.content; editor.readOnly=true; saveBtn.style.display='none';
+    } else {
+      truncHint.style.display='none';
+      editor.value=d.content; editor.readOnly=false; saveBtn.style.display='inline-block';
+      saveBtn.onclick=function(){ filesSave(path, editor.value); };
+    }
+  }).catch(function(){});
+}
+function filesSave(path, content){
+  fetch('/api/files/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path, content:content})})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(res){
+      if (res.ok && res.j.ok) { alert(t.filesSaved); }
+      else { alert(t.filesSaveFailed); }
+    }).catch(function(){ alert(t.filesSaveFailed); });
+}
+function filesDelete(path){
+  var warn = filesIsSettingsPath(path) ? t.filesDeleteSettingsWarn : t.filesDeleteConfirm;
+  if (!confirm(warn)) return;
+  fetch('/api/files/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})})
+    .then(function(){ filesLoad(filesCurrentPath, 0); document.getElementById('filesViewer').style.display='none'; })
+    .catch(function(){});
+}
+document.getElementById('filesCloseBtn').onclick=function(){ document.getElementById('filesViewer').style.display='none'; };
 
 function setText(id,val){
   var el=document.getElementById(id);
@@ -206,6 +356,11 @@ function setText(id,val){
 function fmt1(v){ return (typeof v==='number') ? v.toFixed(1) : '--'; }
 function fmt2(v){ return (typeof v==='number') ? v.toFixed(2) : '--'; }
 function fmt0(v){ return (typeof v==='number') ? Math.round(v).toString() : '--'; }
+// Tagesertrag-Balken (Auftrag "WebUI erweitern"): immer zwei
+// Nachkommastellen im deutschen Zahlenformat (Komma statt Punkt), z.B.
+// "9,35" - unabhaengig von der aktuell angezeigten UI-Sprache (Alex'
+// ausdruecklicher Wunsch). Monate/Jahre bleiben bei fmt0 (gerundet).
+function fmtDay2(v){ return (typeof v==='number') ? v.toFixed(2).replace('.',',') : '--'; }
 
 // ---- Wettersymbole als einfache, farbige SVGs (gleiche Farbwelt wie
 // das Geraet: Wolken weiss, Sonne knallgelb, Regen blau, Schnee cyan,
@@ -342,8 +497,13 @@ function drawDailyChart(day){
     ctx.fillText('--', w/2, h/2);
     return;
   }
+  // Fortschrittsbalken-Streifen (Auftrag "WebUI erweitern" - ersetzt die
+  // vorherige senkrechte "Jetzt"-Linie IM Diagramm) zwischen Kurve und
+  // Zeitachse - eigene, kleine Hoehe "pbH", kommt von der Chart-Flaeche
+  // ab, damit beides zusammen weiterhin in die feste Canvas-Hoehe passt.
+  var pbH=14, pbGap=4;
   var pad={l:44,r:10,t:10,b:20};
-  var cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
+  var cw=w-pad.l-pad.r, ch=h-pad.t-pad.b-pbH-pbGap;
   var maxV=(typeof day.max==='number')?day.max:0;
   var mag=Math.pow(10,Math.floor(Math.log10(Math.max(maxV,1))));
   var norm=maxV/mag;
@@ -367,20 +527,38 @@ function drawDailyChart(day){
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   });
   ctx.stroke();
-  // "Jetzt"-Linie, nur innerhalb des Anzeigefensters.
+
+  // Fortschrittsbalken: faellt von links nach rechts ueber denselben
+  // Zeitbereich/dieselbe Breite wie das Diagramm (05:00-22:00 Uhr,
+  // pad.l..pad.l+cw) - voll ab 22:00, leer vor 05:00 (Auftrag).
+  var pbY=pad.t+ch+pbGap;
   var now=new Date();
   var nowMin=now.getHours()*60+now.getMinutes();
-  if(nowMin>=DAY_START_MIN && nowMin<DAY_END_MIN){
-    var nfrac=(nowMin-DAY_START_MIN)/DAY_SPAN_MIN;
-    var nx=pad.l+nfrac*cw;
-    ctx.strokeStyle=accent; ctx.lineWidth=1; ctx.beginPath();
-    ctx.moveTo(nx,pad.t); ctx.lineTo(nx,pad.t+ch); ctx.stroke();
-  }
-  // Zeitachse (05/09/13/17/22) in der gedaempften Sekundaerfarbe.
-  ctx.fillStyle='#8a8a8a'; ctx.textAlign='center'; ctx.font='10px sans-serif';
-  [5,9,13,17,22].forEach(function(hh){
+  var pfrac=(nowMin<=DAY_START_MIN)?0:(nowMin>=DAY_END_MIN?1:(nowMin-DAY_START_MIN)/DAY_SPAN_MIN);
+  ctx.fillStyle='#242424'; ctx.fillRect(pad.l,pbY,cw,pbH);
+  ctx.fillStyle=accent; ctx.fillRect(pad.l,pbY,Math.max(0,cw*pfrac),pbH);
+  // Aktuelle Uhrzeit als kleine Beschriftung am Fuellende, seitlich an den
+  // Raendern geklemmt, damit sie nie ueber das Diagramm hinausragt.
+  var hhNow=String(now.getHours()).padStart(2,'0'), mmNow=String(now.getMinutes()).padStart(2,'0');
+  var fillX=pad.l+cw*pfrac;
+  ctx.fillStyle='#e8e8e8'; ctx.font='9px sans-serif';
+  ctx.textAlign=(pfrac>0.88?'right':(pfrac<0.12?'left':'center'));
+  ctx.fillText(hhNow+':'+mmNow, Math.min(Math.max(fillX,pad.l+2),pad.l+cw-2), pbY-3);
+
+  // Zeitachse: jede volle Stunde 05-22 (Auftrag, vorher nur 5/9/13/17/22) -
+  // bei wenig Platz (schmaler Bildschirm) kleinere Schrift, und falls auch
+  // DAMIT noch nicht alle 18 Stunden ohne Ueberlappung passen, nur jede
+  // zweite anzeigen (22 Uhr immer zusaetzlich, als letzter Fixpunkt).
+  var hours=[]; for(var hh=5; hh<=22; hh++) hours.push(hh);
+  var fontPx = (cw/hours.length<16) ? 8 : 10;
+  ctx.font=fontPx+'px sans-serif';
+  var neededPerLabel = ctx.measureText('22').width+6;
+  var showEvery = (cw/hours.length<neededPerLabel) ? 2 : 1;
+  ctx.fillStyle='#8a8a8a'; ctx.textAlign='center';
+  hours.forEach(function(hh,idx){
+    if(idx%showEvery!==0 && hh!==22) return;
     var frac=(hh*60-DAY_START_MIN)/DAY_SPAN_MIN;
-    ctx.fillText(String(hh),pad.l+frac*cw,h-4);
+    ctx.fillText(String(hh).padStart(2,'0'),pad.l+frac*cw,h-4);
   });
 }
 
@@ -423,7 +601,7 @@ function renderHistory(data){
   var maxKwh=1; arr.forEach(function(e){ if(e.kwh>maxKwh) maxKwh=e.kwh; });
   arr.forEach(function(e){
     var bar=document.createElement('div'); bar.className='bar'+(e.cur?' cur':'');
-    var vEl=document.createElement('div'); vEl.className='v'; vEl.textContent=fmt0(e.kwh);
+    var vEl=document.createElement('div'); vEl.className='v'; vEl.textContent=(histPeriod===0?fmtDay2(e.kwh):fmt0(e.kwh));
     var fill=document.createElement('div'); fill.className='fill';
     fill.style.height=Math.max(4,(e.kwh/maxKwh)*100)+'%';
     var yEl=document.createElement('div'); yEl.className='y'; yEl.textContent=histLabel(e);
@@ -447,7 +625,9 @@ function render(data){
     var m=document.createElement('meta'); m.name='theme-color'; document.head.appendChild(m); return m;
   })();
   setText('standLine', t.stand+': '+(data.stand||'--:--'));
-  setText('nextLine', t.next+': '+(data.next||'--:--'));
+  var nextTxt = t.next+': '+(data.next||'--:--');
+  if (data.night) nextTxt += '  🌙 '+t.nightMode; // 🌙
+  setText('nextLine', nextTxt);
 
   ['lblPower','lblPvPower'].forEach(function(id){ setText(id,t.power); });
   setText('lblToday',t.today); setText('lblBattery',t.battery);
@@ -505,17 +685,31 @@ function render(data){
 
   setText('lblMax', t.max);
 
-  setText('footerNote','Solar Guardian CYD');
+  // Versions-/Verbindungszeile (Auftrag "WebUI erweitern"): gruener/roter
+  // Punkt + Text je nachdem, ob DIESER Abruf (also die WebUI-Verbindung
+  // zum Geraet) gerade erfolgreich war - siehe updateFooterConn() unten,
+  // dort nochmal fuer den Fehlerfall aufgerufen. Portal-Status kommt aus
+  // dem Ergebnis der letzten Portalabfrage (portalOk vom Geraet).
+  updateFooterConn(true);
+  setText('footerPortalText', data.portalOk ? t.portalOk : t.portalDown);
 }
 
+function updateFooterConn(connected){
+  var dot=document.getElementById('footerConnDot');
+  dot.className='statusDot '+(connected?'ok':'bad');
+  setText('footerConnText', 'Solar Guardian v'+APP_FWV+' · '+(connected?t.connected:t.noConnShort));
+}
+
+var APP_FWV='';
 var failCount=0;
 function poll(){
   fetch('/api/data').then(function(r){ return r.json(); }).then(function(data){
     failCount=0;
+    if (data.fwv) APP_FWV=data.fwv;
     render(data);
   }).catch(function(){
     failCount++;
-    if(failCount>=2) setText('footerNote', t.noConn);
+    if(failCount>=2) updateFooterConn(false);
   });
 }
 buildTabs(); showTab();
@@ -603,6 +797,9 @@ setInterval(poll,5000);
 
         JsonDocument doc;
         doc["lang"] = (appConfig.language == 1) ? "en" : "de";
+        doc["fwv"] = Config::FW_VERSION;
+        doc["night"] = YieldLedger::isNightModeConfirmedNow();
+        doc["portalOk"] = (snap.fetchStatus == SolarData::FetchStatus::Ok);
         char accentHex[8];
         snprintf(accentHex, sizeof(accentHex), "#%02x%02x%02x",
                  (int)(((accent >> 11) & 0x1F) * 255 / 31),
@@ -708,7 +905,11 @@ setInterval(poll,5000);
         for (uint8_t i = 0; i < dcount; i++) {
             JsonObject o = days.add<JsonObject>();
             o["d"] = dvals[i].date;
-            o["kwh"] = dvals[i].kwh;
+            // Auf echte 2 Nachkommastellen runden (Auftrag "genauer
+            // Tagesertrag in der WebUI") - vermeidet Rauschen wie 9.350000012
+            // in der JSON-Ausgabe, die Anzeige selbst rundet ohnehin aufs
+            // Hundertstel (fmtDay2() im Frontend).
+            o["kwh"] = roundf(dvals[i].kwh * 100.0f) / 100.0f;
             o["cur"] = (i == (uint8_t)(dcount - 1));
         }
 
@@ -779,11 +980,13 @@ void tick() {
         server.on("/api/data", handleApiData);
         server.on("/api/day", handleApiDay);
         server.on("/api/history", handleApiHistory);
+        WebFiles::registerRoutes(server);
         server.onNotFound(handleNotFound);
         server.begin();
         started = true;
         Serial.print("[web] WebUI gestartet, Adresse: http://");
         Serial.println(WiFi.localIP());
+        Serial.printf("[web] Heap nach WebUI-Start: %u Byte\n", (unsigned)ESP.getFreeHeap());
     }
     server.handleClient();
 }
