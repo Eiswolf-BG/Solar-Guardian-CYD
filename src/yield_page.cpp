@@ -222,11 +222,11 @@ bool update() {
     return changed;
 }
 
-bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
-    int16_t statusY = statusYFor(areaTop);
-    // Mind. 40px hohe Tipp-Flaeche (CLAUDE.md), ueber die volle Breite.
-    Rect statusRow = {0, (int16_t)(statusY - 14), Config::SCREEN_WIDTH, 40};
-    if (!statusRow.contains(x, y)) return false;
+bool onTap(int16_t /*x*/, int16_t /*y*/, int16_t /*areaTop*/, int16_t /*areaHeight*/) {
+    // Auftrag "manueller Refresh": die ganze Seite ist jetzt antippbar
+    // (vorher nur die Statuszeile) - aktualisiert "Heute" (einzig echter
+    // Portal-Live-Wert hier), Woche/Monat/Jahr folgen automatisch ueber
+    // das Ertragsbuch.
     FetchTask::sendCommand(FetchTask::Command::RefreshNow);
     return true;
 }

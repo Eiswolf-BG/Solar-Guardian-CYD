@@ -103,6 +103,8 @@ namespace I18n {
         BATTERY_EXPLAIN_3,
         BATTERY_EXPLAIN_WEAK,
         NEXT_FETCH_FMT,
+        BATTERY_MAX_VOLTAGE_LABEL,
+        BATTERY_MIN_VOLTAGE_LABEL,
 
         // Wochenansicht (Wetterkachel antippen)
         WEEK_DAY_TOMORROW,

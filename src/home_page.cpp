@@ -10,6 +10,7 @@
 #include "tile_sprite.h"
 #include "redraw_diag.h"
 #include "page_nav.h"
+#include "fetch_task.h"
 #include "week_view_screen.h"
 #include "location_screen.h"
 #include "i18n.h"
@@ -573,16 +574,13 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight) {
         else LocationScreen::run();
         return true;
     }
-    if (L.power.contains(x, y)) {
-        PageNav::requestPage(1); // Leistung
-        return true;
-    }
-    if (L.today.contains(x, y)) {
-        PageNav::requestPage(2); // Ertrag
-        return true;
-    }
-    if (L.battery.contains(x, y)) {
-        PageNav::requestPage(4); // Batterie
+    // Tippen auf Leistung/Ertrag/Batterie loest jetzt den manuellen
+    // Refresh aus (Auftrag "manueller Refresh") statt wie zuvor auf die
+    // jeweilige Wisch-Seite zu springen - das war nur ein Platzhalter.
+    // Navigation zu diesen Seiten laeuft weiterhin ganz normal per
+    // Wischen. Wetter-Kachel bleibt davon unberuehrt (siehe oben).
+    if (L.power.contains(x, y) || L.today.contains(x, y) || L.battery.contains(x, y)) {
+        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
         return true;
     }
     return false;

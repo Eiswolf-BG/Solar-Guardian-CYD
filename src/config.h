@@ -28,7 +28,7 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "1.8";
+    constexpr const char* FW_VERSION = "1.9";
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----

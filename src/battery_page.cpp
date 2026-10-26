@@ -37,8 +37,15 @@ namespace {
     constexpr int16_t TILE_H = 50;
     constexpr uint8_t VALUE_SIZES[] = {2, 1};
     constexpr uint8_t SOC_SIZES[] = {3, 2, 1};
-    constexpr uint8_t EXPLAIN_MAX_LINES = 3;
-    constexpr int16_t EXPLAIN_LINE_H = 12; // etwas enger als fontHeight(17) - reicht fuer 3 Zeilen im verfuegbaren Platz
+    // Auf 1 Zeile reduziert (Auftrag "Max/Min-Spannungskacheln" - Platz
+    // fuer die dritte Kachelreihe, Erklaertexte entsprechend gekuerzt,
+    // siehe i18n BATTERY_EXPLAIN_*).
+    constexpr uint8_t EXPLAIN_MAX_LINES = 1;
+    constexpr int16_t EXPLAIN_LINE_H = 12; // etwas enger als fontHeight(17)
+    // Dritte, flache Kachelreihe (Max./Min. Spannung) - eigene, kleinere
+    // Hoehe als die vier grossen Kacheln (TILE_H=50 bleibt unveraendert,
+    // siehe Auftrag Punkt 3).
+    constexpr int16_t FLAT_TILE_H = 28;
 
     uint32_t lastSeenChangeCounter = 0xFFFFFFFFu;
     int8_t lastSeenMinute = -1;
@@ -52,6 +59,7 @@ namespace {
     String lastStatusTileSig = "\x01";
     String lastExplainSig = "\x01";
     String lastTimestampSig = "\x01";
+    uint8_t lastMaxMinDrawn = 0; // Max/Min-Spannungskacheln (Auftrag) - immer "--", nur einmal pro Seitenaufruf zeichnen
 
     int16_t tileWidth() { return (int16_t)((Config::SCREEN_WIDTH - 3 * TILE_GAP) / 2); }
     int16_t gridTopFor(int16_t areaTop) { return (int16_t)(areaTop + GRID_TOP_OFFSET); }
@@ -285,6 +293,43 @@ namespace {
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
     }
 
+    // Flache Kachel fuer Max./Min. Batteriespannung (Auftrag "zwei neue
+    // Kacheln") - Beschriftung+Wert+Einheit auf EINER Zeile ("Max
+    // 53,41 V"), anders als renderValueTile() (Beschriftung oben,
+    // Wert/Einheit darunter) - bei nur ca. 28px Hoehe ist dafuer kein
+    // Platz. Nur Groesse 1 (immer kurz genug, Zahl wird nie gekuerzt).
+    void renderFlatValueTile(TFT_eSPI& t, int16_t w, int16_t h, int16_t absX, int16_t absY,
+                              I18n::Str labelKey, const String& valueStr, const char* unit,
+                              bool valid, bool stale, uint16_t accent) {
+        t.drawRoundRect(0, 0, w, h, 4, accent);
+        t.setTextSize(1);
+        t.setTextDatum(ML_DATUM);
+        uint16_t numColor = Display::valueColor(valid && !stale, accent);
+        String labelPart = String(I18n::t(labelKey)) + " ";
+        String unitPart = unit ? (String(" ") + unit) : String();
+        int16_t labelW = t.textWidth(labelPart);
+        int16_t numW = t.textWidth(valueStr);
+        int16_t unitW = unit ? t.textWidth(unitPart) : 0;
+        int16_t totalW = (int16_t)(labelW + numW + unitW);
+        int16_t cy = (int16_t)(h / 2);
+        int16_t startX = (int16_t)(w / 2 - totalW / 2);
+        t.setTextColor(accent, TFT_BLACK);
+        t.drawString(labelPart, startX, cy);
+        t.setTextColor(numColor, TFT_BLACK);
+        t.drawString(valueStr, (int16_t)(startX + labelW), cy);
+        if (unit) {
+            t.setTextColor(accent, TFT_BLACK);
+            t.drawString(unitPart, (int16_t)(startX + labelW + numW), cy);
+        }
+        t.setTextDatum(TL_DATUM);
+        {
+            int16_t th = t.fontHeight();
+            LayoutCheck::containedRect("Kachel-Wert", absX, absY, w, h,
+                                        (int16_t)(absX + startX), (int16_t)(absY + cy - th / 2), totalW, th);
+        }
+        LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
+    }
+
     void renderStatusTile(TFT_eSPI& t, int16_t w, int16_t h, int16_t absX, int16_t absY, const StatusRender& render,
                            bool valid, bool stale, uint16_t accent) {
         t.drawRoundRect(0, 0, w, h, 4, accent);
@@ -391,7 +436,7 @@ namespace {
     // nie an einem festen Offset haengen, wenn vorheriger Text
     // unterschiedlich lang sein kann).
     struct PageLayout {
-        int16_t y0 = 0, y1 = 0, row1H = TILE_H;
+        int16_t y0 = 0, y1 = 0, y2 = 0, row1H = TILE_H;
         StatusRender statusRender;
         int16_t explainTop = 0;
         String explainLines[EXPLAIN_MAX_LINES];
@@ -415,7 +460,10 @@ namespace {
             L.row1H = (int16_t)(TILE_H + extra);
         }
         L.y1 = (int16_t)(L.y0 + TILE_H + TILE_GAP);
-        int16_t afterGrid = (int16_t)(L.y1 + L.row1H);
+        // Dritte, flache Reihe (Max./Min. Spannung, Auftrag) - direkt
+        // unter der bisherigen 2-reihigen Kachelgruppe.
+        L.y2 = (int16_t)(L.y1 + L.row1H + TILE_GAP);
+        int16_t afterGrid = (int16_t)(L.y2 + FLAT_TILE_H);
 
         // Erklaerungszeile nur bei einem echten, bekannten Status (kein
         // Rohtext, kein "--") - ohne Wert zeigt sie nichts (Auftrag).
@@ -462,6 +510,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         lastStatusTileSig = "\x01";
         lastExplainSig = "\x01";
         lastTimestampSig = "\x01";
+        lastMaxMinDrawn = 0;
     }
 
     tft.setTextSize(1);
@@ -559,6 +608,26 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         });
     } else {
         LayoutCheck::rect("Kachel-Rahmen", x0, L.y1, tileW, L.row1H);
+    }
+
+    // Max./Min. Batteriespannung (Auftrag "zwei neue Kacheln") - NOCH
+    // OHNE Datenquelle: die dataPointId dafuer ist unbekannt (nicht in
+    // den bestehenden Abfragen enthalten, siehe CLAUDE.md - darf nicht
+    // geraten werden). Zeigt bis dahin immer "--", reine Layout-
+    // Vorbereitung. Signatur ist bewusst konstant (immer "--"), damit
+    // diese beiden Kacheln nur EINMAL beim Seitenaufruf gezeichnet
+    // werden, nicht bei jedem Redraw.
+    if (firstCheck || lastMaxMinDrawn != 1) {
+        lastMaxMinDrawn = 1;
+        TileSprite::drawInto(x0, L.y2, tileW, FLAT_TILE_H, [&](TFT_eSPI& t) {
+            renderFlatValueTile(t, tileW, FLAT_TILE_H, x0, L.y2, I18n::Str::BATTERY_MAX_VOLTAGE_LABEL, "--", I18n::t(I18n::Str::VOLT_UNIT), false, false, accent);
+        });
+        TileSprite::drawInto(x1, L.y2, tileW, FLAT_TILE_H, [&](TFT_eSPI& t) {
+            renderFlatValueTile(t, tileW, FLAT_TILE_H, x1, L.y2, I18n::Str::BATTERY_MIN_VOLTAGE_LABEL, "--", I18n::t(I18n::Str::VOLT_UNIT), false, false, accent);
+        });
+    } else {
+        LayoutCheck::rect("Kachel-Rahmen", x0, L.y2, tileW, FLAT_TILE_H);
+        LayoutCheck::rect("Kachel-Rahmen", x1, L.y2, tileW, FLAT_TILE_H);
     }
 
     String statusTileSig;
@@ -659,8 +728,15 @@ bool update() {
 bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
     SolarData::Data snap = SolarData::snapshot();
     PageLayout L = computeLayout(areaTop, snap);
+    // Auftrag "manueller Refresh": nicht mehr nur die Statuszeile - die
+    // GESAMTE Kachelreihe (alle sechs Kacheln: Spannung/Strom/Temperatur/
+    // Status/Max/Min) ist jetzt ebenfalls antippbar, gleiche Aktion wie
+    // die Statuszeile. Ein einziges, die ganze Kachelreihe umfassendes
+    // Rechteck reicht dafuer (einzelne Kachel-Grenzen muessen hier nicht
+    // unterschieden werden, da alle dieselbe Aktion ausloesen).
+    Rect gridZone = {0, L.y0, Config::SCREEN_WIDTH, (int16_t)(L.y2 + FLAT_TILE_H - L.y0)};
     Rect tapZone = timestampTapZone(L);
-    if (!tapZone.contains(x, y)) return false;
+    if (!gridZone.contains(x, y) && !tapZone.contains(x, y)) return false;
     FetchTask::sendCommand(FetchTask::Command::RefreshNow);
     return true;
 }

@@ -27,7 +27,10 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Blick - Wetter (Symbol + aktuelle Temperatur, antippen öffnet die
   [Wochenansicht](#standort-und-wetter)), aktuelle Leistung, heutiger
   Ertrag und Batterie-Ladezustand (mit Füllstandssymbol, grün/gelb/rot).
-  Leistung/Ertrag/Batterie antippen springt zur jeweiligen Wisch-Seite.
+  Leistung/Ertrag/Batterie antippen fragt die Werte sofort neu ab
+  (zu diesen Seiten wechselt man per Wischen). Auf den Seiten
+  Leistung, Ertrag und Batterie selbst löst Antippen an beliebiger
+  Stelle ebenfalls eine sofortige Neuabfrage aus.
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
   -Strom als Kacheln, Kurve der letzten 3 Stunden), Tagesverlauf
   (Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr mit dem
@@ -198,8 +201,10 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 - **Overview** (first page after boot): four tiles at a glance - weather
   (icon + current temperature, tap for the [week view](#location-and-weather)),
   current power output, today's yield, and battery charge level (with a
-  fill-level icon, green/yellow/red). Tap Power/Yield/Battery to jump to
-  that swipe page.
+  fill-level icon, green/yellow/red). Tapping Power/Yield/Battery
+  refreshes those values immediately (swipe to reach those pages).
+  Tapping anywhere on the Power, Yield, or Battery page itself also
+  triggers an immediate refresh.
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
   current as tiles, a chart of the last 3 hours), Daily curve (the power
   curve of the whole day from 05:00 to 22:00, with today's peak value in

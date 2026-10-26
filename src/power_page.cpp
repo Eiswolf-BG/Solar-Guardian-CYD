@@ -564,9 +564,10 @@ bool update() {
     return changed;
 }
 
-bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
-    Rect tapZone = statusTapZone(areaTop);
-    if (!tapZone.contains(x, y)) return false;
+bool onTap(int16_t /*x*/, int16_t /*y*/, int16_t /*areaTop*/, int16_t /*areaHeight*/) {
+    // Auftrag "manueller Refresh": die ganze Seite ist jetzt antippbar
+    // (vorher nur die Statuszeile), nicht nur einzelne Kacheln - es gibt
+    // hier kein anderes Tipp-Ziel, mit dem das kollidieren koennte.
     FetchTask::sendCommand(FetchTask::Command::RefreshNow);
     return true;
 }
