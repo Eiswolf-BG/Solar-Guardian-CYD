@@ -982,6 +982,15 @@ void tick() {
         server.on("/api/history", handleApiHistory);
         WebFiles::registerRoutes(server);
         server.onNotFound(handleNotFound);
+        // Der "Origin"-Header wird vom WebServer standardmaessig NICHT
+        // erfasst (hasHeader() liefert ohne diese Registrierung immer
+        // false) - ohne collectHeaders() hier waere der Origin-Grundschutz
+        // in web_files.cpp::originAllowed() wirkungslos (Bug, per
+        // curl-Test entdeckt und hier behoben).
+        {
+            const char* headerKeys[] = {"Origin"};
+            server.collectHeaders(headerKeys, 1);
+        }
         server.begin();
         started = true;
         Serial.print("[web] WebUI gestartet, Adresse: http://");
