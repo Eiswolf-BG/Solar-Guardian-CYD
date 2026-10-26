@@ -57,16 +57,22 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
   alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
   Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, Verlauf (Tage/
-  Monate/Jahre), Wetter (inklusive Wettersymbolen und
-  Leistungskurve) und Daten (Dateien auf der SD-Karte ansehen,
-  bearbeiten und löschen - außer dem geschützten Ordner
-  `/SolarHistory`) - genau wie am Gerät. Jetzt auch erreichbar, während
-  am Gerät selbst die WebUI-Seite (oder eine andere Vollbild-Seite)
-  geöffnet ist. Eine kleine Statuszeile unten zeigt Version,
-  Verbindung zum Gerät und Portal-Status. Der Tagesverlauf hat
-  ebenfalls einen Fortschrittsbalken mit stündlicher Zeitachse, die
-  Tage-Ansicht zeigt den genauen Tagesertrag mit zwei
-  Nachkommastellen in richtiger, lückenloser Reihenfolge.
+  Monate/Jahre), Wetter (inklusive Wettersymbolen und Leistungskurve)
+  und Daten (Dateien auf der SD-Karte ansehen, herunterladen,
+  bearbeiten und löschen, inklusive des Ordners `/SolarHistory` - der
+  bleibt dort zum Schutz der Solardaten nur zum Ansehen und
+  Herunterladen) - genau wie am Gerät. Im Reiter "Daten" lässt sich
+  jede Datei einzeln oder ein ganzer Ordner als ZIP herunterladen, und
+  ein Knopf "Backup erstellen" sichert Einstellungen und Solardaten
+  zusammen in einer ZIP-Datei. Jetzt auch erreichbar, während am Gerät
+  selbst die WebUI-Seite (oder eine andere Vollbild-Seite) geöffnet
+  ist. Eine kleine Statuszeile unten zeigt Version, Verbindung zum
+  Gerät und Portal-Status. Der Tagesverlauf hat einen
+  Fortschrittsbalken unter der stündlichen Zeitachse, die
+  Balkengrafiken (Tage/Monate/Jahre) zeigen die Höhe jetzt korrekt
+  proportional zum Wert, und die Tage-Ansicht zeigt den genauen
+  Tagesertrag mit zwei Nachkommastellen in richtiger, lückenloser
+  Reihenfolge.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
@@ -223,14 +229,19 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   shows all values large and clean on your phone or PC, with its own
   tabs for Overview, Power, Daily curve, Yield, Battery, History (Days/
   Months/Years), Weather (including weather icons and the power
-  chart), and Data (view, edit, and delete files on the SD card -
-  except the protected `/SolarHistory` folder) - just like on the
-  device. Now also reachable while the WebUI page itself (or any other
-  full-screen page) is open on the device. A small status line at the
-  bottom shows the version, the connection to the device, and the
-  portal status. The daily curve also has a progress bar with an
-  hourly time axis, and the Days view shows the exact daily yield with
-  two decimal places in correct, gapless order.
+  chart), and Data (view, download, edit, and delete files on the SD
+  card, including the `/SolarHistory` folder - which stays
+  view-and-download-only there to protect your solar data) - just
+  like on the device. The Data tab lets you download any single file
+  or a whole folder as a ZIP, and a "Create backup" button saves
+  settings and solar data together in one ZIP file. Now also
+  reachable while the WebUI page itself (or any other full-screen
+  page) is open on the device. A small status line at the bottom
+  shows the version, the connection to the device, and the portal
+  status. The daily curve has a progress bar below the hourly time
+  axis, the bar charts (Days/Months/Years) now scale correctly in
+  proportion to the value, and the Days view shows the exact daily
+  yield with two decimal places in correct, gapless order.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.

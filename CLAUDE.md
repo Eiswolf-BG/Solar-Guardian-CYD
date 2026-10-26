@@ -550,11 +550,24 @@ Popups, neue wie alte):**
   Helligkeit, Zurücksetzen ...) - die WebUI bleibt rein lesend. **Eine
   Ausnahme (Auftrag "WebUI-Reiter Daten"):** der Reiter "Daten"
   (`web_files.h/.cpp`) ist ein Datei-Explorer für die SD-Karte und darf
-  dort lesen, bearbeiten und löschen - der Ordner `/SolarHistory` ist
-  dabei für JEDE Operation zentral gesperrt (`web_files.cpp::
-  isLockedPath()`, pfadnormalisiert, case-insensitiv), siehe dessen
-  eigene Kommentare. Diese eine Ausnahme gilt NUR für diesen Reiter -
-  alle anderen Endpunkte/Seiten bleiben rein lesend wie bisher.
+  dort lesen, bearbeiten und löschen - außer in `/SolarHistory`: dort
+  ist NUR Ansehen/Herunterladen erlaubt, Speichern/Löschen bleibt für
+  JEDE Datei dort (auch temporäre) zentral gesperrt (`web_files.cpp::
+  isWriteLocked()`, pfadnormalisiert, case-insensitiv - `handleList()`/
+  `handleRead()`/`handleDownload()` rufen diese Prüfung bewusst NICHT
+  auf). Diese eine Ausnahme gilt NUR für diesen Reiter - alle anderen
+  Endpunkte/Seiten bleiben rein lesend wie bisher.
+  **Download/Backup (Auftrag "Daten: Download/Backup"):** jede Datei
+  hat einen Download-Button (`/api/files/download`, gestreamt, auch für
+  `/SolarHistory`); Ordner lassen sich als ZIP herunterladen
+  (`/api/files/listtree` liefert die rekursive Dateiliste, der BROWSER
+  baut die ZIP-Datei selbst zusammen - Modus "gespeichert"/stored mit
+  CRC32, keine externe Bibliothek, siehe `buildZip()`/`crc32()` im
+  WebUI-JS). Der Button "Backup erstellen" oben im Reiter zippt
+  `/SolarGuardian` UND `/SolarHistory` zusammen
+  (`SolarBackup_JJJJ-MM-TT_HHMM.zip`, Zeit vom Browser) - enthält
+  Zugangsdaten, deshalb der Hinweistext im Reiter. Dateien werden dabei
+  strikt nacheinander geholt (kurze Pause dazwischen), nie parallel.
 - Jede blockierende Vollbild-Schleife (Menü, Dateien, Standort,
   Netzwerke, Tastatur ...) muss `WebServer_::tick()` in ihrer
   Warteschleife aufrufen - sonst ist die WebUI nicht erreichbar, solange

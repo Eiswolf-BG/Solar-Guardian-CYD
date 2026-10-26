@@ -74,10 +74,13 @@ namespace {
         return out;
     }
 
-    // /SolarHistory ist fuer ALLE Operationen tabu - zentrale, einzige
-    // Pruefung (Auftrag), case-insensitiv (FAT ist nicht case-sensitiv),
-    // greift auf den bereits normalisierten Pfad.
-    bool isLockedPath(const String& normalized) {
+    // /SolarHistory ist NUR fuer AENDERNDE Operationen tabu (Speichern/
+    // Loeschen) - zentrale, einzige Pruefung (Auftrag "Daten: Download/
+    // Backup"), case-insensitiv (FAT ist nicht case-sensitiv), greift auf
+    // den bereits normalisierten Pfad. Lesen/Anzeigen/Herunterladen ist
+    // dort (wie ueberall sonst) erlaubt - siehe handleList()/handleRead()/
+    // handleDownload(), die isWriteLocked() NICHT aufrufen.
+    bool isWriteLocked(const String& normalized) {
         String upper = normalized; upper.toUpperCase();
         String locked = String(Config::SD_HISTORY_DIR); locked.toUpperCase();
         return upper == locked || upper.startsWith(locked + "/");
@@ -106,7 +109,9 @@ namespace {
         String rawPath = server.hasArg("path") ? server.arg("path") : "/";
         uint16_t page = server.hasArg("page") ? (uint16_t)server.arg("page").toInt() : 0;
         String path = normalizePath(rawPath);
-        if (isLockedPath(path)) { sendForbidden(server, "locked"); return; }
+        // /SolarHistory wird jetzt angezeigt (Auftrag "Daten: Download/
+        // Backup") - nur Speichern/Loeschen bleibt dort gesperrt, siehe
+        // isWriteLocked(). Die Liste selbst ist ueberall erlaubt.
 
         File dir = SD.open(path);
         if (!dir || !dir.isDirectory()) {
@@ -120,7 +125,7 @@ namespace {
         uint8_t collected = 0;
         bool hasMore = false;
 
-        struct Entry { String name; bool isDir; uint32_t size; };
+        struct Entry { String name; bool isDir; uint32_t size; bool locked; };
         std::vector<Entry> entries;
 
         File entry = dir.openNextFile();
@@ -129,14 +134,13 @@ namespace {
             bool isDir = entry.isDirectory();
             uint32_t size = isDir ? 0 : (uint32_t)entry.size();
             entry.close();
-            // /SolarHistory selbst darf in der Elternliste nicht auftauchen
-            // (Auftrag "nicht gelistet") - case-insensitiv wie oben.
             String childNorm = path;
             if (childNorm != "/") childNorm += "/";
             childNorm += name;
-            if (name.length() > 0 && !isLockedPath(normalizePath(childNorm))) {
+            bool locked = isWriteLocked(normalizePath(childNorm));
+            if (name.length() > 0) {
                 if (idx >= skip && collected < PAGE_SIZE) {
-                    entries.push_back({name, isDir, size});
+                    entries.push_back({name, isDir, size, locked});
                     collected++;
                 } else if (idx >= skip + PAGE_SIZE) {
                     hasMore = true;
@@ -156,13 +160,60 @@ namespace {
         JsonDocument doc;
         doc["path"] = path;
         doc["hasMore"] = hasMore;
+        doc["locked"] = isWriteLocked(path);
         JsonArray arr = doc["entries"].to<JsonArray>();
         for (auto& e : entries) {
             JsonObject o = arr.add<JsonObject>();
             o["name"] = e.name;
             o["dir"] = e.isDir;
             o["size"] = e.size;
+            o["locked"] = e.locked;
         }
+        String out;
+        serializeJson(doc, out);
+        server.send(200, "application/json", out);
+    }
+
+    // Rekursive, flache Dateiliste eines Ordners (Auftrag "Ordner/Backup
+    // herunterladen" - die Browser-seitige ZIP-Funktion braucht die
+    // komplette Dateiliste samt relativem Pfad vorab). Ordner selbst
+    // werden nicht aufgefuehrt (ZIP-Builder legt sie implizit ueber die
+    // Pfade an). Rein lesend, deshalb auch fuer /SolarHistory erlaubt.
+    void collectFilesRecursive(const String& dirPath, const String& baseRel, JsonArray& arr, uint16_t& count) {
+        constexpr uint16_t MAX_FILES = 500; // Sicherheitsgrenze gegen ausufernde Antworten
+        if (count >= MAX_FILES) return;
+        File dir = SD.open(dirPath);
+        if (!dir || !dir.isDirectory()) { if (dir) dir.close(); return; }
+        File entry = dir.openNextFile();
+        while (entry && count < MAX_FILES) {
+            String name = entry.name();
+            bool isDir = entry.isDirectory();
+            uint32_t size = isDir ? 0 : (uint32_t)entry.size();
+            String childPath = dirPath; if (childPath != "/") childPath += "/"; childPath += name;
+            String childRel = baseRel.length() ? (baseRel + "/" + name) : name;
+            entry.close();
+            if (isDir) {
+                collectFilesRecursive(childPath, childRel, arr, count);
+            } else if (name.length() > 0) {
+                JsonObject o = arr.add<JsonObject>();
+                o["path"] = childPath;
+                o["rel"] = childRel;
+                o["size"] = size;
+                count++;
+            }
+            entry = dir.openNextFile();
+        }
+        dir.close();
+    }
+
+    void handleListTree(WebServer& server) {
+        String rawPath = server.hasArg("path") ? server.arg("path") : "/";
+        String path = normalizePath(rawPath);
+        JsonDocument doc;
+        JsonArray arr = doc["files"].to<JsonArray>();
+        uint16_t count = 0;
+        collectFilesRecursive(path, "", arr, count);
+        doc["truncated"] = (count >= 500);
         String out;
         serializeJson(doc, out);
         server.send(200, "application/json", out);
@@ -171,7 +222,7 @@ namespace {
     void handleRead(WebServer& server) {
         String rawPath = server.hasArg("path") ? server.arg("path") : "";
         String path = normalizePath(rawPath);
-        if (isLockedPath(path)) { sendForbidden(server, "locked"); return; }
+        // Lesen ist ueberall erlaubt, auch in /SolarHistory (Auftrag).
 
         File f = SD.open(path, FILE_READ);
         if (!f || f.isDirectory()) { if (f) f.close(); sendNotFound(server, "not found"); return; }
@@ -253,7 +304,7 @@ namespace {
         if (content.length() > MAX_TEXT_FILE_SIZE) { sendBadRequest(server, "content too large"); return; }
 
         String path = normalizePath(rawPath);
-        if (isLockedPath(path)) { sendForbidden(server, "locked"); return; }
+        if (isWriteLocked(path)) { sendForbidden(server, "locked"); return; }
         if (!hasTextExtension(path)) { sendBadRequest(server, "unsupported file type"); return; }
 
         if (hasJsonExtension(path)) {
@@ -277,7 +328,7 @@ namespace {
         if (rawPath.length() == 0) { sendBadRequest(server, "missing path"); return; }
 
         String path = normalizePath(rawPath);
-        if (isLockedPath(path)) { sendForbidden(server, "locked"); return; }
+        if (isWriteLocked(path)) { sendForbidden(server, "locked"); return; }
 
         File f = SD.open(path);
         if (!f) { sendNotFound(server, "not found"); return; }
@@ -289,6 +340,33 @@ namespace {
         server.send(200, "application/json", "{\"ok\":true}");
     }
 
+    // Datei herunterladen (Auftrag) - rein lesend, deshalb auch fuer
+    // /SolarHistory erlaubt. Streamt in kleinen Stuecken statt die Datei
+    // komplett in den RAM zu laden (funktioniert auch fuer grosse/
+    // binaere Dateien). Dateiname bleibt ueber Content-Disposition
+    // erhalten.
+    void handleDownload(WebServer& server) {
+        String rawPath = server.hasArg("path") ? server.arg("path") : "";
+        String path = normalizePath(rawPath);
+        File f = SD.open(path, FILE_READ);
+        if (!f || f.isDirectory()) { if (f) f.close(); sendNotFound(server, "not found"); return; }
+
+        int slash = path.lastIndexOf('/');
+        String filename = (slash >= 0) ? path.substring(slash + 1) : path;
+        server.sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        server.setContentLength(f.size());
+        server.send(200, "application/octet-stream", "");
+
+        uint8_t buf[2048];
+        while (true) {
+            size_t n = f.read(buf, sizeof(buf));
+            if (n == 0) break;
+            server.sendContent_P((const char*)buf, n);
+            yield(); // Auftrag: keine lange Schleife ohne yield(), Anzeige/Touch nicht blockieren
+        }
+        f.close();
+    }
+
     void handleMethodNotAllowed(WebServer& server) {
         server.send(404, "text/plain", "Not found");
     }
@@ -296,7 +374,9 @@ namespace {
 
 void registerRoutes(WebServer& server) {
     server.on("/api/files/list", HTTP_GET, [&server]() { handleList(server); });
+    server.on("/api/files/listtree", HTTP_GET, [&server]() { handleListTree(server); });
     server.on("/api/files/read", HTTP_GET, [&server]() { handleRead(server); });
+    server.on("/api/files/download", HTTP_GET, [&server]() { handleDownload(server); });
     server.on("/api/files/save", HTTP_POST, [&server]() { handleSave(server); });
     server.on("/api/files/delete", HTTP_POST, [&server]() { handleDelete(server); });
 }

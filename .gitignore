@@ -21,3 +21,15 @@ History/
 # Native Testumgebung (Auftrag "Tests am Rechner statt am Geraet") - rein
 # lokal, nie committen.
 /test/
+
+# Lokale Kopien/Sicherungen der SD-Karte - koennen echte Zugangsdaten
+# enthalten, nie committen. Greift strukturell (jeder Ordner, der direkt
+# eine SolarGuardian- oder SolarHistory-Unterordner enthaelt, egal wie
+# der aeussere Ordner selbst heisst - z.B. manuell angelegte, beliebig
+# benannte Backup-/Schnappschuss-Ordner), nicht an einen bestimmten Namen
+# oder Datum gebunden.
+/SD-Backup/
+/SolarGuardian/
+/SolarHistory/
+/*/SolarGuardian/
+/*/SolarHistory/
