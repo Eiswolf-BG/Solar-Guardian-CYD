@@ -8,6 +8,7 @@
 #include "layout_check.h"
 #include "tile_sprite.h"
 #include "redraw_diag.h"
+#include "refresh_feedback_text.h"
 #include "i18n.h"
 #include "config.h"
 #include <time.h>
@@ -34,6 +35,44 @@ namespace {
     // Pro-Kachel-Inhaltssignaturen (Auftrag "Flackern, Teil 2").
     String lastTileSig[4] = {"\x01", "\x01", "\x01", "\x01"};
     String lastStatusSig = "\x01";
+
+    // Rueckmeldung zum manuellen Refresh (Auftrag "Refresh-Regeln"), siehe
+    // battery_page.cpp fuer die genaue Funktionsweise.
+    RefreshFeedbackText::FeedbackState feedbackState;
+
+    // Wortweiser Umbruch nach echter Pixelbreite - gleiches Prinzip wie in
+    // anderen Screens (hier bewusst lokal dupliziert, siehe CLAUDE.md
+    // Code-Stil).
+    uint8_t wrapWords(TFT_eSPI& t, const String& text, int16_t maxW, String* outLines, uint8_t maxLines) {
+        String remaining = text;
+        uint8_t lineCount = 0;
+        while (remaining.length() > 0 && lineCount < maxLines) {
+            int16_t lastGoodSpace = -1;
+            int16_t i = 0;
+            String line = "";
+            while (i < (int16_t)remaining.length()) {
+                char c = remaining[i];
+                String candidate = line + c;
+                if (t.textWidth(candidate) > maxW && line.length() > 0) break;
+                line = candidate;
+                if (c == ' ') lastGoodSpace = i;
+                i++;
+            }
+            if (i >= (int16_t)remaining.length()) {
+                outLines[lineCount++] = line;
+                remaining = "";
+                break;
+            }
+            if (lastGoodSpace >= 0) {
+                outLines[lineCount++] = remaining.substring(0, lastGoodSpace);
+                remaining = remaining.substring(lastGoodSpace + 1);
+            } else {
+                outLines[lineCount++] = line;
+                remaining = remaining.substring(line.length());
+            }
+        }
+        return lineCount;
+    }
 
     int16_t gridTopFor(int16_t areaTop) { return (int16_t)(areaTop + GRID_TOP_OFFSET); }
     int16_t tileWidth() { return (int16_t)((Config::SCREEN_WIDTH - 3 * TILE_GAP) / 2); }
@@ -88,7 +127,11 @@ namespace {
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
     }
 
-    String statusTextFor(const SolarData::Data& snap, bool stale) {
+    // ageMinutes: Alter des Hauptwerts (lastSuccessfulFetch) in Minuten
+    // (-1 = noch kein Wert) - zeigt ab 2 Minuten das tatsaechliche Alter
+    // statt des blossen Worts "veraltet" (Auftrag "veraltet nach
+    // erfolgreichem Refresh").
+    String statusTextFor(const SolarData::Data& snap, long ageMinutes) {
         String text;
         switch (snap.fetchStatus) {
             case SolarData::FetchStatus::NoAccount:
@@ -116,9 +159,11 @@ namespace {
                 }
                 break;
         }
-        if (stale) {
+        if (ageMinutes >= 2) {
+            char ageBuf[32];
+            snprintf(ageBuf, sizeof(ageBuf), I18n::t(I18n::Str::PORTAL_DATA_AGE_FMT), (int)ageMinutes);
             text += " ";
-            text += I18n::t(I18n::Str::STATUS_STALE_SUFFIX);
+            text += ageBuf;
         }
         return text;
     }
@@ -141,6 +186,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
     LayoutCheck::rect("Titel", 0, areaTop, Config::SCREEN_WIDTH, 16);
 
     time_t now = time(nullptr);
+    long ageMinutes = snap.lastSuccessfulFetch > 0 ? (long)((now - snap.lastSuccessfulFetch) / 60) : -1;
     bool stale = snap.lastSuccessfulFetch > 0 &&
                  (now - snap.lastSuccessfulFetch) > (time_t)(Config::EPEVER_STALE_AFTER_MS / 1000);
 
@@ -180,27 +226,58 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         }
     }
 
-    String statusLine = statusTextFor(snap, stale);
+    // Refresh-Rueckmeldung hat Vorrang, solange sie aktiv ist (siehe
+    // battery_page.cpp).
+    // Anzeige-Entscheidung aus feedbackState.active (NICHT aus dem
+    // Rueckgabewert) - siehe refresh_feedback_text.h, Auftrag
+    // "Rueckmeldung bleibt dauerhaft stehen".
+    feedbackState.update(snap);
+    String statusLine = feedbackState.active ? feedbackState.text : statusTextFor(snap, ageMinutes);
     int16_t statusY = statusYFor(areaTop);
+
+    // Auftrag "Statuszeile wird abgeschnitten" - siehe battery_page.cpp
+    // fuer die ausfuehrliche Begruendung. Berechnung laeuft JEDEN
+    // draw()-Aufruf, damit die LayoutCheck-Registrierung unten immer
+    // aktuell ist.
+    tft.setTextSize(1);
+    int16_t lineH = tft.fontHeight();
+    int16_t maxW = (int16_t)(Config::SCREEN_WIDTH - 8);
+    String lines[2];
+    uint8_t lineCount = 1;
+    if (tft.textWidth(statusLine) <= maxW) {
+        lines[0] = statusLine;
+    } else {
+        lineCount = wrapWords(tft, statusLine, maxW, lines, 2);
+        if (lineCount == 0) { lineCount = 1; lines[0] = statusLine; }
+    }
+    int16_t pitch = (lineCount > 1) ? 15 : lineH;
+    int16_t spriteH = (int16_t)(pitch * lineCount + 2);
+
     if (statusLine != lastStatusSig) {
         lastStatusSig = statusLine;
         RedrawDiag::log("Ertrag-Statuszeile", "Inhalt geaendert");
-        // Puffer muss mindestens die echte Schrifthoehe (+2px Reserve)
-        // fassen - gleicher Bugfix wie battery_page.cpp (Auftrag
-        // "Abgeschnittener Text"): vorher feste Hoehe 18 bei Text-Y=2
-        // (braucht 2+Schrifthoehe), dadurch unten abgeschnitten.
-        tft.setTextSize(1);
-        int16_t lineH = tft.fontHeight();
-        int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, statusY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
             t.setTextDatum(TC_DATUM);
             t.setTextColor(Display::secondaryColor(), TFT_BLACK);
-            t.drawString(statusLine, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
+            for (uint8_t i = 0; i < lineCount; i++) {
+                t.drawString(lines[i], (int16_t)(Config::SCREEN_WIDTH / 2), (int16_t)(i * pitch));
+            }
             t.setTextDatum(TL_DATUM);
         });
-        LayoutCheck::bufferRect("Statuszeile-Puffer", Config::SCREEN_WIDTH, spriteH, tft.textWidth(statusLine), lineH);
+        int16_t widestLineW = 0;
+        for (uint8_t i = 0; i < lineCount; i++) {
+            int16_t lw = tft.textWidth(lines[i]);
+            if (lw > widestLineW) widestLineW = lw;
+        }
+        LayoutCheck::bufferRect("Statuszeile-Puffer", Config::SCREEN_WIDTH, spriteH, widestLineW, (int16_t)(pitch * lineCount));
     }
-    LayoutCheck::rect("Statuszeile", 0, (int16_t)(statusY - 14), Config::SCREEN_WIDTH, 40);
+    // EIN Rechteck fuer Tipp-Flaeche UND Text (siehe battery_page.cpp -
+    // zwei separate, sich zwangslaeufig ueberlappende Rechtecke waeren ein
+    // Falsch-Konflikt).
+    int16_t tapTop = (int16_t)(statusY - 14);
+    int16_t textBottom = (int16_t)(statusY + pitch * lineCount);
+    int16_t combinedBottom = textBottom > (int16_t)(tapTop + 40) ? textBottom : (int16_t)(tapTop + 40);
+    LayoutCheck::rect("Statuszeile", 0, tapTop, Config::SCREEN_WIDTH, (int16_t)(combinedBottom - tapTop));
 }
 
 bool update() {
@@ -210,7 +287,8 @@ bool update() {
 
     bool solarChanged = snap.changeCounter != lastSeenChangeCounter;
     bool minuteTicked = minute != lastSeenMinute;
-    bool changed = firstCheck || solarChanged || minuteTicked;
+    bool feedbackActive = feedbackState.update(snap);
+    bool changed = firstCheck || solarChanged || minuteTicked || feedbackActive;
     if (changed) {
         if (firstCheck) RedrawDiag::log("Ertrag", "erster Aufruf");
         if (solarChanged) RedrawDiag::log("Ertrag", "SolarData-Zaehler geaendert");

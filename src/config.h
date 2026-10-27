@@ -28,7 +28,7 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "1.9";
+    constexpr const char* FW_VERSION = "2.0";
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----
@@ -213,6 +213,16 @@ namespace Config {
     constexpr uint32_t EPEVER_RETRY_INTERVAL_MS = 60UL * 1000UL;        // Takt bei den ersten Fehlschlaegen
     constexpr uint8_t  EPEVER_MAX_SHORT_RETRIES = 3;                    // danach zurueck auf den normalen Takt
     constexpr uint32_t EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS = 30UL * 1000UL;
+    // Harte Obergrenze fuer die "Aktualisiere..."-Rueckmeldung (Auftrag
+    // "Fehler in der Refresh-Rueckmeldung") - die urspruengliche
+    // "Working"-Anzeige hatte KEINE eigene Zeitgrenze, sondern wartete
+    // unbegrenzt auf das naechste Ereignis (Done/NoChange/...). Blieb
+    // dieses Ereignis aus (z.B. WLAN faellt direkt nach dem Tipp kurz
+    // weg, bevor der geplante Abruf ueberhaupt starten konnte), stand
+    // die Rueckmeldung fuer immer da UND verdeckte dabei den zuletzt
+    // gueltigen Wert - beides beobachtet und behoben, siehe
+    // refresh_feedback_text.h::FeedbackState.
+    constexpr uint32_t REFRESH_WORKING_TIMEOUT_MS = 15UL * 1000UL;
     constexpr uint32_t EPEVER_STALE_AFTER_MS = 30UL * 60UL * 1000UL;    // Werte gelten danach als veraltet
     constexpr const char* EPEVER_BATTERY_URL = "https://hncloudapi.epsolarpv.com:7002/history/getSampleDataPoint";
 

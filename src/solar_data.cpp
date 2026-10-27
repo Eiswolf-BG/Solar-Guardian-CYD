@@ -168,6 +168,18 @@ void setBattery(float voltage, float current, float socPercent, float tempC, tim
     });
 }
 
+void setBatteryVoltageExtremes(float maxV, float minV) {
+    mutate([&](Data& d) {
+        bool changed = !d.batteryVoltageExtremesValid ||
+                       floatChanged(d.batteryVoltageMax, maxV, 0.005f) ||
+                       floatChanged(d.batteryVoltageMin, minV, 0.005f);
+        d.batteryVoltageMax = maxV;
+        d.batteryVoltageMin = minV;
+        d.batteryVoltageExtremesValid = true;
+        return changed;
+    });
+}
+
 void setPv(float voltage, float current, time_t measuredAt) {
     mutate([&](Data& d) {
         bool changed = !d.pvValid || floatChanged(d.pvVoltage, voltage, 0.05f) ||
@@ -284,6 +296,14 @@ void setFetchStatus(FetchStatus status) {
         bool changed = d.fetchStatus != status;
         d.fetchStatus = status;
         return changed;
+    });
+}
+
+void setRefreshFeedback(RefreshFeedback fb) {
+    mutate([&](Data& d) {
+        d.refreshFeedback = fb;
+        d.refreshFeedbackSeq++;
+        return true; // immer ein eigenes Ereignis, siehe Header-Kommentar
     });
 }
 

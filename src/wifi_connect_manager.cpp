@@ -2,6 +2,7 @@
 #include "app_config.h"
 #include "wifi_status.h"
 #include "config.h"
+#include <Arduino.h>
 #include <WiFi.h>
 #include <time.h>
 
@@ -87,6 +88,22 @@ void tick() {
         if (matched != currentConnectedSlot) {
             currentConnectedSlot = matched;
             WifiStatus::set(true, matched);
+#ifdef NIGHT_MODE_DIAG_TEST
+            // Auftrag "Diagnosezeilen fuer die naechste Nacht" - Zustands-
+            // wechsel mit Dauer (nur wenn ein eigener Verbindungsversuch
+            // lief, sonst ist "Dauer" nicht aussagekraeftig, siehe
+            // attemptActive).
+            struct tm nt;
+            char hhmm[6] = "--:--";
+            if (getLocalTime(&nt, 5)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+            if (attemptActive) {
+                Serial.printf("[wifi] Verbunden (Platz %u) um %s, Versuch dauerte %lu ms\n",
+                               (unsigned)matched, hhmm, (unsigned long)(millis() - attemptStartMs));
+            } else {
+                Serial.printf("[wifi] Verbunden (Platz %u) um %s (ausserhalb eigenen Verbindungszyklus)\n",
+                               (unsigned)matched, hhmm);
+            }
+#endif
         }
         attemptActive = false;
         if (!ntpConfigured) {
@@ -98,6 +115,13 @@ void tick() {
 
     // Verbindung verloren, nachdem sie stand - Zyklus von vorne beginnen.
     if (currentConnectedSlot != 255) {
+#ifdef NIGHT_MODE_DIAG_TEST
+        struct tm nt;
+        char hhmm[6] = "--:--";
+        if (getLocalTime(&nt, 5)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+        Serial.printf("[wifi] Verbindung verloren (war Platz %u) um %s - Versuch, neu zu verbinden\n",
+                       (unsigned)currentConnectedSlot, hhmm);
+#endif
         currentConnectedSlot = 255;
         begin();
         return;
@@ -106,6 +130,13 @@ void tick() {
     if (!attemptActive || orderCount == 0) return;
 
     if (millis() - attemptStartMs >= Config::WIFI_CONNECT_TIMEOUT_MS) {
+#ifdef NIGHT_MODE_DIAG_TEST
+        struct tm nt;
+        char hhmm[6] = "--:--";
+        if (getLocalTime(&nt, 5)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+        Serial.printf("[wifi] Versuch auf Platz %u nach %lu ms ohne Erfolg (Zeitlimit) um %s - naechster Platz\n",
+                       (unsigned)order[orderPos], (unsigned long)(millis() - attemptStartMs), hhmm);
+#endif
         orderPos = (uint8_t)((orderPos + 1) % orderCount);
         startAttempt(order[orderPos]);
     }

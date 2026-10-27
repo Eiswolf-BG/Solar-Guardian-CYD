@@ -7,6 +7,7 @@
 #include "layout_check.h"
 #include "tile_sprite.h"
 #include "redraw_diag.h"
+#include "refresh_feedback_text.h"
 #include "i18n.h"
 #include "config.h"
 #include <time.h>
@@ -59,7 +60,14 @@ namespace {
     String lastStatusTileSig = "\x01";
     String lastExplainSig = "\x01";
     String lastTimestampSig = "\x01";
-    uint8_t lastMaxMinDrawn = 0; // Max/Min-Spannungskacheln (Auftrag) - immer "--", nur einmal pro Seitenaufruf zeichnen
+    String lastMaxMinSig = "\x01"; // Max/Min-Spannungskacheln
+
+    // Rueckmeldung zum manuellen Refresh (Auftrag "Refresh-Regeln") -
+    // ersetzt kurzzeitig die normale Statuszeile, siehe
+    // refresh_feedback_text.h. Dieselbe Instanz wird von update() (erkennt
+    // neue Ereignisse, erzwingt einen draw()-Aufruf) UND draw() (liest den
+    // aktuellen Text) verwendet.
+    RefreshFeedbackText::FeedbackState feedbackState;
 
     int16_t tileWidth() { return (int16_t)((Config::SCREEN_WIDTH - 3 * TILE_GAP) / 2); }
     int16_t gridTopFor(int16_t areaTop) { return (int16_t)(areaTop + GRID_TOP_OFFSET); }
@@ -305,21 +313,30 @@ namespace {
         t.setTextSize(1);
         t.setTextDatum(ML_DATUM);
         uint16_t numColor = Display::valueColor(valid && !stale, accent);
-        String labelPart = String(I18n::t(labelKey)) + " ";
+        // Auftrag "fehlendes Leerzeichen Max/Min": t.textWidth() auf einen
+        // String, der mit einem LEERZEICHEN endet ("Max "), lieferte beim
+        // eigenen Font denselben Wert wie ohne das Leerzeichen (dessen
+        // Vorschubbreite wird am Stringende offenbar nicht mitgezaehlt) -
+        // der Wert wurde dadurch direkt an die Beschriftung angrenzend
+        // gezeichnet ("Max53,48"), obwohl das Leerzeichen selbst
+        // technisch mitgezeichnet wurde. Fester Pixel-Abstand (GAP) statt
+        // eines gemessenen Leerzeichens behebt das zuverlaessig.
+        constexpr int16_t GAP = 4;
+        String labelOnly = String(I18n::t(labelKey));
         String unitPart = unit ? (String(" ") + unit) : String();
-        int16_t labelW = t.textWidth(labelPart);
+        int16_t labelW = t.textWidth(labelOnly);
         int16_t numW = t.textWidth(valueStr);
         int16_t unitW = unit ? t.textWidth(unitPart) : 0;
-        int16_t totalW = (int16_t)(labelW + numW + unitW);
+        int16_t totalW = (int16_t)(labelW + GAP + numW + unitW);
         int16_t cy = (int16_t)(h / 2);
         int16_t startX = (int16_t)(w / 2 - totalW / 2);
         t.setTextColor(accent, TFT_BLACK);
-        t.drawString(labelPart, startX, cy);
+        t.drawString(labelOnly, startX, cy);
         t.setTextColor(numColor, TFT_BLACK);
-        t.drawString(valueStr, (int16_t)(startX + labelW), cy);
+        t.drawString(valueStr, (int16_t)(startX + labelW + GAP), cy);
         if (unit) {
             t.setTextColor(accent, TFT_BLACK);
-            t.drawString(unitPart, (int16_t)(startX + labelW + numW), cy);
+            t.drawString(unitPart, (int16_t)(startX + labelW + GAP + numW), cy);
         }
         t.setTextDatum(TL_DATUM);
         {
@@ -373,7 +390,11 @@ namespace {
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
     }
 
-    String statusTextFor(const SolarData::Data& snap, bool stale) {
+    // ageMinutes: Alter des Hauptwerts (batteryMeasuredAt) in Minuten
+    // (-1 = noch kein Wert) - zeigt ab 2 Minuten das tatsaechliche Alter
+    // statt des blossen Worts "veraltet" (Auftrag "veraltet nach
+    // erfolgreichem Refresh").
+    String statusTextFor(const SolarData::Data& snap, long ageMinutes) {
         String text;
         switch (snap.fetchStatus) {
             case SolarData::FetchStatus::NoAccount:
@@ -411,9 +432,11 @@ namespace {
                 break;
             }
         }
-        if (stale) {
+        if (ageMinutes >= 2) {
+            char ageBuf[32];
+            snprintf(ageBuf, sizeof(ageBuf), I18n::t(I18n::Str::PORTAL_DATA_AGE_FMT), (int)ageMinutes);
             text += " ";
-            text += I18n::t(I18n::Str::STATUS_STALE_SUFFIX);
+            text += ageBuf;
         }
         return text;
     }
@@ -510,7 +533,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         lastStatusTileSig = "\x01";
         lastExplainSig = "\x01";
         lastTimestampSig = "\x01";
-        lastMaxMinDrawn = 0;
+        lastMaxMinSig = "\x01";
     }
 
     tft.setTextSize(1);
@@ -521,6 +544,7 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
     LayoutCheck::rect("Titel", 0, areaTop, Config::SCREEN_WIDTH, 16);
 
     time_t now = time(nullptr);
+    long ageMinutes = snap.batteryMeasuredAt > 0 ? (long)((now - snap.batteryMeasuredAt) / 60) : -1;
     bool stale = snap.batteryMeasuredAt > 0 &&
                  (now - snap.batteryMeasuredAt) > (time_t)(Config::EPEVER_STALE_AFTER_MS / 1000);
     bool haveSoc = snap.batteryValid;
@@ -610,20 +634,30 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         LayoutCheck::rect("Kachel-Rahmen", x0, L.y1, tileW, L.row1H);
     }
 
-    // Max./Min. Batteriespannung (Auftrag "zwei neue Kacheln") - NOCH
-    // OHNE Datenquelle: die dataPointId dafuer ist unbekannt (nicht in
-    // den bestehenden Abfragen enthalten, siehe CLAUDE.md - darf nicht
-    // geraten werden). Zeigt bis dahin immer "--", reine Layout-
-    // Vorbereitung. Signatur ist bewusst konstant (immer "--"), damit
-    // diese beiden Kacheln nur EINMAL beim Seitenaufruf gezeichnet
-    // werden, nicht bei jedem Redraw.
-    if (firstCheck || lastMaxMinDrawn != 1) {
-        lastMaxMinDrawn = 1;
+    // Max./Min. Batteriespannung (Auftrag "Max/Min-Spannungskacheln") -
+    // echte Tageswerte, laufen in der bestehenden Abfrage mit. "--" nur,
+    // wenn noch nie ein gueltiger Wert empfangen wurde (direkt nach dem
+    // Start) - danach bleibt bei einem Ausfall/im Nachtmodus der zuletzt
+    // gueltige Wert stehen (snap.batteryVoltageExtremesValid wird dafuer
+    // NIE wieder auf false gesetzt, siehe SolarData::
+    // setBatteryVoltageExtremes()).
+    char maxVStr[16], minVStr[16];
+    if (snap.batteryVoltageExtremesValid) {
+        formatNumber(snap.batteryVoltageMax, 2, maxVStr, sizeof(maxVStr));
+        formatNumber(snap.batteryVoltageMin, 2, minVStr, sizeof(minVStr));
+    } else {
+        strncpy(maxVStr, "--", sizeof(maxVStr));
+        strncpy(minVStr, "--", sizeof(minVStr));
+    }
+    String maxMinSig = String(maxVStr) + "|" + minVStr + (snap.batteryVoltageExtremesValid ? "1" : "0") + (stale ? "s" : "");
+    if (maxMinSig != lastMaxMinSig) {
+        lastMaxMinSig = maxMinSig;
+        RedrawDiag::log("Batterie-Max-Min-Spannung", "Inhalt geaendert");
         TileSprite::drawInto(x0, L.y2, tileW, FLAT_TILE_H, [&](TFT_eSPI& t) {
-            renderFlatValueTile(t, tileW, FLAT_TILE_H, x0, L.y2, I18n::Str::BATTERY_MAX_VOLTAGE_LABEL, "--", I18n::t(I18n::Str::VOLT_UNIT), false, false, accent);
+            renderFlatValueTile(t, tileW, FLAT_TILE_H, x0, L.y2, I18n::Str::BATTERY_MAX_VOLTAGE_LABEL, maxVStr, I18n::t(I18n::Str::VOLT_UNIT), snap.batteryVoltageExtremesValid, stale, accent);
         });
         TileSprite::drawInto(x1, L.y2, tileW, FLAT_TILE_H, [&](TFT_eSPI& t) {
-            renderFlatValueTile(t, tileW, FLAT_TILE_H, x1, L.y2, I18n::Str::BATTERY_MIN_VOLTAGE_LABEL, "--", I18n::t(I18n::Str::VOLT_UNIT), false, false, accent);
+            renderFlatValueTile(t, tileW, FLAT_TILE_H, x1, L.y2, I18n::Str::BATTERY_MIN_VOLTAGE_LABEL, minVStr, I18n::t(I18n::Str::VOLT_UNIT), snap.batteryVoltageExtremesValid, stale, accent);
         });
     } else {
         LayoutCheck::rect("Kachel-Rahmen", x0, L.y2, tileW, FLAT_TILE_H);
@@ -682,28 +716,73 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         LayoutCheck::rect("Erklaerung", 8, L.explainTop, (int16_t)(Config::SCREEN_WIDTH - 16), (int16_t)(L.explainLineCount * EXPLAIN_LINE_H));
     }
 
-    String statusLine = statusTextFor(snap, stale);
+    // Refresh-Rueckmeldung (Auftrag "Refresh-Regeln") hat Vorrang vor der
+    // normalen Statuszeile, solange sie aktiv ist (ca. 2s, bei "Working"
+    // bis zum naechsten Ereignis).
+    // Anzeige-Entscheidung aus feedbackState.active (NICHT aus dem
+    // Rueckgabewert) - siehe refresh_feedback_text.h, Auftrag
+    // "Rueckmeldung bleibt dauerhaft stehen".
+    feedbackState.update(snap);
+    String statusLine = feedbackState.active ? feedbackState.text : statusTextFor(snap, ageMinutes);
+
+    // Auftrag "Statuszeile wird abgeschnitten": "Naechste Abfrage: HH:MM
+    // Uhr" + " veraltet" (oder eine lange Refresh-Rueckmeldung wie die
+    // Nachtsperre-Meldung) passt nicht immer auf eine Zeile - LayoutCheck
+    // meldete das zuvor nur ("wird abgeschnitten"), ohne dass etwas
+    // dagegen unternommen wurde. Jetzt: erst volle Breite probieren,
+    // sonst wortweise auf bis zu 2 Zeilen umbrechen (nie abgeschnitten,
+    // CLAUDE.md Layout-Regel) - 8px Sicherheitsrand (4px je Seite), damit
+    // "knapp passt" nicht wieder "knapp nicht passt" wird. Diese
+    // Berechnung laeuft JEDEN draw()-Aufruf (nicht nur bei Aenderung),
+    // damit die LayoutCheck-Registrierung unten immer aktuell ist.
+    tft.setTextSize(1);
+    int16_t lineH = tft.fontHeight();
+    int16_t maxW = (int16_t)(Config::SCREEN_WIDTH - 8);
+    String lines[2];
+    uint8_t lineCount = 1;
+    if (tft.textWidth(statusLine) <= maxW) {
+        lines[0] = statusLine;
+    } else {
+        lineCount = wrapWords(tft, statusLine, maxW, lines, 2);
+        if (lineCount == 0) { lineCount = 1; lines[0] = statusLine; }
+    }
+    // Bei 2 Zeilen engerer Zeilenabstand (14px statt der vollen
+    // Schrifthoehe ~17px) - die Flaeche bis zur Fusszone ist auf dieser
+    // Seite knapp (3 Kachelreihen + Erklaerzeile), gleiches Prinzip wie
+    // EXPLAIN_LINE_H oben ("etwas enger als fontHeight(17)", dort bereits
+    // bewaehrt).
+    int16_t pitch = (lineCount > 1) ? 14 : lineH;
+    int16_t spriteH = (int16_t)(pitch * lineCount + 2);
+
     if (statusLine != lastTimestampSig) {
         lastTimestampSig = statusLine;
         RedrawDiag::log("Batterie-Statuszeile", "Inhalt geaendert");
-        // Puffer muss mindestens die echte Schrifthoehe (plus 2px Reserve)
-        // fassen - war vorher mit fester Hoehe 18 bei Text-Y=10 zu niedrig
-        // (brauchte 10+Schrifthoehe), dadurch wurde die untere Haelfte der
-        // Zeile abgeschnitten (Auftrag "Abgeschnittener Text", per Foto
-        // bestaetigt).
-        tft.setTextSize(1);
-        int16_t lineH = tft.fontHeight();
-        int16_t spriteH = (int16_t)(lineH + 2);
         TileSprite::drawInto(0, L.timestampY, Config::SCREEN_WIDTH, spriteH, [&](TFT_eSPI& t) {
             t.setTextDatum(TC_DATUM);
             t.setTextColor(Display::secondaryColor(), TFT_BLACK);
-            t.drawString(statusLine, (int16_t)(Config::SCREEN_WIDTH / 2), 0);
+            for (uint8_t i = 0; i < lineCount; i++) {
+                t.drawString(lines[i], (int16_t)(Config::SCREEN_WIDTH / 2), (int16_t)(i * pitch));
+            }
             t.setTextDatum(TL_DATUM);
         });
-        LayoutCheck::bufferRect("Statuszeile-Puffer", Config::SCREEN_WIDTH, spriteH, tft.textWidth(statusLine), lineH);
+        int16_t widestLineW = 0;
+        for (uint8_t i = 0; i < lineCount; i++) {
+            int16_t lw = tft.textWidth(lines[i]);
+            if (lw > widestLineW) widestLineW = lw;
+        }
+        LayoutCheck::bufferRect("Statuszeile-Puffer", Config::SCREEN_WIDTH, spriteH, widestLineW, (int16_t)(pitch * lineCount));
     }
+    // EIN Rechteck fuer Tipp-Flaeche UND Text zusammen registrieren (statt
+    // zwei separaten, die sich zwangslaeufig ueberlappen wuerden - eine
+    // Tipp-Flaeche UM den Text herum ist gewollt, kein Konflikt. Bei 2
+    // Zeilen reicht der Text ggf. weiter nach unten als die feste 40px-
+    // Tipp-Flaeche - das deckt dieses eine, vergroesserte Rechteck mit ab,
+    // damit der Layout-Pruefer das trotzdem gegen die Fusszone pruefen
+    // kann). Unconditioned, damit jeder draw()-Aufruf konsistent prueft.
     Rect tapZone = timestampTapZone(L);
-    LayoutCheck::rect("Statuszeile", tapZone.x, tapZone.y, tapZone.w, tapZone.h);
+    int16_t textBottom = (int16_t)(L.timestampY + pitch * lineCount);
+    int16_t combinedBottom = textBottom > (tapZone.y + tapZone.h) ? textBottom : (int16_t)(tapZone.y + tapZone.h);
+    LayoutCheck::rect("Statuszeile", tapZone.x, tapZone.y, tapZone.w, (int16_t)(combinedBottom - tapZone.y));
 }
 
 bool update() {
@@ -713,7 +792,12 @@ bool update() {
 
     bool solarChanged = snap.changeCounter != lastSeenChangeCounter;
     bool minuteTicked = minute != lastSeenMinute;
-    bool changed = firstCheck || solarChanged || minuteTicked;
+    // feedbackActive haelt update() auf "true", solange eine Refresh-
+    // Rueckmeldung angezeigt wird - sonst wuerde draw() nie erneut
+    // aufgerufen, um sie nach Ablauf wieder durch die normale Statuszeile
+    // zu ersetzen.
+    bool feedbackActive = feedbackState.update(snap);
+    bool changed = firstCheck || solarChanged || minuteTicked || feedbackActive;
     if (changed) {
         if (firstCheck) RedrawDiag::log("Batterie", "erster Aufruf");
         if (solarChanged) RedrawDiag::log("Batterie", "SolarData-Zaehler geaendert");

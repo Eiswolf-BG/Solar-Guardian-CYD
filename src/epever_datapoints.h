@@ -18,4 +18,13 @@ namespace EpeverDatapoints {
     constexpr int32_t PV_POWER           = 101596388; // W
     constexpr int32_t PV_VOLTAGE         = 101596362; // V
     constexpr int32_t PV_CURRENT         = 101596380; // A
+
+    // Tages-Extremwerte der Batteriespannung (Auftrag "Max/Min-
+    // Spannungskacheln") - laufen in der bestehenden Batterieabfrage mit
+    // (kein zusaetzlicher HTTP-Aufruf), exakt derselbe Mechanismus wie
+    // die Werte oben. Von Alex direkt aus der Portal-Spalte
+    // "Parameter ID" uebernommen, stimmen mit den bisherigen 8 IDs
+    // (gleiches Nummernschema) ueberein.
+    constexpr int32_t BATTERY_VOLTAGE_MAX = 101596406; // V
+    constexpr int32_t BATTERY_VOLTAGE_MIN = 101596413; // V
 }

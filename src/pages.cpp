@@ -5,6 +5,7 @@
 #include "yield_page.h"
 #include "years_page.h"
 #include "battery_page.h"
+#include "pv_status_page.h"
 #include "i18n.h"
 
 namespace Pages {
@@ -21,6 +22,9 @@ namespace {
         {I18n::Str::PAGE_YIELD_TITLE, YieldPage::draw, YieldPage::update, YieldPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YIELD},
         {I18n::Str::PAGE_YEARS_TITLE, YearsPage::draw, YearsPage::update, YearsPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YEARS},
         {I18n::Str::PAGE_BATTERY_TITLE, BatteryPage::draw, BatteryPage::update, BatteryPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_BATTERY},
+        // Auftrag "Neuer Bildschirm PV" - bewusst LETZTE Seite, Reihenfolge
+        // der bisherigen 6 Seiten bleibt unveraendert.
+        {I18n::Str::PAGE_PV_STATUS_TITLE, PvStatusPage::draw, PvStatusPage::update, PvStatusPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_PV_STATUS},
     };
     constexpr uint8_t PAGE_COUNT = sizeof(PAGES) / sizeof(PAGES[0]);
 }

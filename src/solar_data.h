@@ -25,6 +25,19 @@ namespace SolarData {
         Ok,
     };
 
+    // Rueckmeldung zu einem manuellen Refresh-Tipp (Auftrag "Refresh-
+    // Regeln und Rueckmeldung") - vom Fetch-Task (Core 0) gesetzt, Core 1
+    // bildet daraus den angezeigten Text ueber die zentrale Textliste.
+    enum class RefreshFeedback : uint8_t {
+        Working,       // Abfrage laeuft gerade
+        Done,          // neuer Wert erhalten
+        NoChange,      // Abfrage ok, aber Wert unveraendert
+        LockedNight,   // ausserhalb des Tagesfensters (Nachtmodus/Abschlussabfrage)
+        NoWifi,        // kein WLAN verbunden
+        Busy,          // ein Abruf laeuft bereits
+        Cooldown,      // Mindestabstand (30s) zum letzten Tipp noch nicht erreicht
+    };
+
     constexpr uint8_t HISTORY_MAX_POINTS = 50;
 
     struct HistoryPoint {
@@ -81,6 +94,15 @@ namespace SolarData {
         float batteryTempC = 0.0f;
         bool batteryValid = false;
         time_t batteryMeasuredAt = 0;
+        // Tages-Extremwerte der Batteriespannung (Auftrag "Max/Min-
+        // Spannungskacheln") - eigene Validity, damit ein Ausfall NUR
+        // dieser beiden Datenpunkte (Rest der Abfrage sonst erfolgreich)
+        // nicht die zuletzt gueltigen Werte loescht (siehe
+        // setBatteryVoltageExtremes() - wird nur bei BEIDEN gueltigen
+        // Werten aufgerufen).
+        float batteryVoltageMax = 0.0f;
+        float batteryVoltageMin = 0.0f;
+        bool batteryVoltageExtremesValid = false;
 
         // PV-Spannung/-Strom (Datenpunkte 101596362/101596380), fuer die
         // Seite "Leistung" - kommen in derselben Anfrage wie die Batterie-
@@ -143,6 +165,14 @@ namespace SolarData {
         // Steigt bei jeder Aktualisierung - Core 1 vergleicht ihn, um nur
         // bei echter Aenderung neu zu zeichnen statt bei jedem Tick.
         uint32_t changeCounter = 0;
+
+        // Rueckmeldung zum letzten manuellen Refresh-Tipp (Auftrag) -
+        // refreshFeedbackSeq steigt bei JEDEM erkannten Tipp UNBEDINGT
+        // (anders als changeCounter oben), damit Core 1 auch zwei
+        // aufeinanderfolgende, inhaltlich GLEICHE Rueckmeldungen (z.B.
+        // zweimal "Kein WLAN") als zwei eigene Ereignisse erkennt.
+        RefreshFeedback refreshFeedback = RefreshFeedback::Done;
+        uint32_t refreshFeedbackSeq = 0;
     };
 
     // Einmal beim Start aufrufen (legt den Mutex an).
@@ -177,6 +207,9 @@ namespace SolarData {
     void appendDailyCurvePoint(uint16_t minutesSinceMidnight, uint16_t watts, const char* dayKey);
     void setEnergy(float todayKwh, float monthKwh, float yearKwh, float totalKwh);
     void setBattery(float voltage, float current, float socPercent, float tempC, time_t measuredAt);
+    // Nur aufrufen, wenn BEIDE Werte in dieser Abfrage gueltig waren -
+    // sonst bleiben die zuletzt gueltigen Werte stehen (Auftrag).
+    void setBatteryVoltageExtremes(float maxV, float minV);
     void setPv(float voltage, float current, time_t measuredAt);
     // Wird nur vom Fetch-Task aufgerufen, wenn sich die Geraete-
     // Seriennummer geaendert hat (siehe fetch_task.cpp::
@@ -192,4 +225,7 @@ namespace SolarData {
     void setFinalQueryDoneDate(const char* dateStr);
     void setStatusText(const char* text);
     void setFetchStatus(FetchStatus status);
+    // Immer EIN eigenes Ereignis (siehe Data::refreshFeedbackSeq oben) -
+    // bewusst NICHT ueber mutate()s "nur bei echter Aenderung"-Logik.
+    void setRefreshFeedback(RefreshFeedback fb);
 }

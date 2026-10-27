@@ -9,6 +9,7 @@
 #include "layout_check.h"
 #include "tile_sprite.h"
 #include "redraw_diag.h"
+#include "refresh_feedback_text.h"
 #include "page_nav.h"
 #include "fetch_task.h"
 #include "week_view_screen.h"
@@ -42,6 +43,22 @@ namespace {
     String lastPowerSig = "\x01";
     String lastTodaySig = "\x01";
     String lastBatterySig = "\x01";
+
+    // Rueckmeldung zum manuellen Refresh (Auftrag "Refresh-Regeln",
+    // korrigiert durch Auftrag "Fehler in der Refresh-Rueckmeldung") -
+    // die Uebersicht hat keine eigene Statuszeile wie die anderen Seiten,
+    // die Rueckmeldung ersetzt deshalb kurzzeitig NUR DIE BESCHRIFTUNGS-
+    // ZEILE der tatsaechlich angetippten Kachel (Leistung/Ertrag/
+    // Batterie), siehe battery_page.cpp fuer die genaue Funktionsweise
+    // von FeedbackState. lastTappedTile (0=Leistung,1=Ertrag,2=Batterie,
+    // -1=keine) legt fest, WELCHE Kachel die Rueckmeldung zeigt - EINE
+    // geteilte FeedbackState-Instanz treibt nur Text/Zeitsteuerung,
+    // welche Kachel sie anzeigt ist eine reine Zeichen-Entscheidung
+    // (gleiches Prinzip wie pv_status_page.cpp). Vorher hatten alle drei
+    // Kacheln DENSELBEN Zustand ausgewertet, wodurch ein Tipp auf nur
+    // eine Kachel faelschlich alle drei umschaltete (Auftrag, Punkt 1).
+    RefreshFeedbackText::FeedbackState feedbackState;
+    int8_t lastTappedTile = -1;
 
     struct Rect {
         int16_t x, y, w, h;
@@ -162,9 +179,14 @@ namespace {
     // Automaten sonst auf eine kleinere Schriftgroesse zwang als bei
     // kurzen Einheiten ("W"/"kW") - die Kacheln wirkten dadurch
     // uneinheitlich gross (Auftrag "Kacheln einheitlich machen").
+    // labelOverride: leer = normale Beschriftung (label) zeichnen: nicht
+    // leer = diesen Text STATT der Beschriftung zeigen (Refresh-
+    // Rueckmeldung, Auftrag "Fehler in der Refresh-Rueckmeldung") - der
+    // Wert darunter wird in JEDEM Fall normal weitergezeichnet, damit er
+    // nie verschwindet (Auftrag, Punkt 2).
     void renderLabelValueTile(TFT_eSPI& t, int16_t w, int16_t h, int16_t absX, int16_t absY,
                                const char* label, const String& numberStr, const char* unit,
-                               bool valid, uint16_t accent) {
+                               bool valid, uint16_t accent, const String& labelOverride = String()) {
         t.drawRoundRect(0, 0, w, h, 4, accent);
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
 
@@ -172,10 +194,11 @@ namespace {
         t.setTextDatum(TC_DATUM);
         t.setTextColor(accent, TFT_BLACK);
         int16_t labelTopY = 8;
-        t.drawString(label, (int16_t)(w / 2), labelTopY);
+        String labelText = labelOverride.length() > 0 ? labelOverride : String(label);
+        t.drawString(labelText, (int16_t)(w / 2), labelTopY);
         t.setTextDatum(TL_DATUM);
         {
-            Measured lr = measureTopCentered(t, (int16_t)(w / 2), labelTopY, label, 1);
+            Measured lr = measureTopCentered(t, (int16_t)(w / 2), labelTopY, labelText, 1);
             LayoutCheck::containedRect("Kachel-Beschriftung", absX, absY, w, h,
                                         (int16_t)(absX + lr.x), (int16_t)(absY + lr.y), lr.w, lr.h);
         }
@@ -244,8 +267,10 @@ namespace {
         }
     }
 
+    // labelOverride: siehe renderLabelValueTile() - Wert/Symbol bleiben
+    // in JEDEM Fall sichtbar, nur die Beschriftung wird ersetzt.
     void renderBatteryTile(TFT_eSPI& t, int16_t w, int16_t h, int16_t absX, int16_t absY,
-                            const SolarData::Data& snap, uint16_t accent) {
+                            const SolarData::Data& snap, uint16_t accent, const String& labelOverride = String()) {
         t.drawRoundRect(0, 0, w, h, 4, accent);
         LayoutCheck::rect("Kachel-Rahmen", absX, absY, w, h);
 
@@ -253,7 +278,7 @@ namespace {
         t.setTextDatum(TC_DATUM);
         t.setTextColor(accent, TFT_BLACK);
         int16_t labelTopY = 8;
-        const char* label = I18n::t(I18n::Str::PAGE_BATTERY_TITLE);
+        String label = labelOverride.length() > 0 ? labelOverride : String(I18n::t(I18n::Str::PAGE_BATTERY_TITLE));
         t.drawString(label, (int16_t)(w / 2), labelTopY);
         t.setTextDatum(TL_DATUM);
         {
@@ -492,42 +517,60 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
         });
     }
 
+    // Refresh-Rueckmeldung (Auftrag "Fehler in der Refresh-Rueckmeldung")
+    // - erscheint NUR in der tatsaechlich angetippten Kachel
+    // (lastTappedTile), ersetzt dort NUR die Beschriftungszeile (Wert
+    // bleibt immer sichtbar, Punkt 2) und wird vorher gegen die
+    // Kachelbreite gemessen (Punkt 2, Kurzfassung bei Bedarf).
+    // Rueckgabewert von update() nur fuer "jetzt neu zeichnen" (hier
+    // bereits durch draw() implizit erfuellt) - die ANZEIGE-Entscheidung
+    // kommt aus feedbackState.active (siehe refresh_feedback_text.h,
+    // Auftrag "Rueckmeldung bleibt dauerhaft stehen").
+    feedbackState.update(snap);
+    tft.setTextSize(1); // fuer die Breitenmessung unten (Schrift explizit setzen)
+    bool showOnPower = feedbackState.active && lastTappedTile == 0;
+    bool showOnToday = feedbackState.active && lastTappedTile == 1;
+    bool showOnBattery = feedbackState.active && lastTappedTile == 2;
+    String powerLabelOverride = showOnPower ? RefreshFeedbackText::fitToWidth(tft, feedbackState.text, feedbackState.shortText, (int16_t)(L.power.w - 8)) : String();
+    String todayLabelOverride = showOnToday ? RefreshFeedbackText::fitToWidth(tft, feedbackState.text, feedbackState.shortText, (int16_t)(L.today.w - 8)) : String();
+    String batteryLabelOverride = showOnBattery ? RefreshFeedbackText::fitToWidth(tft, feedbackState.text, feedbackState.shortText, (int16_t)(L.battery.w - 8)) : String();
+
     char powerStr[16];
     const char* powerUnit = I18n::t(I18n::Str::POWER_UNIT_W);
     if (snap.powerValid) formatPower(snap.currentPowerW, powerStr, sizeof(powerStr), &powerUnit);
     else strncpy(powerStr, "--", sizeof(powerStr));
-    String powerSig = String(powerStr) + "|" + powerUnit + (snap.powerValid ? "1" : "0");
+    String powerSig = (showOnPower ? (String("F") + powerLabelOverride) : String()) + "|" + powerStr + "|" + powerUnit + (snap.powerValid ? "1" : "0");
     if (powerSig != lastPowerSig) {
         lastPowerSig = powerSig;
         RedrawDiag::log("Uebersicht-Leistung", "Inhalt geaendert");
         TileSprite::drawInto(L.power.x, L.power.y, L.power.w, L.power.h, [&](TFT_eSPI& t) {
             renderLabelValueTile(t, L.power.w, L.power.h, L.power.x, L.power.y,
-                                  I18n::t(I18n::Str::PAGE_POWER_TITLE), String(powerStr), powerUnit, snap.powerValid, accent);
+                                  I18n::t(I18n::Str::PAGE_POWER_TITLE), String(powerStr), powerUnit, snap.powerValid, accent, powerLabelOverride);
         });
     }
 
     char todayStr[16];
     if (yield.valid) formatDecimal(yield.todayKwh, 2, todayStr, sizeof(todayStr));
     else strncpy(todayStr, "--", sizeof(todayStr));
-    String todaySig = String(todayStr) + (yield.valid ? "1" : "0");
+    String todaySig = (showOnToday ? (String("F") + todayLabelOverride) : String()) + "|" + todayStr + (yield.valid ? "1" : "0");
     if (todaySig != lastTodaySig) {
         lastTodaySig = todaySig;
         RedrawDiag::log("Uebersicht-Ertrag", "Inhalt geaendert");
         TileSprite::drawInto(L.today.x, L.today.y, L.today.w, L.today.h, [&](TFT_eSPI& t) {
             renderLabelValueTile(t, L.today.w, L.today.h, L.today.x, L.today.y,
-                                  I18n::t(I18n::Str::YIELD_TILE_TODAY), String(todayStr), I18n::t(I18n::Str::KWH_UNIT), yield.valid, accent);
+                                  I18n::t(I18n::Str::YIELD_TILE_TODAY), String(todayStr), I18n::t(I18n::Str::KWH_UNIT), yield.valid, accent, todayLabelOverride);
         });
     }
 
     char batterySigBuf[8];
     if (snap.batteryValid) snprintf(batterySigBuf, sizeof(batterySigBuf), "%.0f", (double)snap.batterySocPercent);
     else strncpy(batterySigBuf, "--", sizeof(batterySigBuf));
-    String batterySig = String(batterySigBuf) + (snap.batteryValid ? "1" : "0");
+    String batterySig = (showOnBattery ? (String("F") + batteryLabelOverride) : String()) + "|" + batterySigBuf + (snap.batteryValid ? "1" : "0");
     if (batterySig != lastBatterySig) {
         lastBatterySig = batterySig;
         RedrawDiag::log("Uebersicht-Batterie", "Inhalt geaendert");
         TileSprite::drawInto(L.battery.x, L.battery.y, L.battery.w, L.battery.h, [&](TFT_eSPI& t) {
-            renderBatteryTile(t, L.battery.w, L.battery.h, L.battery.x, L.battery.y, snap, accent);
+            renderBatteryTile(t, L.battery.w, L.battery.h, L.battery.x, L.battery.y, snap, accent, batteryLabelOverride);
         });
     }
 
@@ -549,7 +592,8 @@ bool update() {
     bool solarChanged = snap.changeCounter != lastSeenSolarCounter;
     bool yieldChanged = yieldRev != lastSeenYieldRevision;
     bool weatherChanged = weatherCounter != lastSeenWeatherCounter;
-    bool changed = firstCheck || solarChanged || yieldChanged || weatherChanged;
+    bool feedbackActive = feedbackState.update(snap);
+    bool changed = firstCheck || solarChanged || yieldChanged || weatherChanged || feedbackActive;
     if (changed) {
         if (firstCheck) RedrawDiag::log("Uebersicht", "erster Aufruf");
         if (solarChanged) RedrawDiag::log("Uebersicht", "SolarData-Zaehler geaendert");
@@ -574,12 +618,26 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight) {
         else LocationScreen::run();
         return true;
     }
-    // Tippen auf Leistung/Ertrag/Batterie loest jetzt den manuellen
-    // Refresh aus (Auftrag "manueller Refresh") statt wie zuvor auf die
-    // jeweilige Wisch-Seite zu springen - das war nur ein Platzhalter.
-    // Navigation zu diesen Seiten laeuft weiterhin ganz normal per
-    // Wischen. Wetter-Kachel bleibt davon unberuehrt (siehe oben).
-    if (L.power.contains(x, y) || L.today.contains(x, y) || L.battery.contains(x, y)) {
+    // Tippen auf Leistung/Ertrag/Batterie loest den manuellen Refresh aus
+    // (Auftrag "manueller Refresh") statt wie urspruenglich auf die
+    // jeweilige Wisch-Seite zu springen. Navigation zu diesen Seiten
+    // laeuft weiterhin ganz normal per Wischen. Wetter-Kachel bleibt
+    // davon unberuehrt (siehe oben). lastTappedTile wird VOR dem Senden
+    // gesetzt, damit die Rueckmeldung (naechster draw()-Aufruf) garantiert
+    // nur in DIESER Kachel erscheint (Auftrag "Fehler in der Refresh-
+    // Rueckmeldung", Punkt 1).
+    if (L.power.contains(x, y)) {
+        lastTappedTile = 0;
+        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+        return true;
+    }
+    if (L.today.contains(x, y)) {
+        lastTappedTile = 1;
+        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+        return true;
+    }
+    if (L.battery.contains(x, y)) {
+        lastTappedTile = 2;
         FetchTask::sendCommand(FetchTask::Command::RefreshNow);
         return true;
     }

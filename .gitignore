@@ -22,6 +22,13 @@ History/
 # lokal, nie committen.
 /test/
 
+# Mehrtaegige Portal-Messung (Auftrag) - rein lokales Diagnosewerkzeug,
+# bleibt unversioniert. Der Aufruf in main.cpp ist entsprechend per
+# #ifdef PORTAL_DAY_PROBE (siehe config.h) abgesichert, damit ein
+# frischer Checkout ohne diese Dateien trotzdem baut.
+src/portal_day_probe.h
+src/portal_day_probe.cpp
+
 # Lokale Kopien/Sicherungen der SD-Karte - koennen echte Zugangsdaten
 # enthalten, nie committen. Greift strukturell (jeder Ordner, der direkt
 # eine SolarGuardian- oder SolarHistory-Unterordner enthaelt, egal wie

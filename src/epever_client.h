@@ -32,6 +32,9 @@ namespace EpeverClient {
         // PV-Spannung/-Strom (Seite "Leistung") - laufen mit kleinem
         // sampleLimit in derselben Anfrage mit, siehe CLAUDE.md.
         BatteryPoint pvVoltage, pvCurrent;
+        // Tages-Extremwerte der Batteriespannung (Auftrag "Max/Min-
+        // Spannungskacheln") - laufen ebenfalls in derselben Anfrage mit.
+        BatteryPoint voltageMax, voltageMin;
     };
 
     // deviceNo ist keine geheime Information (Geraete-Seriennummer).

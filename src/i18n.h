@@ -80,6 +80,11 @@ namespace I18n {
         KWH_UNIT,
         STATUS_UPDATED_FMT,
         STATUS_STALE_SUFFIX,
+        // Alters-Anzeige statt des blossen Worts "veraltet" (Auftrag
+        // "veraltet nach erfolgreichem Refresh") - zeigt das tatsaechliche
+        // Alter des massgeblichen Hauptwerts (Leistung/Batterie), nicht
+        // mehr nur ein pauschales Wort.
+        PORTAL_DATA_AGE_FMT,
         STATUS_LOGGING_IN,
         STATUS_LOGIN_FAILED,
         STATUS_NETWORK_ERROR,
@@ -105,6 +110,22 @@ namespace I18n {
         NEXT_FETCH_FMT,
         BATTERY_MAX_VOLTAGE_LABEL,
         BATTERY_MIN_VOLTAGE_LABEL,
+        REFRESH_WORKING,
+        REFRESH_DONE,
+        REFRESH_NO_CHANGE,
+        REFRESH_LOCKED_NIGHT_FMT,
+        REFRESH_NO_WIFI,
+        REFRESH_BUSY,
+        REFRESH_COOLDOWN,
+        // Kurzfassungen fuer schmale Kachel-Beschriftungszeilen (Auftrag
+        // "Fehler in der Refresh-Rueckmeldung")
+        REFRESH_WORKING_SHORT,
+        REFRESH_DONE_SHORT,
+        REFRESH_NO_CHANGE_SHORT,
+        REFRESH_NO_WIFI_SHORT,
+        REFRESH_BUSY_SHORT,
+        REFRESH_COOLDOWN_SHORT,
+        REFRESH_LOCKED_NIGHT_SHORT_FMT,
 
         // Wochenansicht (Wetterkachel antippen)
         WEEK_DAY_TOMORROW,
@@ -230,6 +251,14 @@ namespace I18n {
         HELP_BODY_PAGE_DAILY,
         DAILY_CURVE_MAX_LABEL,
         DAILY_CURVE_EMPTY,
+
+        // Seite "PV-Status" (Auftrag "Neuer Bildschirm PV")
+        PAGE_PV_STATUS_TITLE,
+        PV_VOLTAGE_LABEL,
+        PV_CURRENT_LABEL,
+        PV_POWER_LABEL,
+        PV_MAX_TODAY_LABEL,
+        HELP_BODY_PAGE_PV_STATUS,
 
         COUNT
     };

@@ -99,6 +99,19 @@ namespace {
     bool lastDrawnHeaderNightMode = false;
     bool lastDrawnHeaderNightModeKnown = false;
 
+    // Auftrag "Flackern waehrend der Rueckmeldung" (Teil b, Fusszone) -
+    // gleiches Prinzip wie beim Kopfzeilen-Fix oben: drawDots()/der
+    // "?"-Knopf werden nur noch tatsaechlich NEU gezeichnet, wenn sich
+    // Seite oder Akzentfarbe seit dem letzten Mal wirklich geaendert
+    // haben - unabhaengig davon, WARUM drawBody(false) gerade aufgerufen
+    // wurde (z.B. nur wegen einer Kachel-Rueckmeldung). Das macht die
+    // Fusszone robust gegen jede Form von zu haeufigem drawBody(false),
+    // nicht nur gegen die inzwischen behobene Ursache in
+    // refresh_feedback_text.h.
+    uint8_t lastDrawnDotsPage = 0xFF;
+    uint16_t lastDrawnDotsAccent = 0xFFFF;
+    uint16_t lastDrawnHelpAccent = 0xFFFF;
+
     // Verstecktes Zusatzfeature (siehe easter_egg.h) - Rueckmeldung per
     // Blinken der Uhrzeit, zeitgesteuert statt mit delay(). Feste,
     // kraeftige Farben (nicht an die Systemfarbe gekoppelt, Auftrag).
@@ -150,7 +163,13 @@ namespace {
     Rect moonIconZone() {
         constexpr int16_t R = 6;
         int16_t cx = (int16_t)(MENU_BTN.x + MENU_BTN.w + 12);
-        int16_t cy = HEADER_BASELINE_Y - 2;
+        // Unterkante der Sichel (cy+R) bewusst gleich mit der Unterkante
+        // des WLAN-Balkensymbols (= HEADER_BASELINE_Y, siehe drawHeader()/
+        // wifiIconTapZone()) - vorher stand die Sichel 4px zu tief (Auftrag
+        // "Mondsichel ausrichten"). Durchmesser (2*R=12) entspricht bereits
+        // der Hoehe des hoechsten WLAN-Balkens, daher keine Groessenaenderung
+        // noetig.
+        int16_t cy = (int16_t)(HEADER_BASELINE_Y - R);
         return {(int16_t)(cx - R), (int16_t)(cy - R), (int16_t)(2 * R), (int16_t)(2 * R)};
     }
 
@@ -240,16 +259,39 @@ namespace {
         });
     }
 
-    void drawDots() {
+    // force=true: immer neu zeichnen (Seitenwechsel/erste Anzeige - der
+    // Bereich wurde gerade schwarz gewischt oder zeigt noch die falsche
+    // Seite). force=false: nur neu zeichnen, wenn sich Seite ODER
+    // Akzentfarbe seit dem letzten tatsaechlichen Zeichnen geaendert
+    // haben - Auftrag "Flackern waehrend der Rueckmeldung" (Teil b): die
+    // Fusszone darf NIE nur wegen einer Kachel-Rueckmeldung (die den Rest
+    // der Seite unveraendert laesst) neu gezeichnet werden, da genau das
+    // vorher ein sichtbares Flackern verursacht hat (direktes
+    // tft.fillRect() auf den echten Bildschirm, ohne Off-Screen-Puffer,
+    // bei JEDEM drawBody(false)-Aufruf). Die LayoutCheck-Registrierung
+    // laeuft trotzdem immer, unabhaengig vom tatsaechlichen Zeichnen -
+    // die Rechtecke selbst aendern sich zwischen Aufrufen nicht.
+    void drawDots(bool force) {
         uint16_t accent = Display::systemColor();
-        tft.fillRect(0, DOTS_Y, Config::SCREEN_WIDTH, DOTS_H, TFT_BLACK);
         uint8_t n = Pages::count();
         constexpr int16_t DOT_R = 3;
         constexpr int16_t DOT_GAP = 10;
         int16_t totalW = (int16_t)((n - 1) * DOT_GAP);
-        int16_t x = (int16_t)(Config::SCREEN_WIDTH / 2 - totalW / 2);
+        int16_t firstX = (int16_t)(Config::SCREEN_WIDTH / 2 - totalW / 2);
         int16_t y = (int16_t)(DOTS_Y + DOTS_H / 2);
-        int16_t firstX = x;
+        int16_t lastX = (int16_t)(firstX + (n > 0 ? (n - 1) * DOT_GAP : 0));
+        // Tatsaechliche Ausdehnung der Punktreihe melden (nicht die volle
+        // Bildschirmbreite) - sie liegt mittig und beruehrt den "?"-Knopf
+        // am rechten Rand dadurch nie (siehe CLAUDE.md Layout-Regel).
+        LayoutCheck::rect("Seitenpunkte", (int16_t)(firstX - DOT_R), (int16_t)(y - DOT_R),
+                           (int16_t)(lastX - firstX + 2 * DOT_R), (int16_t)(2 * DOT_R));
+
+        if (!force && currentPage == lastDrawnDotsPage && accent == lastDrawnDotsAccent) return;
+        lastDrawnDotsPage = currentPage;
+        lastDrawnDotsAccent = accent;
+
+        tft.fillRect(0, DOTS_Y, Config::SCREEN_WIDTH, DOTS_H, TFT_BLACK);
+        int16_t x = firstX;
         for (uint8_t i = 0; i < n; i++) {
             if (i == currentPage) {
                 tft.fillCircle(x, y, DOT_R, accent);
@@ -258,12 +300,6 @@ namespace {
             }
             x += DOT_GAP;
         }
-        // Tatsaechliche Ausdehnung der Punktreihe melden (nicht die volle
-        // Bildschirmbreite) - sie liegt mittig und beruehrt den "?"-Knopf
-        // am rechten Rand dadurch nie (siehe CLAUDE.md Layout-Regel).
-        int16_t lastX = (int16_t)(x - DOT_GAP);
-        LayoutCheck::rect("Seitenpunkte", (int16_t)(firstX - DOT_R), (int16_t)(y - DOT_R),
-                           (int16_t)(lastX - firstX + 2 * DOT_R), (int16_t)(2 * DOT_R));
     }
 
     // fullClear=true: kompletter schwarzer Wisch vor dem Zeichnen - fuer
@@ -286,11 +322,21 @@ namespace {
         // CLAUDE.md Layout-Regel.
         LayoutCheck::begin(I18n::t(Pages::get(currentPage).titleKey));
         Pages::get(currentPage).draw(BODY_TOP, BODY_H, fullClear);
-        drawDots();
+        drawDots(fullClear);
         // Als letztes zeichnen - der Knopf reicht in die Punkte-Zeile
         // hinein (siehe HELP_BTN-Kommentar), darf also nicht von
-        // drawDots() wieder uebermalt werden.
-        HelpPopup::drawButton(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
+        // drawDots() wieder uebermalt werden. Genau wie bei drawDots():
+        // nur tatsaechlich neu zeichnen, wenn sich die Akzentfarbe
+        // geaendert hat oder die Seite komplett gewischt wurde - nie nur
+        // wegen einer Kachel-Rueckmeldung (Auftrag "Flackern waehrend der
+        // Rueckmeldung", Teil b).
+        {
+            uint16_t accent = Display::systemColor();
+            if (fullClear || accent != lastDrawnHelpAccent) {
+                lastDrawnHelpAccent = accent;
+                HelpPopup::drawButton(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
+            }
+        }
         LayoutCheck::rect("Hilfe-Knopf", HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
         LayoutCheck::finish();
 

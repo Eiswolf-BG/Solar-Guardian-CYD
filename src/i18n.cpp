@@ -75,6 +75,7 @@ namespace {
         "kWh",
         "Aktualisiert %02d:%02d",
         "veraltet",
+        "Portaldaten %d Min alt",
         "Anmeldung läuft...",
         "Anmeldung fehlgeschlagen",
         "Keine Verbindung",
@@ -100,6 +101,22 @@ namespace {
         "Nächste Abfrage: %s Uhr",
         "Max",
         "Min",
+        "Aktualisiere...",
+        "Aktualisiert",
+        "Keine neuen Daten",
+        "Aktualisierung ab %02d:%02d Uhr wieder möglich",
+        "Kein WLAN",
+        "Abruf läuft",
+        "Bitte kurz warten",
+
+        // Refresh-Rueckmeldung, Kurzfassungen fuer schmale Kacheln
+        "Lade...",
+        "Fertig",
+        "Gleich",
+        "WLAN?",
+        "Läuft...",
+        "Warten...",
+        "Ab %02d:%02d",
 
         // Wochenansicht (Wetterkachel antippen)
         "Morgen",
@@ -225,6 +242,14 @@ namespace {
         "Zeigt die Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr sowie den heutigen Höchstwert. Die Kurve bleibt abends stehen, bis um 05:00 Uhr der nächste Tag beginnt.",
         "Max:",
         "Noch keine Werte für heute",
+
+        // Seite "PV-Status"
+        "PV-Status",
+        "PV-Spannung",
+        "PV-Strom",
+        "PV-Leistung",
+        "Max heute",
+        "Zeigt Spannung, Strom und Leistung der Solarmodule sowie den heutigen Leistungs-Höchstwert (derselbe Wert wie im Tagesverlauf). Die Werte kommen vom Solarregler über das Solar-Guardian-Portal und aktualisieren sich alle 5 Minuten. Kacheln antippen aktualisiert sofort. Nachts ist 0 W normal.",
     };
 
     constexpr const char* EN[] = {
@@ -296,6 +321,7 @@ namespace {
         "kWh",
         "Updated %02d:%02d",
         "stale",
+        "Portal data %d min old",
         "Signing in...",
         "Sign-in failed",
         "No connection",
@@ -321,6 +347,22 @@ namespace {
         "Next update: %s",
         "Max",
         "Min",
+        "Refreshing...",
+        "Updated",
+        "No new data",
+        "Refresh available again from %02d:%02d",
+        "No WiFi",
+        "Fetch in progress",
+        "Please wait a moment",
+
+        // Refresh feedback, short versions for narrow tiles
+        "Loading...",
+        "Done",
+        "Same",
+        "No WiFi",
+        "Busy...",
+        "Wait...",
+        "From %02d:%02d",
 
         // Week view (tap the weather tile)
         "Tomorrow",
@@ -446,6 +488,14 @@ namespace {
         "Shows the power curve of the whole day from 05:00 to 22:00, plus today's peak value. The curve stays visible in the evening until the next day starts at 05:00.",
         "Max:",
         "No data yet for today",
+
+        // "PV status" page
+        "PV status",
+        "PV voltage",
+        "PV current",
+        "PV power",
+        "Max today",
+        "Shows voltage, current, and power of the solar panels, plus today's power peak (the same value as on the Daily curve page). The values come from the solar controller via the Solar Guardian portal and refresh every 5 minutes. Tap a tile to refresh immediately. 0 W at night is normal.",
     };
 
     static_assert(sizeof(DE) / sizeof(DE[0]) == (size_t)Str::COUNT, "DE table size mismatch - add/remove an entry to match enum Str");

@@ -20,6 +20,13 @@ vorausgesetzt werden.
 - Wir bauen ein Feature nach dem anderen und warten nach jedem Feature auf
   Alex' OK, bevor das nächste angefangen wird.
 - Bei Unklarheiten nachfragen statt zu raten.
+- Flashen auf dem Testgerät ist nach erfolgreichem Build und bestandenen
+  nativen Tests dauerhaft erlaubt, ohne vorher zu fragen - nur melden, was
+  und wann geflasht wurde. Eine zeitliche Flash-Sperre gilt ausschließlich,
+  wenn Alex sie in der jeweiligen Nachricht ausdrücklich für einen
+  genannten Zeitraum verlangt, und endet automatisch mit diesem Zeitraum -
+  nicht als Dauerregel merken. Commit, Tag und Push weiterhin nur auf
+  ausdrücklichen Auftrag (gilt nicht für Releases).
 
 ## Pflichtregeln
 
@@ -545,7 +552,12 @@ Popups, neue wie alte):**
 - **Feste Regel (Auftrag "WebUI erweitern"):** Die WebUI wird IMMER um
   alles erweitert, was auch das Gerät bekommt und solartechnisch relevant
   ist (neue Wert-Screens, Diagramme, Übersichten) - Standard, nicht
-  optional, gilt auch für künftige neue Seiten/Features. NICHT gespiegelt
+  optional, gilt auch für künftige neue Seiten/Features. Jede neue
+  CYD-Wisch-Seite bekommt dafür IMMER einen eigenen Reiter in der WebUI,
+  OHNE Ausnahme - auch wenn ihre Werte bereits in einem anderen Reiter
+  stehen (z. B. "PV-Status": eigener Reiter direkt nach "Batterie", obwohl
+  Leistung/Spannung/Strom auch im Reiter "Leistung" zu sehen sind). NICHT
+  gespiegelt
   werden Einstellungen und Menüs (Konto, Netzwerke, Farbe, Sprache,
   Helligkeit, Zurücksetzen ...) - die WebUI bleibt rein lesend. **Eine
   Ausnahme (Auftrag "WebUI-Reiter Daten"):** der Reiter "Daten"
@@ -1065,6 +1077,33 @@ Popups, neue wie alte):**
       msSinceLastBeat()`, nicht-blockierend) und schreibt im Ernstfall
       selbst (wie ohnehin schon ueblich) auf die SD-Karte.
 
+23. **Seite "PV-Status"** (`pv_status_page.h/.cpp`, Auftrag "Neuer
+    Bildschirm PV"): letzte/7. Wisch-Seite, direkt nach "Batterie"
+    (Reihenfolge der vorherigen 6 Seiten unveraendert).
+    2x2-Kacheln PV-Spannung/PV-Strom/PV-Leistung/heutiges
+    Leistungsmaximum, TILE_H 50 wie die anderen 2x2-Kachelseiten.
+    Quellen: PV-Spannung/PV-Strom laufen bereits in der bestehenden
+    Batterie-Abfrage mit (`EpeverDatapoints::PV_VOLTAGE/PV_CURRENT`,
+    `SolarData::pvVoltage/pvCurrent`), PV-Leistung ist exakt
+    `SolarData::currentPowerW` - DIESELBE Quelle wie die Leistungs-
+    anzeige auf der Uebersicht und der Seite "Leistung" (keine eigene
+    Abfrage, keine Abweichung zwischen den Anzeigen moeglich). Das
+    heutige Leistungsmaximum ist KEIN Portalwert, sondern wird genau
+    wie die "Max:"-Zeile im Tagesverlauf aus `SolarData::dailyCurve[]`
+    berechnet (gleiche Quelle, in `pv_status_page.cpp` und
+    `web_server.cpp` je lokal dupliziert statt geteilt, siehe
+    Code-Stil) - setzt sich damit automatisch zum Tagesfenster-Beginn
+    (04:30) zurueck und wird nach einem Neustart ueber
+    `fetch_task.cpp::runDailyCurveBackfillIfNeeded()` aus dem Portal
+    neu aufgebaut (keine eigene Persistenz noetig). Refresh-
+    Rueckmeldung wie bei den anderen Kachelseiten (`RefreshFeedbackText::
+    FeedbackState`), aber bewusst NUR in der tatsaechlich angetippten
+    Kachel sichtbar, nicht in allen vier gleichzeitig. Eigener WebUI-
+    Reiter "PV-Status" direkt nach "Batterie" (vor "Verlauf") - zeigt
+    dieselben 4 Werte wie auf dem Geraet, auch wenn PV-Spannung/-Strom/
+    -Leistung zusaetzlich im Reiter "Leistung" zu sehen sind (keine
+    Ausnahme von der "jede Seite bekommt einen Reiter"-Regel).
+
 ## Code-Struktur
 
 - `config.h` — alle Konstanten (Pins, Größen, Zeiten, Farbpalette, API-URLs)
@@ -1128,8 +1167,11 @@ Popups, neue wie alte):**
   (`wifi_select_screen`/`credentials_screen`/`serial_number_screen`/
   `location_screen` werden auch von Netzwerke/Konto/Menü wiederverwendet)
 - `pages.h/.cpp`, `home_page.h/.cpp`, `power_page.h/.cpp`,
-  `yield_page.h/.cpp`, `years_page.h/.cpp`, `battery_page.h/.cpp` — die
-  per Wisch-Geste erreichbaren Hauptseiten (`home_page` ist Seite 1)
+  `daily_curve_page.h/.cpp`, `yield_page.h/.cpp`, `years_page.h/.cpp`,
+  `battery_page.h/.cpp`, `pv_status_page.h/.cpp` — die per Wisch-Geste
+  erreichbaren Hauptseiten (`home_page` ist Seite 1, `pv_status_page`
+  ist seit Auftrag "Neuer Bildschirm PV" die letzte/7. Seite, direkt
+  nach `battery_page`)
 - `page_nav.h/.cpp` — schmaler Umweg, damit eine Seite (z.B. `home_page`)
   zu einer anderen Wisch-Seite springen kann
 - `week_view_screen.h/.cpp` — Wochenansicht (kein Hauptmenüpunkt, nur

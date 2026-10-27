@@ -37,6 +37,24 @@ namespace {
     volatile bool pausedAck = false;
     bool manualDisconnect = false;
 
+    // Plausibilitaetspruefung eines Epoch-Werts (gleiches Prinzip wie
+    // yield_ledger.cpp's Datumsschutz: Jahr < 2024 ablehnen) - robuster
+    // als sich auf getLocalTime(&t, 5) (5ms-Timeout, kann spontan/
+    // voruebergehend false liefern, auch WEIT nach echter NTP-
+    // Synchronisation - haengt an Systemlast, kein verlaesslicher
+    // "Zeit noch nicht synchron"-Indikator) zu verlassen, um EINMALIG
+    // einen Zeitstempel (z.B. lastFetchAttemptEpoch) zu uebernehmen.
+    // Live beobachtet: ein auf hasValidTime gestuetzter Schutz blieb
+    // teils minutenlang im Fallback haengen, obwohl die Uhr laengst
+    // korrekt lief.
+    bool epochPlausible(time_t t) {
+        if (t <= 0) return false;
+        struct tm tmCheck;
+        localtime_r(&t, &tmCheck);
+        int year = tmCheck.tm_year + 1900;
+        return year >= 2024 && year <= 2099;
+    }
+
     // Portal-Zustand - ausschliesslich vom Fetch-Task selbst gelesen und
     // geschrieben (Core 0). Die Zugangsdaten kommen NUR ueber
     // AccountBridge (Mutex-Kopie von Core 1), niemals per direktem Zugriff
@@ -58,6 +76,20 @@ namespace {
     bool needsLogin = false;
     uint8_t consecutiveFailures = 0;
     uint32_t lastFetchAttemptMs = 0;
+    // Wall-Clock-Pendant zu lastFetchAttemptMs (Auftrag "Diagnosezeilen
+    // fuer die naechste Nacht" deckte auf: die bisherige Berechnung von
+    // candidateNextAt mischte millis()- und time()-Domaene
+    // (nowEpoch + msUntilNext/1000) - die beiden Uhren laufen zwar
+    // gleich schnell, werden aber zu leicht unterschiedlichen Zeitpunkten
+    // gelesen, wodurch die runden Sekunden beim Teilen/Addieren fast
+    // jeden Tick um +-1s kippen konnten. Das unterlief die eigentlich
+    // vorgesehene Anti-Flacker-Bremse (siehe lastSentNextFetchAt unten) -
+    // candidateNextAt aenderte sich dadurch faktisch fast jeden Tick,
+    // nicht nur bei einer echten Aenderung. Mit lastFetchAttemptEpoch
+    // (reine time()-Domaene) wird candidateNextAt jetzt komplett ohne
+    // erneuten Bezug auf "jetzt" berechnet - stabil, bis der naechste
+    // ECHTE Abruf stattfindet.
+    time_t lastFetchAttemptEpoch = 0;
     uint32_t lastEquipmentListAttemptMs = 0; // Drosselung, siehe tryResolveEquipmentList()
     time_t lastSentNextFetchAt = -1; // siehe runFetchCycle()-Aufrufstelle, Anti-Flacker-Bremse
     // Tagesfenster/Nachtmodus (Auftrag): Datum des Abends, fuer den die
@@ -76,6 +108,16 @@ namespace {
 #endif
     uint32_t lastManualRefreshMs = 0;
     bool forceFetchNow = false;
+    // Auftrag "Refresh-Regeln und Rueckmeldung": fetchInProgress ist in
+    // diesem einfaedigen Ablauf praktisch nie waehrend handleCommand()
+    // beobachtbar (Befehle werden nur VOR einem Abruf abgearbeitet, nie
+    // waehrenddessen) - bleibt trotzdem gesetzt, fuer den Fall, dass sich
+    // das spaeter aendert, und zur Dokumentation. manualRefreshPending
+    // merkt sich, ob der GERADE LAUFENDE Abruf durch einen manuellen Tipp
+    // ausgeloest wurde (fuer die Done/Keine-neuen-Daten-Rueckmeldung
+    // danach).
+    bool fetchInProgress = false;
+    bool manualRefreshPending = false;
     bool firstFetchHeapLogged = false;
     bool firstBatteryHeapLogged = false;
     bool firstPowerCurveHeapLogged = false;
@@ -141,6 +183,7 @@ namespace {
         needsLogin = hasAccount;
         consecutiveFailures = 0;
         lastFetchAttemptMs = 0; // beim naechsten Tick (mit WLAN) sofort faellig
+        lastFetchAttemptEpoch = 0;
         SolarData::FetchStatus initialStatus;
         if (!hasAccount) initialStatus = SolarData::FetchStatus::NoAccount;
         else if (!hasDeviceNo) initialStatus = SolarData::FetchStatus::NoDeviceNo;
@@ -244,6 +287,12 @@ namespace {
                                result.temperature.valid ? result.temperature.value : 0.0f,
                                measuredAt);
 
+        // Max./Min.-Spannung (Auftrag) - nur bei BEIDEN gueltigen Werten
+        // uebernehmen, sonst bleiben die zuletzt gueltigen Werte stehen.
+        if (result.voltageMax.valid && result.voltageMin.valid) {
+            SolarData::setBatteryVoltageExtremes(result.voltageMax.value, result.voltageMin.value);
+        }
+
         if (result.chargeStatus.valid) {
             bool changed = !haveLastChargeStatus ||
                            lastChargeStatusWasText != result.chargeStatus.isText ||
@@ -285,6 +334,21 @@ namespace {
         if (result.pvVoltage.valid || result.pvCurrent.valid) {
             time_t pvMeasuredAt = result.pvVoltage.valid ? result.pvVoltage.time
                                                            : (result.pvCurrent.valid ? result.pvCurrent.time : time(nullptr));
+#ifdef NIGHT_MODE_DIAG_TEST
+            // Auftrag "veraltet erscheint obwohl Werte aktuell sind" -
+            // pvMeasuredAt ist der vom PORTAL gemeldete Messzeitpunkt
+            // dieses Datenpunkts (result.pvVoltage.time), NICHT der
+            // Zeitpunkt UNSERES Abrufs - falls das Portal selbst einen
+            // aelteren Zeitstempel fuer PV-Spannung/-Strom liefert als
+            // fuer andere Werte (z.B. weil der Regler diese Register
+            // seltener aktualisiert), waere "veraltet" trotz frischem
+            // eigenen Abruf korrekt und kein Fehler. Diese Zeile macht
+            // das Alter direkt sichtbar.
+            long ageSec = (long)(time(nullptr) - pvMeasuredAt);
+            struct tm pt; localtime_r(&pvMeasuredAt, &pt);
+            Serial.printf("[fetch] PV-Messzeitpunkt (laut Portal): %02d:%02d, Alter=%lds\n",
+                          pt.tm_hour, pt.tm_min, ageSec);
+#endif
             SolarData::setPv(result.pvVoltage.valid ? result.pvVoltage.value : 0.0f,
                               result.pvCurrent.valid ? result.pvCurrent.value : 0.0f,
                               pvMeasuredAt);
@@ -658,10 +722,30 @@ namespace {
                 // spaetere Features verdrahtet.
                 break;
             case Command::RefreshNow: {
+                // Auftrag "Refresh-Regeln und Rueckmeldung": Reihenfolge
+                // der Pruefungen wie vorgegeben - Tagesfenster/Nachtmodus
+                // vor WLAN vor laufendem Abruf vor Mindestabstand. NIE
+                // forceFetchNow setzen, wenn gesperrt - ein gesperrter
+                // Tipp wird nicht vorgemerkt und faellt nicht
+                // nachtraeglich beim naechsten erlaubten Zeitpunkt an
+                // (vorheriges Verhalten, siehe Auftrag-Korrektur).
+                if (!hasAccount) break; // kein Konto - wie bisher stillschweigend ignoriert
                 uint32_t now = millis();
-                if (hasAccount && now - lastManualRefreshMs >= Config::EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS) {
+                struct tm nowTm;
+                bool hasValidTime = getLocalTime(&nowTm, 5);
+                if (!hasValidTime || !DayWindow::isDayWindow(nowTm)) {
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::LockedNight);
+                } else if (WiFi.status() != WL_CONNECTED) {
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoWifi);
+                } else if (fetchInProgress) {
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Busy);
+                } else if (now - lastManualRefreshMs < Config::EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS) {
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Cooldown);
+                } else {
                     lastManualRefreshMs = now;
                     forceFetchNow = true;
+                    manualRefreshPending = true;
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Working);
                 }
                 break;
             }
@@ -756,12 +840,58 @@ namespace {
                     bool due = forceFetchNow || justConnected || lastFetchAttemptMs == 0 ||
                                (now - lastFetchAttemptMs >= interval);
                     if (due) {
+#ifdef NIGHT_MODE_DIAG_TEST
+                        // Auftrag "Diagnosezeilen fuer die naechste Nacht" -
+                        // welches Intervall (in Sekunden) diesen Abruf
+                        // ausgeloest hat, inkl. Grund (manuell/gerade erst
+                        // verbunden/Intervall abgelaufen).
+                        const char* dueReason = forceFetchNow ? "manueller Refresh"
+                                                : justConnected ? "WLAN gerade verbunden"
+                                                : lastFetchAttemptMs == 0 ? "noch nie/Neustart"
+                                                : "Intervall abgelaufen";
+                        Serial.printf("[fetch] Abruf startet - Intervall=%lus, Grund=%s\n",
+                                      (unsigned long)(interval / 1000), dueReason);
+#endif
                         lastFetchAttemptMs = now;
+                        // NUR bei plausiblem Datum uebernehmen (siehe
+                        // epochPlausible() oben) - sonst (z.B. ein Abruf
+                        // in den ersten Sekunden nach dem Boot, bevor NTP
+                        // synchronisiert ist) wuerde ein winziger/
+                        // unplausibler Epoch-Wert (nahe 1970) haengen
+                        // bleiben und "Naechste Abfrage" bis zum naechsten
+                        // echten Abruf (5 Minuten) einen kompletten
+                        // Unsinnswert wie "01:05" anzeigen - live am
+                        // Geraet beobachtet, direkt nach dem Flashen.
+                        // BEWUSST nicht auf hasValidTime gestuetzt (5ms-
+                        // Timeout, kann auch lange nach echter NTP-
+                        // Synchronisation spontan/voruebergehend false
+                        // liefern - ebenfalls live beobachtet, blieb dann
+                        // minutenlang im "--:--"/nowEpoch-Fallback haengen
+                        // statt den stabilen Wert zu nutzen).
+                        // candidateNextAt faellt bei Unplausibilitaet
+                        // unten auf den bestehenden "--:--"-Pfad zurueck.
+                        if (epochPlausible(nowEpoch)) lastFetchAttemptEpoch = nowEpoch;
+                        bool wasManualRefresh = manualRefreshPending;
                         forceFetchNow = false;
+                        manualRefreshPending = false;
+                        fetchInProgress = true;
+                        uint32_t changeCounterBefore = wasManualRefresh ? SolarData::snapshot().changeCounter : 0;
                         if (hasDeviceNo) {
                             runFetchCycle();
                         } else {
                             runDeviceNoOnlyCycle();
+                        }
+                        fetchInProgress = false;
+                        // Rueckmeldung fuer einen manuellen Refresh-Tipp
+                        // (Auftrag) - "Done" nur, wenn sich dabei
+                        // TATSAECHLICH ein angezeigter Wert geaendert hat
+                        // (changeCounter steigt nur bei echter Aenderung,
+                        // siehe SolarData::mutate()), sonst "NoChange".
+                        if (wasManualRefresh) {
+                            uint32_t changeCounterAfter = SolarData::snapshot().changeCounter;
+                            SolarData::setRefreshFeedback(changeCounterAfter != changeCounterBefore
+                                ? SolarData::RefreshFeedback::Done
+                                : SolarData::RefreshFeedback::NoChange);
                         }
                         // consecutiveFailures==0 nach dem Versuch heisst
                         // "erfolgreich" (jeder Fehlschlag zaehlt ihn hoch,
@@ -807,9 +937,22 @@ namespace {
                                            ? Config::EPEVER_RETRY_INTERVAL_MS
                                            : Config::EPEVER_FETCH_INTERVAL_MS;
                         }
-                        int32_t msUntilNext = (int32_t)(lastFetchAttemptMs + nextInterval - now);
-                        if (msUntilNext < 0) msUntilNext = 0;
-                        candidateNextAt = nowEpoch + (time_t)(msUntilNext / 1000);
+                        // Komplett in der time()-Domaene gerechnet (siehe
+                        // lastFetchAttemptEpoch-Kommentar oben) - haengt
+                        // NICHT mehr von "jetzt" (now/nowEpoch) ab, bleibt
+                        // also zwischen zwei echten Abrufen vollkommen
+                        // stabil, keine +-1s-Rundungsjitter mehr moeglich.
+                        if (lastFetchAttemptEpoch > 0) {
+                            candidateNextAt = lastFetchAttemptEpoch + (time_t)(nextInterval / 1000);
+                        } else if (epochPlausible(nowEpoch)) {
+                            candidateNextAt = nowEpoch + (time_t)(nextInterval / 1000);
+                        } else {
+                            // Weder ein frueherer gueltiger Abruf noch
+                            // aktuell gueltige NTP-Zeit - lieber "--:--"
+                            // zeigen (candidateNextAt<=0, siehe Anzeige-
+                            // Seiten) als einen erfundenen Unsinnswert.
+                            candidateNextAt = 0;
+                        }
                     }
                     // NUR bei echter Aenderung schreiben - SolarData::
                     // setNextFetchAt() erhoeht IMMER changeCounter, auch
@@ -821,6 +964,22 @@ namespace {
                     if (candidateNextAt != lastSentNextFetchAt) {
                         lastSentNextFetchAt = candidateNextAt;
                         SolarData::setNextFetchAt(candidateNextAt);
+#ifdef NIGHT_MODE_DIAG_TEST
+                        // Auftrag "Diagnosezeilen fuer die naechste Nacht" -
+                        // Planung des naechsten Abrufs mit Grund, besonders
+                        // um 04:30 wichtig ("Tagesfenster beginnt...").
+                        char nextHhmm[6] = "--:--";
+                        if (candidateNextAt > 0) {
+                            struct tm nt; localtime_r(&candidateNextAt, &nt);
+                            snprintf(nextHhmm, sizeof(nextHhmm), "%02d:%02d", nt.tm_hour, nt.tm_min);
+                        }
+                        const char* reason = !allowFetch ? "Nachtsperre/Abschluss erledigt - Tagesbeginn"
+                                              : inFinalQueryWindow ? "Abschlussfenster-Wiederholung"
+                                              : (consecutiveFailures >= 1 && consecutiveFailures < Config::EPEVER_MAX_SHORT_RETRIES) ? "Kurzfehler-Wiederholung"
+                                              : "normaler Takt";
+                        long inSec = candidateNextAt > 0 ? (long)(candidateNextAt - nowEpoch) : -1;
+                        Serial.printf("[fetch] Naechster Abruf geplant: %s (in %lds, Grund: %s)\n", nextHhmm, inSec, reason);
+#endif
                     }
                 }
             }
@@ -880,9 +1039,20 @@ namespace {
             uint32_t now = millis();
             if (now - lastHeapLogMs >= HEAP_LOG_INTERVAL_MS) {
                 lastHeapLogMs = now;
+#ifdef NIGHT_MODE_DIAG_TEST
+                // Auftrag "Diagnosezeilen fuer die naechste Nacht" -
+                // Laufzeit seit dem letzten Start, um einen Neustart auch
+                // OHNE sichtbaren Bootbanner/logResetReason()-Treffer im
+                // Mitschnitt an einem ploetzlich kleinen uptimeSec-Wert
+                // erkennen zu koennen.
+                Serial.printf("[fetch] freeHeap=%u minFreeHeap=%u stackHighWaterMark=%u uptimeSec=%lu\n",
+                              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(),
+                              (unsigned)uxTaskGetStackHighWaterMark(nullptr), (unsigned long)(now / 1000));
+#else
                 Serial.printf("[fetch] freeHeap=%u minFreeHeap=%u stackHighWaterMark=%u\n",
                               (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(),
                               (unsigned)uxTaskGetStackHighWaterMark(nullptr));
+#endif
             }
 
             vTaskDelay(pdMS_TO_TICKS(TICK_DELAY_MS));

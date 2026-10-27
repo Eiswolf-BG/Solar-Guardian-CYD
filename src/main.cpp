@@ -20,7 +20,9 @@
 #include "web_server.h"
 #include "boot_logo.h"
 #include "easter_egg.h"
+#ifdef PORTAL_DAY_PROBE
 #include "portal_day_probe.h"
+#endif
 #include <esp_system.h>
 
 namespace {

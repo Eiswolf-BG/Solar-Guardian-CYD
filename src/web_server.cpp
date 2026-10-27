@@ -139,6 +139,7 @@ footer div{margin-top:3px;}
     <div class="card"><div class="label" id="lblPvPower">Leistung</div><div class="value"><span id="pPower">--</span><span class="unit">W</span></div><div class="sub" id="pStand"></div></div>
     <div class="card"><div class="label" id="lblPvVolt">Spannung</div><div class="value"><span id="pVolt">--</span><span class="unit">V</span></div></div>
     <div class="card"><div class="label" id="lblPvCurr">Strom</div><div class="value"><span id="pCurr">--</span><span class="unit">A</span></div></div>
+    <div class="card"><div class="label" id="lblPvMax">Max heute</div><div class="value"><span id="pMax">--</span><span class="unit">W</span></div></div>
   </div>
   <canvas id="chart" style="margin-top:14px;"></canvas>
 </section>
@@ -160,7 +161,18 @@ footer div{margin-top:3px;}
     <div class="card"><div class="label" id="lblBVolt">Spannung</div><div class="value"><span id="bVolt">--</span><span class="unit">V</span></div></div>
     <div class="card"><div class="label" id="lblBCurr">Strom</div><div class="value"><span id="bCurr">--</span><span class="unit">A</span></div></div>
     <div class="card"><div class="label" id="lblBTemp">Temperatur</div><div class="value"><span id="bTemp">--</span><span class="unit">&deg;C</span></div></div>
+    <div class="card"><div class="label" id="lblBVMax">Max. Spannung</div><div class="value"><span id="bVMax">--</span><span class="unit">V</span></div></div>
+    <div class="card"><div class="label" id="lblBVMin">Min. Spannung</div><div class="value"><span id="bVMin">--</span><span class="unit">V</span></div></div>
     <div class="card" style="grid-column:1/-1;"><div class="label" id="lblBStatus">Status</div><div class="value" style="font-size:1.2rem;" id="bStatus">--</div></div>
+  </div>
+</section>
+<section id="tab-pvstatus">
+  <div class="grid">
+    <div class="card"><div class="label" id="lblPvsVolt">PV-Spannung</div><div class="value"><span id="pvsVolt">--</span><span class="unit">V</span></div></div>
+    <div class="card"><div class="label" id="lblPvsCurr">PV-Strom</div><div class="value"><span id="pvsCurr">--</span><span class="unit">A</span></div></div>
+    <div class="card"><div class="label" id="lblPvsPower">PV-Leistung</div><div class="value"><span id="pvsPower">--</span><span class="unit">W</span></div></div>
+    <div class="card"><div class="label" id="lblPvsMax">Max heute</div><div class="value"><span id="pvsMax">--</span><span class="unit">W</span></div></div>
+    <div class="card" style="grid-column:1/-1;"><div class="label" id="lblPvsStatus">Status</div><div class="value" style="font-size:1rem;" id="pvsStatus">--</div></div>
   </div>
 </section>
 <section id="tab-history">
@@ -203,7 +215,7 @@ footer div{margin-top:3px;}
 <script>
 (function(){
 var L={
- de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','Verlauf','Wetter','Daten'],
+ de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','PV-Status','Verlauf','Wetter','Daten'],
      power:'Leistung',today:'Heute',battery:'Batterie',week:'Woche',month:'Monat',year:'Jahr',
      voltage:'Spannung',current:'Strom',temp:'Temperatur',status:'Status',weather:'Wetter',
      stand:'Stand',next:'Nächste Abfrage',noLoc:'Standort nicht gesetzt',noConn:'Keine Verbindung zum Gerät',
@@ -222,8 +234,10 @@ var L={
      filesBackupHint:'Das Backup enthält auch Einstellungen und WLAN-Daten - bitte nur auf dem eigenen Rechner speichern.',
      filesBigDownloadWarn:'Das ist mehr als 20 MB - das Gerät kann während des Downloads träge reagieren. Trotzdem fortfahren?',
      filesProgressFmt:'Lade Datei {i} von {n}: {name}',filesBackupDone:'Backup wurde heruntergeladen (liegt im Download-Ordner, je nach Browser wirst du nach dem Speicherort gefragt).',
-     filesDownloadFailed:'Download fehlgeschlagen.'},
- en:{tabs:['Overview','Power','Daily curve','Yield','Battery','History','Weather','Data'],
+     filesDownloadFailed:'Download fehlgeschlagen.',
+     maxVoltage:'Max. Spannung',minVoltage:'Min. Spannung',maxToday:'Max heute',
+     pvStatus:'PV-Status',portalAgeFmt:'Portaldaten {m} Min alt'},
+ en:{tabs:['Overview','Power','Daily curve','Yield','Battery','PV status','History','Weather','Data'],
      power:'Power',today:'Today',battery:'Battery',week:'Week',month:'Month',year:'Year',
      voltage:'Voltage',current:'Current',temp:'Temperature',status:'Status',weather:'Weather',
      stand:'As of',next:'Next update',noLoc:'No location set',noConn:'Lost connection to device',
@@ -242,12 +256,14 @@ var L={
      filesBackupHint:'The backup also contains settings and WiFi credentials - please only save it on your own computer.',
      filesBigDownloadWarn:'That is more than 20 MB - the device may respond slowly during the download. Continue anyway?',
      filesProgressFmt:'Loading file {i} of {n}: {name}',filesBackupDone:'Backup downloaded (check your downloads folder - depending on your browser, you may be asked where to save it).',
-     filesDownloadFailed:'Download failed.'}
+     filesDownloadFailed:'Download failed.',
+     maxVoltage:'Max. voltage',minVoltage:'Min. voltage',maxToday:'Max today',
+     pvStatus:'PV status',portalAgeFmt:'Portal data {m} min old'}
 };
 var lang='de', t=L.de;
 var last={};
 var tabsEl=document.getElementById('tabs');
-var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-history','tab-weather','tab-files'];
+var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-pvstatus','tab-history','tab-weather','tab-files'];
 var activeTab=0;
 var lastHist=null;
 var lastDay=null;
@@ -818,24 +834,43 @@ function render(data){
   })();
   setText('standLine', t.stand+': '+(data.stand||'--:--'));
   var nextTxt = t.next+': '+(data.next||'--:--');
-  if (data.night) nextTxt += '  🌙 '+t.nightMode; // 🌙
+  if (data.night) nextTxt += '   🌙  '+t.nightMode; // Auftrag "Mondsichel-Abstand": mehr Luft links/rechts, wirkte vorher gestaucht
   setText('nextLine', nextTxt);
 
   ['lblPower','lblPvPower'].forEach(function(id){ setText(id,t.power); });
   setText('lblToday',t.today); setText('lblBattery',t.battery);
-  setText('lblPvVolt',t.voltage); setText('lblPvCurr',t.current);
+  setText('lblPvVolt',t.voltage); setText('lblPvCurr',t.current); setText('lblPvMax',t.maxToday);
   setText('lblYToday',t.today); setText('lblYWeek',t.week); setText('lblYMonth',t.month); setText('lblYYear',t.year);
   setText('lblBSoc',t.battery); setText('lblBVolt',t.voltage); setText('lblBCurr',t.current);
   setText('lblBTemp',t.temp); setText('lblBStatus',t.status);
+  setText('lblBVMax',t.maxVoltage); setText('lblBVMin',t.minVoltage);
+  setText('lblPvsVolt',t.voltage); setText('lblPvsCurr',t.current);
+  setText('lblPvsPower',t.power); setText('lblPvsMax',t.maxToday); setText('lblPvsStatus',t.status);
   setText('heroLabel',t.weather);
 
   var p=data.power||{};
   setText('ovPower', fmt0(p.w)); setText('pPower', fmt0(p.w));
   setText('pStand', p.stand ? (t.stand+': '+p.stand) : '');
+  setText('pMax', fmt0(p.maxToday));
   var pv=data.pv||{};
   setText('pVolt', fmt1(pv.v)); setText('pCurr', fmt2(pv.i));
   lastHist = p.hist;
   drawChart(p.hist);
+
+  // Reiter "PV-Status" (Auftrag "jede neue CYD-Seite bekommt einen
+  // WebUI-Reiter") - dieselben Werte wie oben (pv.v/pv.i, power.w/
+  // maxToday), plus dieselbe Alters-/Statusangabe wie auf dem Geraet
+  // (Hauptwert Leistung, NICHT der seltener aktualisierte PV-Zeitstempel
+  // - siehe pv_status_page.cpp).
+  setText('pvsVolt', fmt1(pv.v)); setText('pvsCurr', fmt2(pv.i));
+  setText('pvsPower', fmt0(p.w)); setText('pvsMax', fmt0(p.maxToday));
+  {
+    var statusTxt = p.stand ? (t.next+': '+(data.next||'--:--')) : '--';
+    if (typeof p.ageMin === 'number' && p.ageMin >= 2) {
+      statusTxt += ' ' + t.portalAgeFmt.replace('{m}', p.ageMin);
+    }
+    setText('pvsStatus', statusTxt);
+  }
 
   var y=data.yield||{};
   setText('ovToday', fmt2(y.today));
@@ -846,6 +881,7 @@ function render(data){
   setText('ovBatt', fmt0(b.soc));
   setText('bSoc', fmt0(b.soc)); setText('bVolt', fmt2(b.v)); setText('bCurr', fmt2(b.i));
   setText('bTemp', fmt1(b.temp)); setText('bStatus', b.status||'--');
+  setText('bVMax', fmt2(b.vmax)); setText('bVMin', fmt2(b.vmin));
 
   var w=data.weather||{};
   var wSig = w.code+'|'+w.day;
@@ -1010,6 +1046,23 @@ setInterval(poll,5000);
         char powerStandBuf[6];
         formatHHMM(snap.powerMeasuredAt, powerStandBuf, sizeof(powerStandBuf));
         power["stand"] = powerStandBuf;
+        // Alter des Hauptwerts in Minuten (Auftrag "veraltet nach
+        // erfolgreichem Refresh") - exakt dieselbe Berechnung wie auf dem
+        // Geraet (power_page.cpp/pv_status_page.cpp), -1 = noch kein Wert.
+        power["ageMin"] = snap.powerMeasuredAt > 0
+            ? (int)((time(nullptr) - snap.powerMeasuredAt) / 60)
+            : -1;
+        // Heutiges Leistungsmaximum (Auftrag "Neuer Bildschirm PV") -
+        // dieselbe Quelle/Berechnung wie die "Max:"-Zeile im Tagesverlauf
+        // und die neue PV-Status-Seite (snap.dailyCurve[]), keine eigene
+        // Variable/Anfrage.
+        {
+            float maxToday = 0.0f;
+            for (uint16_t i = 0; i < snap.dailyCurveCount; i++) {
+                if ((float)snap.dailyCurve[i].watts > maxToday) maxToday = (float)snap.dailyCurve[i].watts;
+            }
+            power["maxToday"] = snap.dailyCurveCount > 0 ? maxToday : (float)NAN;
+        }
         JsonArray hist = power["hist"].to<JsonArray>();
         for (uint8_t i = 0; i < snap.historyCount; i++) {
             JsonObject pt = hist.add<JsonObject>();
@@ -1033,6 +1086,8 @@ setInterval(poll,5000);
         batt["soc"] = snap.batteryValid ? snap.batterySocPercent : (float)NAN;
         batt["temp"] = snap.batteryValid ? snap.batteryTempC : (float)NAN;
         batt["status"] = statusDisplayFor(snap);
+        batt["vmax"] = snap.batteryVoltageExtremesValid ? snap.batteryVoltageMax : (float)NAN;
+        batt["vmin"] = snap.batteryVoltageExtremesValid ? snap.batteryVoltageMin : (float)NAN;
 
         JsonObject weatherObj = doc["weather"].to<JsonObject>();
         weatherObj["locSet"] = weather.locationSet;

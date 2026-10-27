@@ -244,6 +244,7 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
         EpeverDatapoints::CHARGE_STATUS, EpeverDatapoints::BATTERY_TEMP,
         EpeverDatapoints::BATTERY_SOC, EpeverDatapoints::DAILY_GENERATION,
         EpeverDatapoints::PV_VOLTAGE, EpeverDatapoints::PV_CURRENT,
+        EpeverDatapoints::BATTERY_VOLTAGE_MAX, EpeverDatapoints::BATTERY_VOLTAGE_MIN,
     };
 
     JsonDocument body;
@@ -312,6 +313,8 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
     out.dailyGeneration = extractPoint(list, EpeverDatapoints::DAILY_GENERATION);
     out.pvVoltage = extractPoint(list, EpeverDatapoints::PV_VOLTAGE);
     out.pvCurrent = extractPoint(list, EpeverDatapoints::PV_CURRENT);
+    out.voltageMax = extractPoint(list, EpeverDatapoints::BATTERY_VOLTAGE_MAX);
+    out.voltageMin = extractPoint(list, EpeverDatapoints::BATTERY_VOLTAGE_MIN);
 
     Serial.printf("[fetch] Batterie ok: U=%.2fV I=%.2fA SOC=%.1f%% T=%.1fC Tagesertrag=%.2fkWh PV U=%.1fV I=%.2fA\n",
                   out.voltage.valid ? out.voltage.value : 0.0f,

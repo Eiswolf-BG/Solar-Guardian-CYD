@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-1.4-blue)
+![version](https://img.shields.io/badge/version-2.0-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -27,10 +27,14 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Blick - Wetter (Symbol + aktuelle Temperatur, antippen öffnet die
   [Wochenansicht](#standort-und-wetter)), aktuelle Leistung, heutiger
   Ertrag und Batterie-Ladezustand (mit Füllstandssymbol, grün/gelb/rot).
-  Leistung/Ertrag/Batterie antippen fragt die Werte sofort neu ab
-  (zu diesen Seiten wechselt man per Wischen). Auf den Seiten
-  Leistung, Ertrag und Batterie selbst löst Antippen an beliebiger
-  Stelle ebenfalls eine sofortige Neuabfrage aus.
+  Leistung/Ertrag/Batterie antippen fragt die Werte sofort neu ab - die
+  Kachel zeigt dabei kurz "Lade..." und danach wieder ihre normale
+  Beschriftung, die Seite selbst wird dadurch nicht gewechselt (zu den
+  Wisch-Seiten gelangt man weiterhin per Wischen). Die Wetterkachel
+  verhält sich unverändert und öffnet immer die Wochenansicht. Auf den
+  Seiten Leistung, Ertrag, Batterie und PV-Status löst Antippen einer
+  Kachel ebenfalls eine sofortige Neuabfrage mit derselben
+  "Lade..."-Rückmeldung aus.
 - **Wisch-Seiten**: Leistung (aktuelle PV-Leistung groß, PV-Spannung/
   -Strom als Kacheln, Kurve der letzten 3 Stunden), Tagesverlauf
   (Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr mit dem
@@ -38,12 +42,20 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   über den Tag füllt), Ertrag (Heute, Woche als gleitendes
   7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare Reiter Tage/
   Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate bzw.
-  Kalenderjahre) und Batterie (Ladezustand, Spannung, Strom,
-  Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände).
+  Kalenderjahre), Batterie (Ladezustand, Spannung, Strom, Temperatur,
+  Ladestatus mit kurzer Erklärung der vier Zustände, sowie die
+  tatsächlichen Höchst-/Tiefstwerte der Batteriespannung des Tages) und
+  PV-Status (PV-Spannung, PV-Strom, PV-Leistung und das heutige
+  Leistungsmaximum als eigene Seite nach Batterie).
 - **Nachtmodus**: Die Abfrage läuft nur noch zwischen 04:30 und
   22:30 Uhr - danach eine Abschlussabfrage, bestätigt per Abgleich mit
   dem Tages-Backup. Bestätigt erscheint im Kopfbereich eine kleine
-  Mondsichel, bis die Abfrage um 04:30 Uhr wieder beginnt.
+  Mondsichel, bis die Abfrage um 04:30 Uhr wieder beginnt. Tippt man
+  nachts trotzdem auf eine Kachel, zeigt die Rückmeldung einen Hinweis,
+  dass die Aktualisierung erst wieder ab 04:30 Uhr möglich ist.
+- **Datenalter statt "veraltet"**: Die Statuszeile zeigt bei älteren
+  Werten jetzt z.B. "Portaldaten 12 Min alt" an statt nur "veraltet" -
+  bricht bei Bedarf in zwei Zeilen um, statt abgeschnitten zu werden.
 - **Einheitliche Farben** auf allen Seiten: Beschriftungen, Einheiten
   (kWh, W, V, A, %, °C), Rahmen und Kurven/Balken in der gewählten
   Systemfarbe. Alle vom Portal oder Wetterdienst abgefragten Werte -
@@ -59,9 +71,9 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 - **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
   die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
   alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
-  Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, Verlauf (Tage/
-  Monate/Jahre), Wetter (inklusive Wettersymbolen und Leistungskurve)
-  und Daten (Dateien auf der SD-Karte ansehen, herunterladen,
+  Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, PV-Status, Verlauf
+  (Tage/Monate/Jahre), Wetter (inklusive Wettersymbolen und
+  Leistungskurve) und Daten (Dateien auf der SD-Karte ansehen, herunterladen,
   bearbeiten und löschen, inklusive des Ordners `/SolarHistory` - der
   bleibt dort zum Schutz der Solardaten nur zum Ansehen und
   Herunterladen) - genau wie am Gerät. Im Reiter "Daten" lässt sich
@@ -202,22 +214,31 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   (icon + current temperature, tap for the [week view](#location-and-weather)),
   current power output, today's yield, and battery charge level (with a
   fill-level icon, green/yellow/red). Tapping Power/Yield/Battery
-  refreshes those values immediately (swipe to reach those pages).
-  Tapping anywhere on the Power, Yield, or Battery page itself also
-  triggers an immediate refresh.
+  refreshes those values immediately - the tile briefly shows "Loading..."
+  and then returns to its normal label, without switching the page
+  itself (swipe to reach those pages as before). The weather tile is
+  unchanged and always opens the week view. Tapping a tile on the Power,
+  Yield, Battery, or PV status page itself also triggers an immediate
+  refresh with the same "Loading..." feedback.
 - **Swipe pages**: Power (current PV power front and center, PV voltage/
   current as tiles, a chart of the last 3 hours), Daily curve (the power
   curve of the whole day from 05:00 to 22:00, with today's peak value in
   watts and, below it, a progress bar that fills up over the day), Yield
   (Today, Week as a rolling 7-day window, Month, Year),
   History (three tappable tabs Days/Months/Years, each a bar chart of
-  the last 7 days, months, or calendar years), and Battery (charge
-  level, voltage, current, temperature, charging status with a short
-  explanation of all four states).
+  the last 7 days, months, or calendar years), Battery (charge level,
+  voltage, current, temperature, charging status with a short
+  explanation of all four states, plus the day's actual highest/lowest
+  battery voltage), and PV status (PV voltage, PV current, PV power, and
+  today's power peak, as its own page right after Battery).
 - **Night mode**: fetching now only runs between 04:30 and 22:30 -
   followed by a final query, confirmed by comparing it against the
   day's backup. Once confirmed, a small crescent moon appears in the
-  header until fetching resumes at 04:30.
+  header until fetching resumes at 04:30. Tapping a tile at night still
+  shows a hint that refreshing is only possible again starting at 04:30.
+- **Data age instead of "stale"**: the status line now shows e.g. "Portal
+  data 12 min old" for older values instead of just "stale" - wrapping to
+  two lines when needed instead of getting cut off.
 - **Consistent colors** across every page: labels, units (kWh, W, V, A,
   %, °C), borders, and chart curves/bars use the chosen theme color.
   Every value fetched from the portal or weather service - numbers AND
@@ -232,9 +253,9 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 - **Web view**: In the menu under "Networks" → "WebUI" you'll find the
   address to open in a browser on a device in the same WiFi network -
   shows all values large and clean on your phone or PC, with its own
-  tabs for Overview, Power, Daily curve, Yield, Battery, History (Days/
-  Months/Years), Weather (including weather icons and the power
-  chart), and Data (view, download, edit, and delete files on the SD
+  tabs for Overview, Power, Daily curve, Yield, Battery, PV status,
+  History (Days/Months/Years), Weather (including weather icons and the
+  power chart), and Data (view, download, edit, and delete files on the SD
   card, including the `/SolarHistory` folder - which stays
   view-and-download-only there to protect your solar data) - just
   like on the device. The Data tab lets you download any single file

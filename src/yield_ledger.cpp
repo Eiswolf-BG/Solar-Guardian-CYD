@@ -423,16 +423,37 @@ namespace {
     bool nightConfirmedCache = false;
 
     // Einmal pro Abend/Nacht ausgefuehrt (idempotent ueber
-    // nightConfirmedCacheDate): entweder eine FRISCHE Pruefung (Auftrag
-    // 3d, wenn die Abschlussabfrage in DIESER Sitzung lief) oder, falls das
-    // Geraet erst waehrend der Nacht neu gestartet ist, die zuletzt
-    // gespeicherte Bestaetigung direkt aus der Backup-Datei uebernehmen -
-    // in beiden Faellen OHNE Abhaengigkeit von RAM-Zustand aus der Zeit vor
-    // einem moeglichen Neustart.
+    // nightConfirmedCacheDate, SOBALD bestaetigt - siehe unten): entweder
+    // eine FRISCHE Pruefung (Auftrag 3d, wenn die Abschlussabfrage in
+    // DIESER Sitzung lief) oder, falls das Geraet erst waehrend der Nacht
+    // neu gestartet ist, die zuletzt gespeicherte Bestaetigung direkt aus
+    // der Backup-Datei uebernehmen - in beiden Faellen OHNE Abhaengigkeit
+    // von RAM-Zustand aus der Zeit vor einem moeglichen Neustart.
     void refreshNightModeConfirmation(time_t nowEpoch, const struct tm& nowTm) {
         char eveningDate[11];
         DayWindow::currentNightEveningDate(nowEpoch, nowTm, eveningDate, sizeof(eveningDate));
-        if (nightConfirmedCacheDate[0] && strcmp(nightConfirmedCacheDate, eveningDate) == 0) return;
+        // NUR eine bereits BESTAETIGTE Entscheidung fuer diesen Abend wird
+        // uebersprungen (einmal bestaetigt, bleibt bestaetigt). Eine
+        // NICHT bestaetigte Entscheidung wird waehrend des
+        // Abschlussfensters (22:30-22:55) bei jedem Aufruf erneut
+        // geprueft - ein spaeterer Wiederholungsversuch koennte
+        // zwischenzeitlich noch erfolgreich gewesen sein (Auftrag
+        // "Mondsichel fruehrer anzeigen"). Erst nach 22:55 (keine
+        // Wiederholungen mehr moeglich) wird auch eine NICHT bestaetigte
+        // Entscheidung fuer den Rest des Abends endgueltig gecacht.
+        bool sameEveningAsCache = nightConfirmedCacheDate[0] && strcmp(nightConfirmedCacheDate, eveningDate) == 0;
+        if (sameEveningAsCache && (nightConfirmedCache || !DayWindow::isFinalQueryWindow(nowTm))) {
+            return;
+        }
+        if (!sameEveningAsCache) {
+            // Neuer Abend (oder allererster Aufruf) - den Zwischenstand
+            // NICHT aus einem ggf. noch "true" stehenden Cache-Wert des
+            // VORHERIGEN Abends uebernehmen, solange dieser Abend selbst
+            // noch nicht bestaetigt ist (sonst wuerde eine gestern
+            // bestaetigte Nacht heute Abend faelschlich die Mondsichel
+            // schon vor der eigenen Bestaetigung zeigen).
+            nightConfirmedCache = false;
+        }
 
         SolarData::Data snap = SolarData::snapshot();
         bool freshSignalThisSession = snap.finalQueryDoneDate[0] &&
@@ -470,8 +491,16 @@ namespace {
 #endif
         }
 
-        strncpy(nightConfirmedCacheDate, eveningDate, sizeof(nightConfirmedCacheDate) - 1);
-        nightConfirmedCache = confirmed;
+        // Nur cachen (und damit fuer den Rest des Abends einfrieren), wenn
+        // entweder bestaetigt ODER das Abschlussfenster schon vorbei ist
+        // (keine Wiederholung mehr moeglich) - sonst wuerde ein frueher,
+        // noch erfolgloser Aufruf waehrend 22:30-22:55 das Ergebnis
+        // vorzeitig auf "nicht bestaetigt" einfrieren, obwohl ein
+        // spaeterer Wiederholungsversuch noch erfolgreich sein kann.
+        if (confirmed || !DayWindow::isFinalQueryWindow(nowTm)) {
+            strncpy(nightConfirmedCacheDate, eveningDate, sizeof(nightConfirmedCacheDate) - 1);
+            nightConfirmedCache = confirmed;
+        }
     }
 
     void backfillLastDaysFromCsv(const char* todayStr) {
@@ -624,11 +653,14 @@ void tick() {
         }
     }
 
-    // Tagesfenster/Nachtmodus (Auftrag): waehrend der Nacht (22:55-04:30)
-    // einmal pro Abend die Mondsicht-Bestaetigung ableiten/aktualisieren -
-    // siehe refreshNightModeConfirmation() oben, komplett unabhaengig vom
-    // sonstigen Ertragsbuch-Ablauf.
-    if (DayWindow::isNightWindow(nowTm)) {
+    // Tagesfenster/Nachtmodus (Auftrag "Mondsichel fruehrer anzeigen"):
+    // ab Beginn des Abschlussfensters (22:30, nicht erst 22:55) bei jedem
+    // tick() pruefen/aktualisieren, ob die Mondsicht-Bestaetigung bereits
+    // vorliegt - refreshNightModeConfirmation() selbst sorgt dafuer, dass
+    // ein noch unbestaetigter Zwischenstand waehrend 22:30-22:55 nicht
+    // vorzeitig einfriert (siehe dort). Komplett unabhaengig vom sonstigen
+    // Ertragsbuch-Ablauf.
+    if (!DayWindow::isDayWindow(nowTm)) {
         refreshNightModeConfirmation(time(nullptr), nowTm);
     }
 
@@ -777,7 +809,11 @@ bool isNightModeConfirmedNow() {
     time_t now = time(nullptr);
     struct tm nowTm;
     if (!getLocalTime(&nowTm, 5)) return false;
-    if (!DayWindow::isNightWindow(nowTm)) return false;
+    // Mondsichel darf ab Beginn des Abschlussfensters (22:30) erscheinen,
+    // sobald bestaetigt - nicht erst ab dem eigentlichen Nachtmodus-
+    // Fenster (22:55) (Auftrag "Mondsichel fruehrer anzeigen"). Waehrend
+    // des normalen Tagesfensters (04:30-22:30) IMMER false.
+    if (DayWindow::isDayWindow(nowTm)) return false;
 
     char eveningDate[11];
     DayWindow::currentNightEveningDate(now, nowTm, eveningDate, sizeof(eveningDate));
