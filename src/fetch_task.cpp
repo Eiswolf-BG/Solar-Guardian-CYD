@@ -5,6 +5,7 @@
 #include "account_bridge.h"
 #include "location_bridge.h"
 #include "epever_client.h"
+#include "active_read_limiter.h"
 #include "weather_client.h"
 #include "met_norway_client.h"
 #include "weather_data.h"
@@ -32,6 +33,16 @@ namespace {
 
     TaskHandle_t taskHandle = nullptr;
     QueueHandle_t commandQueue = nullptr;
+
+    // Queue-Element (Auftrag "Aktiv-Auslesen beim Antippen", Korrektur
+    // B3): Command::RefreshNow braucht zusaetzlich, WELCHE Datenpunkte
+    // aktiv auszulesen sind (genau die, die der angetippte Bereich
+    // zeigt) - alle anderen Befehle lassen refresh einfach leer
+    // (dataPointCount==0).
+    struct QueueItem {
+        Command cmd;
+        FetchTask::RefreshRequest refresh;
+    };
 
     volatile bool pauseRequested = false;
     volatile bool pausedAck = false;
@@ -92,6 +103,18 @@ namespace {
     time_t lastFetchAttemptEpoch = 0;
     uint32_t lastEquipmentListAttemptMs = 0; // Drosselung, siehe tryResolveEquipmentList()
     time_t lastSentNextFetchAt = -1; // siehe runFetchCycle()-Aufrufstelle, Anti-Flacker-Bremse
+
+    // Naechtlicher Batterie-Abruf (Auftrag "Batterie auch nachts
+    // abfragen") - eigener, von lastFetchAttemptMs/-Epoch komplett
+    // getrennter Zeitplan-Zustand, gleiches Prinzip wie oben
+    // (millis()-Takt fuer "due", EIGENE time()-Domaene fuer die stabile
+    // Anzeige, Anti-Flacker-Bremse). lastNightBatteryDate erkennt einen
+    // neuen Abend (wie finalQueryDoneDate) - dann wird sofort (nicht erst
+    // nach 10 Minuten) einmal abgefragt.
+    char lastNightBatteryDate[11] = {0};
+    uint32_t lastNightBatteryFetchMs = 0;
+    time_t lastNightBatteryFetchEpoch = 0;
+    time_t lastSentNightBatteryNextFetchAt = -1;
     // Tagesfenster/Nachtmodus (Auftrag): Datum des Abends, fuer den die
     // Abschlussabfrage bereits erfolgreich war - leer = noch nicht. Wird
     // beim naechsten Tageswechsel automatisch "veraltet" (siehe
@@ -107,6 +130,10 @@ namespace {
     bool nightPauseLogged = false;
 #endif
     uint32_t lastManualRefreshMs = 0;
+    // Schutz gegen Dauer-Tippen beim Aktiv-Auslesen (Auftrag) - eigener,
+    // zusaetzlicher Zustand neben lastManualRefreshMs oben, siehe
+    // active_read_limiter.h.
+    ActiveReadLimiter::State activeReadLimiterState;
     bool forceFetchNow = false;
     // Auftrag "Refresh-Regeln und Rueckmeldung": fetchInProgress ist in
     // diesem einfaedigen Ablauf praktisch nie waehrend handleCommand()
@@ -118,6 +145,10 @@ namespace {
     // danach).
     bool fetchInProgress = false;
     bool manualRefreshPending = false;
+    // Welche Datenpunkte der aktuell vorgemerkte Tipp aktiv auslesen soll
+    // (Auftrag "Aktiv-Auslesen", Korrektur B3) - von handleCommand()
+    // Command::RefreshNow gesetzt, von der due-Stelle unten konsumiert.
+    RefreshRequest pendingActiveRead;
     bool firstFetchHeapLogged = false;
     bool firstBatteryHeapLogged = false;
     bool firstPowerCurveHeapLogged = false;
@@ -253,23 +284,50 @@ namespace {
     // (neu einloggen) und die Abfrage wiederholt - genau wie bei der
     // Ertragsabfrage in runFetchCycle(). Schreibt Ergebnisse in SolarData
     // und liefert den Tagesertrag-Datenpunkt fuer das Ertragsbuch zurueck.
-    bool runBatteryFetch(float& outDailyGenKwh, bool& outDailyGenValid) {
+    // activeReadDataPointIds/activeReadCount (Auftrag "Aktualisieren-
+    // Knopf soll echt etwas bewirken", Korrektur B3): activeReadCount==0
+    // bedeutet "normaler, passiver Abruf" (geplanter 5-Minuten-Takt UND
+    // naechtlicher Batterietakt - BEIDE nutzen NIE ein aktives Auslesen).
+    // activeReadCount>0 NUR vom manuellen Tipp gesetzt (siehe
+    // runFetchCycle()/handleCommand() Command::RefreshNow) - liest dann
+    // GENAU die vom tippenden Bereich angeforderten Datenpunkte aktiv
+    // aus (siehe CLAUDE.md Tabelle), nicht automatisch alle.
+    // updateNonBatteryFields=false (Auftrag "Batterie auch nachts
+    // abfragen", Korrektur A3): NUR vom naechtlichen Batterie-Pfad
+    // gesetzt - der Nachtabruf darf laut Auftrag NUR die Batteriefelder
+    // aendern, PV-Spannung/-Strom/-Leistung (zeigen sich sonst unbemerkt
+    // auf den Seiten "Leistung"/"PV-Status", obwohl deren "Portaldaten X
+    // Min alt"-Zeile nachts gar nicht aktualisiert wird) bleiben dadurch
+    // unangetastet. Tagsueber immer true (Standardwert).
+    bool runBatteryFetch(float& outDailyGenKwh, bool& outDailyGenValid,
+                         const int32_t* activeReadDataPointIds, uint8_t activeReadCount,
+                         bool updateNonBatteryFields = true) {
         outDailyGenValid = false;
+        bool useActiveRead = activeReadCount > 0;
 
         EpeverClient::BatteryResult result;
         int httpCode = 0, apiStatus = 0;
-        bool ok = EpeverClient::fetchBatteryData(currentDeviceNo, currentToken, result, &httpCode, &apiStatus);
+        bool activeReadFresh = false;
+        bool ok = useActiveRead
+            ? EpeverClient::activeReadBattery(currentDeviceNo, currentToken, activeReadDataPointIds, activeReadCount, result, activeReadFresh, &httpCode, &apiStatus)
+            : EpeverClient::fetchBatteryData(currentDeviceNo, currentToken, result, &httpCode, &apiStatus);
 
         if (!ok && (httpCode == 401 || apiStatus != 0)) {
             currentToken = "";
             if (EpeverClient::login(currentEmail, currentPassword, currentToken)) {
                 needsLogin = false;
-                ok = EpeverClient::fetchBatteryData(currentDeviceNo, currentToken, result, &httpCode, &apiStatus);
+                ok = useActiveRead
+                    ? EpeverClient::activeReadBattery(currentDeviceNo, currentToken, activeReadDataPointIds, activeReadCount, result, activeReadFresh, &httpCode, &apiStatus)
+                    : EpeverClient::fetchBatteryData(currentDeviceNo, currentToken, result, &httpCode, &apiStatus);
             } else {
                 needsLogin = true;
             }
         }
 
+        if (useActiveRead) {
+            Serial.printf("[fetch] Aktiv-Auslesen: ok=%d frisch=%d HTTP-Code=%d status=%d\n",
+                          ok ? 1 : 0, activeReadFresh ? 1 : 0, httpCode, apiStatus);
+        }
         Serial.printf("[fetch] Port 7002: HTTP-Code=%d status=%d\n", httpCode, apiStatus);
 
         if (!ok) {
@@ -331,7 +389,7 @@ namespace {
             outDailyGenValid = true;
         }
 
-        if (result.pvVoltage.valid || result.pvCurrent.valid) {
+        if (updateNonBatteryFields && (result.pvVoltage.valid || result.pvCurrent.valid)) {
             time_t pvMeasuredAt = result.pvVoltage.valid ? result.pvVoltage.time
                                                            : (result.pvCurrent.valid ? result.pvCurrent.time : time(nullptr));
 #ifdef NIGHT_MODE_DIAG_TEST
@@ -352,6 +410,16 @@ namespace {
             SolarData::setPv(result.pvVoltage.valid ? result.pvVoltage.value : 0.0f,
                               result.pvCurrent.valid ? result.pvCurrent.value : 0.0f,
                               pvMeasuredAt);
+        }
+
+        // PV-Leistung (Auftrag "Aktiv-Auslesen", Korrektur B3) - nur bei
+        // einem AKTIVEN Auslesen der Uebersicht-Kachel "Leistung" relevant
+        // (der normale 5-Minuten-Takt aktualisiert currentPowerW weiterhin
+        // ausschliesslich ueber die separate Leistungskurven-Abfrage,
+        // siehe runPowerCurveFetch()) - gleiche Ausnahme wie bei PV-
+        // Spannung/-Strom oben (nachts nie, siehe updateNonBatteryFields).
+        if (updateNonBatteryFields && result.power.valid) {
+            SolarData::setPower(result.power.value, result.power.time);
         }
 
         if (!firstBatteryHeapLogged) {
@@ -617,7 +685,7 @@ namespace {
     // eingeloggt und wiederholt (siehe Auftrag). Blockiert waehrend der
     // HTTPS-Aufrufe, aber nur den Fetch-Task (Core 0) - Core 1 wartet nie
     // darauf.
-    void runFetchCycle() {
+    void runFetchCycle(const int32_t* activeReadDataPointIds = nullptr, uint8_t activeReadCount = 0) {
         if (needsLogin || currentToken.length() == 0) {
             SolarData::setFetchStatus(SolarData::FetchStatus::LoggingIn);
             if (!EpeverClient::login(currentEmail, currentPassword, currentToken)) {
@@ -668,7 +736,7 @@ namespace {
         // der Batterieabfrage, sonst der "Heute"-Wert von eben.
         float dailyFromDatapoint = 0.0f;
         bool dailyFromDatapointValid = false;
-        runBatteryFetch(dailyFromDatapoint, dailyFromDatapointValid);
+        runBatteryFetch(dailyFromDatapoint, dailyFromDatapointValid, activeReadDataPointIds, activeReadCount);
         runPowerCurveFetch();
         runDailyCurveBackfillIfNeeded();
 
@@ -687,7 +755,7 @@ namespace {
         }
     }
 
-    void handleCommand(Command cmd) {
+    void handleCommand(Command cmd, const RefreshRequest& refresh) {
         switch (cmd) {
             case Command::ReconnectNow:
                 manualDisconnect = false;
@@ -733,7 +801,17 @@ namespace {
                 uint32_t now = millis();
                 struct tm nowTm;
                 bool hasValidTime = getLocalTime(&nowTm, 5);
-                if (!hasValidTime || !DayWindow::isDayWindow(nowTm)) {
+                if (!hasDeviceNo) {
+                    // Auftrag "Seriennummer-Quelle fuer das Aktiv-
+                    // Auslesen", Punkt 2: klare, eigene Meldung statt des
+                    // sonst irrefuehrenden "Keine neuen Daten" (der Abruf
+                    // liefe sonst still ueber runDeviceNoOnlyCycle() ins
+                    // Leere, ohne dass je ein Befehl gesendet wird). Ruft
+                    // dabei KEINE zusaetzliche Geraeteliste-Abfrage ab -
+                    // die laeuft bereits unabhaengig vom Tipp im
+                    // Hintergrund (siehe tryResolveEquipmentList()).
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoDeviceNo);
+                } else if (!hasValidTime || !DayWindow::isDayWindow(nowTm)) {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::LockedNight);
                 } else if (WiFi.status() != WL_CONNECTED) {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoWifi);
@@ -741,11 +819,30 @@ namespace {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Busy);
                 } else if (now - lastManualRefreshMs < Config::EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS) {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Cooldown);
+                } else if (!ActiveReadLimiter::allowTap(activeReadLimiterState, now, refresh.dataPointCount)) {
+                    // Schutz gegen Dauer-Tippen beim Aktiv-Auslesen
+                    // (Auftrag, Korrektur B3: zaehlt BEFEHLE - refresh.
+                    // dataPointCount - nicht Tipps) - Mindestabstand/
+                    // Stunden-/Tagesobergrenze, ZUSAETZLICH zur 30s-Sperre
+                    // oben. Im Sperrfenster wird KEIN Befehl an den
+                    // Regler gesendet, nur eine kurze Rueckmeldung gezeigt
+                    // (dieselbe Meldung wie bei der 30s-Sperre - kein
+                    // neuer Text noetig).
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Cooldown);
                 } else {
                     lastManualRefreshMs = now;
+                    pendingActiveRead = refresh;
+                    // Die Operationsprotokoll-Eintraege entstehen schon
+                    // mit dem SENDEN der Befehle (nicht erst bei Erfolg) -
+                    // deshalb hier und nicht erst nach runFetchCycle().
+                    if (refresh.dataPointCount > 0) {
+                        ActiveReadLimiter::recordTap(activeReadLimiterState, now, refresh.dataPointCount);
+                    }
                     forceFetchNow = true;
                     manualRefreshPending = true;
-                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Working);
+                    SolarData::setRefreshFeedback(refresh.dataPointCount > 0
+                        ? SolarData::RefreshFeedback::WorkingActiveRead
+                        : SolarData::RefreshFeedback::Working);
                 }
                 break;
             }
@@ -775,9 +872,9 @@ namespace {
             }
             pausedAck = false;
 
-            Command cmd;
-            while (xQueueReceive(commandQueue, &cmd, 0) == pdTRUE) {
-                handleCommand(cmd);
+            QueueItem item;
+            while (xQueueReceive(commandQueue, &item, 0) == pdTRUE) {
+                handleCommand(item.cmd, item.refresh);
             }
 
             if (!manualDisconnect) WifiConnectManager::tick();
@@ -872,12 +969,18 @@ namespace {
                         // unten auf den bestehenden "--:--"-Pfad zurueck.
                         if (epochPlausible(nowEpoch)) lastFetchAttemptEpoch = nowEpoch;
                         bool wasManualRefresh = manualRefreshPending;
+                        RefreshRequest activeReadForThisCycle = wasManualRefresh ? pendingActiveRead : RefreshRequest();
                         forceFetchNow = false;
                         manualRefreshPending = false;
+                        pendingActiveRead = RefreshRequest();
                         fetchInProgress = true;
                         uint32_t changeCounterBefore = wasManualRefresh ? SolarData::snapshot().changeCounter : 0;
                         if (hasDeviceNo) {
-                            runFetchCycle();
+                            // activeReadForThisCycle steuert das Aktiv-
+                            // Auslesen (Auftrag) - der geplante Takt
+                            // (wasManualRefresh == false) bleibt immer
+                            // beim passiven Abruf (dataPointCount == 0).
+                            runFetchCycle(activeReadForThisCycle.dataPointIds, activeReadForThisCycle.dataPointCount);
                         } else {
                             runDeviceNoOnlyCycle();
                         }
@@ -982,6 +1085,65 @@ namespace {
 #endif
                     }
                 }
+
+                // Naechtlicher Batterie-Abruf (Auftrag "Batterie auch
+                // nachts abfragen", KORRIGIERT auf Alex' Hinweis: die
+                // Bestaetigung lebt NUR im RAM und geht bei jedem
+                // Neustart verloren - ein Neustart mitten in der Nacht,
+                // z.B. 00:30 oder 03:00 Uhr, darf den Abruf NICHT bis
+                // zum naechsten Tag blockieren). Zwei Faelle:
+                // - Ab 22:55 (inNightWindow): IMMER erlaubt, UNABHAENGIG
+                //   von der Bestaetigung - erfasst auch einen Neustart
+                //   mitten in der Nacht sofort.
+                // - Vor 22:55, also noch im Abschlussfenster
+                //   (inFinalQueryWindow, 22:30-22:55): weiterhin NUR nach
+                //   bestaetigter Abschlussabfrage/Sicherung (startet dann
+                //   ggf. schon VOR 22:55, sobald bestaetigt).
+                // Komplett getrennt vom "allowFetch"-Pfad: runFetchCycle()
+                // (Ertrag/Leistungskurve/Tageskurve/Ertragsbuch/SD-
+                // Schreibzugriffe) wird hier NIE aufgerufen, nur der
+                // reine, passive runBatteryFetch() (useActiveRead=false -
+                // NIE ein aktives Auslesen nachts). allowFetch und dieses
+                // Gate schliessen sich nachweislich (siehe
+                // test_night_battery) immer gegenseitig aus - beide
+                // Bloecke laufen nie im selben Tick.
+                bool nightBatteryGate = inNightWindow || (inFinalQueryWindow && finalQueryAlreadyDoneTonight);
+                if (nightBatteryGate) {
+                    bool sameNight = lastNightBatteryDate[0] && strcmp(lastNightBatteryDate, eveningDate) == 0;
+                    bool nightBatteryDue = !sameNight ||
+                        (now - lastNightBatteryFetchMs >= Config::EPEVER_NIGHT_BATTERY_INTERVAL_MS);
+                    if (nightBatteryDue) {
+                        strncpy(lastNightBatteryDate, eveningDate, sizeof(lastNightBatteryDate) - 1);
+                        lastNightBatteryDate[sizeof(lastNightBatteryDate) - 1] = 0;
+                        lastNightBatteryFetchMs = now;
+                        if (epochPlausible(nowEpoch)) lastNightBatteryFetchEpoch = nowEpoch;
+                        float unusedDailyGenKwh = 0.0f;
+                        bool unusedDailyGenValid = false;
+                        bool ok = runBatteryFetch(unusedDailyGenKwh, unusedDailyGenValid, nullptr, 0, /*updateNonBatteryFields=*/false);
+                        Serial.printf("[fetch] Naechtlicher Batterieabruf: ok=%d\n", ok ? 1 : 0);
+                    }
+
+                    // Gleiche stabile time()-Domaene-Berechnung wie
+                    // candidateNextAt oben (siehe lastFetchAttemptEpoch-
+                    // Kommentar) - eigenes Feld, zeigt NUR auf der
+                    // Batterieseite statt "04:30 Uhr" (Auftrag, siehe
+                    // battery_page.cpp/solar_data.h).
+                    time_t nightCandidateNextAt = lastNightBatteryFetchEpoch > 0
+                        ? lastNightBatteryFetchEpoch + (time_t)(Config::EPEVER_NIGHT_BATTERY_INTERVAL_MS / 1000)
+                        : 0;
+                    if (nightCandidateNextAt != lastSentNightBatteryNextFetchAt) {
+                        lastSentNightBatteryNextFetchAt = nightCandidateNextAt;
+                        SolarData::setNightBatteryNextFetchAt(nightCandidateNextAt);
+                    }
+                } else if (lastSentNightBatteryNextFetchAt != 0) {
+                    // Tag, oder Nacht aber Abschlussabfrage/Sicherung noch
+                    // nicht bestaetigt - Feld zuruecksetzen, sonst wuerde
+                    // battery_page.cpp eine veraltete naechtliche Zeit
+                    // zeigen statt korrekt auf nextFetchAt zurueckzufallen.
+                    lastSentNightBatteryNextFetchAt = 0;
+                    SolarData::setNightBatteryNextFetchAt(0);
+                    lastNightBatteryFetchEpoch = 0;
+                }
             }
 
             // Wetter: unabhaengig vom Solar-Guardian-Konto, laeuft sobald
@@ -1073,7 +1235,7 @@ void start() {
     // account_bridge.h/location_bridge.h - sonst wuerden
     // applyAccountSnapshot()/applyLocationSnapshot() im Task (unten)
     // mangels Mutex nichts lesen.
-    commandQueue = xQueueCreate(4, sizeof(Command));
+    commandQueue = xQueueCreate(4, sizeof(QueueItem));
 
     xTaskCreatePinnedToCore(taskFn, "fetch", STACK_SIZE, nullptr, PRIORITY, &taskHandle, CORE_ID);
 }
@@ -1090,7 +1252,14 @@ void resume() {
 
 void sendCommand(Command cmd) {
     if (!commandQueue) return;
-    xQueueSend(commandQueue, &cmd, 0);
+    QueueItem item{cmd, RefreshRequest()};
+    xQueueSend(commandQueue, &item, 0);
+}
+
+void sendRefreshNow(const RefreshRequest& req) {
+    if (!commandQueue) return;
+    QueueItem item{Command::RefreshNow, req};
+    xQueueSend(commandQueue, &item, 0);
 }
 
 }

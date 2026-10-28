@@ -3,6 +3,7 @@
 #include "solar_data.h"
 #include "app_config.h"
 #include "fetch_task.h"
+#include "epever_datapoints.h"
 #include "layout_utils.h"
 #include "layout_check.h"
 #include "tile_sprite.h"
@@ -456,10 +457,24 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
         {x0, y0, tileW, TILE_H}, {x1, y0, tileW, TILE_H},
         {x0, y1, tileW, TILE_H}, {x1, y1, tileW, TILE_H},
     };
+    // Welcher Datenpunkt aktiv ausgelesen wird, je angetippter Kachel
+    // (Auftrag "Aktiv-Auslesen", Korrektur B3) - Index 3 ("Max heute")
+    // ist ein lokal aus der Tageskurve berechneter Wert, am Portal NICHT
+    // einzeln lesbar (wie "Tagesertrag", siehe Auftrag) - bleibt deshalb
+    // bei 0 Datenpunkten, faellt auf den normalen passiven Refresh zurueck.
+    constexpr int32_t kTileDataPointId[4] = {
+        EpeverDatapoints::PV_VOLTAGE, EpeverDatapoints::PV_CURRENT,
+        EpeverDatapoints::PV_POWER, 0,
+    };
     for (uint8_t i = 0; i < 4; i++) {
         if (tiles[i].contains(x, y)) {
             lastTappedTile = (int8_t)i;
-            FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+            FetchTask::RefreshRequest req;
+            if (kTileDataPointId[i] != 0) {
+                req.dataPointCount = 1;
+                req.dataPointIds[0] = kTileDataPointId[i];
+            }
+            FetchTask::sendRefreshNow(req);
             return true;
         }
     }

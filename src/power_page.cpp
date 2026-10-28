@@ -3,6 +3,7 @@
 #include "solar_data.h"
 #include "app_config.h"
 #include "fetch_task.h"
+#include "epever_datapoints.h"
 #include "layout_utils.h"
 #include "layout_check.h"
 #include "tile_sprite.h"
@@ -646,7 +647,12 @@ bool onTap(int16_t /*x*/, int16_t /*y*/, int16_t /*areaTop*/, int16_t /*areaHeig
     // Auftrag "manueller Refresh": die ganze Seite ist jetzt antippbar
     // (vorher nur die Statuszeile), nicht nur einzelne Kacheln - es gibt
     // hier kein anderes Tipp-Ziel, mit dem das kollidieren koennte.
-    FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+    // Aktiv ausgelesener Datenpunkt (Auftrag "Aktiv-Auslesen", Korrektur
+    // B3): die PV-Leistung, der Hauptwert dieser Seite.
+    FetchTask::RefreshRequest req;
+    req.dataPointCount = 1;
+    req.dataPointIds[0] = EpeverDatapoints::PV_POWER;
+    FetchTask::sendRefreshNow(req);
     return true;
 }
 

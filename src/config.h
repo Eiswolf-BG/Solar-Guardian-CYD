@@ -28,7 +28,7 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "2.0";
+    constexpr const char* FW_VERSION = "2.1";
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----
@@ -210,6 +210,11 @@ namespace Config {
     constexpr const char* EPEVER_ENERGY_URL = "https://hncloudapi.epsolarpv.com/usrCloud/vn/userView/getGeneratedEnergy";
     constexpr uint32_t EPEVER_HTTP_TIMEOUT_MS = 10000; // Verbindungsaufbau/TLS-Handshake-Teillimit, siehe http_deadline_guard.h
     constexpr uint32_t EPEVER_FETCH_INTERVAL_MS = 5UL * 60UL * 1000UL;   // normaler Takt
+    // Nachts (22:55-04:30, NUR nach bestaetigter Abschlussabfrage/
+    // Sicherung) laeuft statt des vollen Abrufs nur ein reiner, passiver
+    // Batterie-Abruf in diesem (laengeren) Takt - Auftrag "Batterie auch
+    // nachts abfragen", siehe fetch_task.cpp::taskFn().
+    constexpr uint32_t EPEVER_NIGHT_BATTERY_INTERVAL_MS = 10UL * 60UL * 1000UL;
     constexpr uint32_t EPEVER_RETRY_INTERVAL_MS = 60UL * 1000UL;        // Takt bei den ersten Fehlschlaegen
     constexpr uint8_t  EPEVER_MAX_SHORT_RETRIES = 3;                    // danach zurueck auf den normalen Takt
     constexpr uint32_t EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS = 30UL * 1000UL;
@@ -223,8 +228,91 @@ namespace Config {
     // gueltigen Wert - beides beobachtet und behoben, siehe
     // refresh_feedback_text.h::FeedbackState.
     constexpr uint32_t REFRESH_WORKING_TIMEOUT_MS = 15UL * 1000UL;
+    // "Aktualisierung ab 04:30 Uhr wieder moeglich" stand bisher nur die
+    // normalen ~2s (wie jede andere Rueckmeldung) - laut Alex zu kurz,
+    // um bewusst wahrgenommen zu werden (Auftrag). Nur diese EINE
+    // Rueckmeldung bekommt deshalb eine laengere Anzeigedauer, siehe
+    // refresh_feedback_text.h::FeedbackState::update().
+    constexpr uint32_t REFRESH_LOCKED_NIGHT_SHOW_MS = 4UL * 1000UL;
     constexpr uint32_t EPEVER_STALE_AFTER_MS = 30UL * 60UL * 1000UL;    // Werte gelten danach als veraltet
     constexpr const char* EPEVER_BATTERY_URL = "https://hncloudapi.epsolarpv.com:7002/history/getSampleDataPoint";
+    // Fenster/sampleLimit fuer den "neuesten Wert"-Abruf (Auftrag
+    // "Fehler im Abruf beheben - Werte systematisch ~30 Min alt"):
+    // VORHER 3h-Fenster mit sampleLimit=5 - bei einem Portal, das die
+    // Batteriespannung JEDE MINUTE speichert (Alex' Live-Vergleich),
+    // liefert ein so breites Fenster mit so wenigen erlaubten Werten
+    // offenbar NICHT die letzten 5 Minutenwerte, sondern (wie ein
+    // Chart-Downsampling) ca. 5 gleichmaessig ueber das Fenster verteilte
+    // Stuetzstellen (3h/5 = 36 Min Abstand) - der neueste zurueckgegebene
+    // Wert lag dadurch systematisch bis zu ~36 Min (beobachtet: 30-118
+    // Min bei laengeren Nachtpausen) hinter "jetzt" zurueck, obwohl
+    // frischere Minutenwerte im Portal laengst vorlagen. JETZT: deutlich
+    // schmaleres Fenster UND mehr erlaubte Werte, damit selbst bei
+    // gleicher Downsampling-Logik die juengste Stuetzstelle nur noch
+    // wenige Minuten alt sein kann (20 Min / 10 Werte = 2 Min
+    // Bucket-Abstand). END_BUFFER_MS faengt eine leichte Uhrabweichung
+    // unseres Geraets gegenueber dem Portal ab (Endzeit minimal NACH
+    // "jetzt", damit der aktuellste Portal-Wert nie knapp ausserhalb des
+    // Fensters liegt).
+    constexpr int64_t EPEVER_BATTERY_WINDOW_MS = 20LL * 60LL * 1000LL;
+    constexpr int64_t EPEVER_BATTERY_END_BUFFER_MS = 2LL * 60LL * 1000LL;
+    constexpr uint8_t EPEVER_BATTERY_SAMPLE_LIMIT = 10;
+
+    // ---- Aktiv-Auslesen beim Antippen (Auftrag "Aktualisieren-Knopf
+    // soll echt etwas bewirken", Korrektur B "an die echte Portal-
+    // Anfrage anpassen") ----
+    // EPEVER_BATTERY_URL oben liefert nur den zuletzt im Portal
+    // GESPEICHERTEN Messwert (Historien-Abfrage), keine frische Messung
+    // vom Regler - bestaetigter Befund, siehe CLAUDE.md. Fuer einen
+    // ECHTEN Tipp-Effekt wird stattdessen beim Regler selbst eine neue
+    // Messung angestossen: "userop/add" (Alex' Live-Mitschnitt, siehe
+    // unten), danach wird mit dem BEREITS BESTEHENDEN, portal-
+    // verifizierten EPEVER_BATTERY_URL oben (history/getSampleDataPoint)
+    // kurz wiederholt nachgefragt, bis dessen Zeitstempel neuer ist -
+    // KEIN separater, unbestaetigter zweiter Endpunkt mehr (der fruehere
+    // "getStatusByEquipmentId" war nur eine Vermutung, siehe Git-
+    // Historie - jetzt durch den bereits produktiv funktionierenden
+    // Abruf ersetzt, das ist sicherer).
+    // URL/Host wie die anderen "usrCloud/vn/..."-Aufrufe (Port 443, siehe
+    // EPEVER_ENERGY_URL oben) - NICHT Port 7002 wie beim reinen Lesen.
+    constexpr const char* EPEVER_ACTIVE_READ_TRIGGER_URL = "https://hncloudapi.epsolarpv.com/usrCloud/vn/devicelog/userop/add";
+    // Der einzig erlaubte opType (0 = NUR Lesen) steht NICHT hier,
+    // sondern als einzige Quelle der Wahrheit in epever_active_read.h
+    // (EpeverActiveRead::ALLOWED_OP_TYPE) - dort auch die Whitelist-
+    // Pruefungsfunktion dafuer, mit eigenem nativem Test.
+    // slaveIndex: in Alex' Mitschnitt ein fester Text "1" - es gibt in
+    // der Geraeteliste (tryResolveEquipmentList()) KEIN entsprechendes
+    // Feld, deshalb hier als feste Konstante hinterlegt (nicht aus der
+    // Geraeteliste geholt). Falls eine Anlage mehrere Regler/Slaves am
+    // selben Gateway haben sollte, muesste das spaeter angepasst werden.
+    constexpr const char* EPEVER_ACTIVE_READ_SLAVE_INDEX = "1";
+    // Zeitgrenze fuer das WARTEN auf den neuen Zeitstempel (Korrektur B2:
+    // live gemessen ca. 27s bis zur Antwort, 50s als Sicherheitsmarge).
+    // Korrektur "Fehler im Abruf beheben", Punkt 3: Alex hat gemessen,
+    // dass der neue Wert schon nach ca. 7s im Portal-Verlauf stand -
+    // deshalb erst ca. 5s warten (statt sofort/zu frueh nachzufragen),
+    // danach alle 3s.
+    constexpr uint32_t EPEVER_ACTIVE_READ_WAIT_TIMEOUT_MS = 50UL * 1000UL;
+    constexpr uint32_t EPEVER_ACTIVE_READ_FIRST_POLL_DELAY_MS = 5UL * 1000UL;
+    constexpr uint32_t EPEVER_ACTIVE_READ_POLL_INTERVAL_MS = 3UL * 1000UL;
+    // Harte Obergrenze der "Lade..."-RUECKMELDUNG selbst (Korrektur B2) -
+    // bewusst GROESSER als EPEVER_ACTIVE_READ_WAIT_TIMEOUT_MS oben (deckt
+    // zusaetzlich den Trigger-Request selbst und etwas Sicherheitsmarge
+    // ab), damit die Anzeige nicht vorzeitig aufgibt, waehrend im
+    // Hintergrund noch gewartet wird. Siehe refresh_feedback_text.h
+    // (SolarData::RefreshFeedback::WorkingActiveRead).
+    constexpr uint32_t EPEVER_ACTIVE_READ_FEEDBACK_TIMEOUT_MS = 55UL * 1000UL;
+    // Schutz gegen Dauer-Tippen (Auftrag, Korrektur B3: die Grenzen
+    // zaehlen BEFEHLE, nicht Antippen - jeder einzelne Datenpunkt-Befehl
+    // erzeugt einen eigenen Eintrag im Operationsprotokoll der Anlage).
+    // Der Mindestabstand gilt weiterhin zwischen zwei TIPPEN
+    // (ein Tipp kann mehrere Befehle ausloesen, siehe CLAUDE.md Tabelle),
+    // ZUSAETZLICH zur bestehenden allgemeinen 30s-Tippsperre
+    // (EPEVER_MANUAL_REFRESH_MIN_INTERVAL_MS oben, gilt fuer JEDEN
+    // Refresh-Tipp).
+    constexpr uint32_t EPEVER_ACTIVE_READ_MIN_INTERVAL_MS = 60UL * 1000UL;
+    constexpr uint8_t  EPEVER_ACTIVE_READ_MAX_PER_HOUR = 20;
+    constexpr uint8_t  EPEVER_ACTIVE_READ_MAX_PER_DAY = 100;
 
     // ---- Tagesfenster/Nachtmodus (Auftrag "Tagesfenster mit Nachtmodus")
     // ----

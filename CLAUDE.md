@@ -666,9 +666,12 @@ Popups, neue wie alte):**
    Aktionsreihe erreichbar, Einmal-Shift (kein Capslock), Klartext.
 3. **Hauptbildschirm mit Wisch-Seiten** (`main_screen.cpp`, `pages.cpp`,
    `swipe_input.cpp`): feste Kopfzeile, darunter Wisch-Seiten im Rundlauf
-   ("Übersicht"/"Leistung"/"Ertrag"/"Jahre"/"Batterie", Reihenfolge
-   zentral in `pages.cpp::PAGES[]`, "Übersicht" ist seit Punkt 21 unten
-   die erste Seite nach dem Booten) mit Punkte-Indikator.
+   ("Übersicht"/"Leistung"/"Tagesverlauf"/"Ertrag"/"Batterie"/"PV-Status"/
+   "Verlauf", Reihenfolge zentral in `pages.cpp::PAGES[]`, "Übersicht" ist
+   seit Punkt 21 unten die erste Seite nach dem Booten, "Verlauf"
+   (Tage/Monate/Jahre, vormals "Jahre") ist seit Auftrag
+   "Seitenreihenfolge am CYD ändern" bewusst die letzte Seite) mit
+   Punkte-Indikator.
 4. **Menü** (`menu_screen.cpp`, für Stift-Bedienung ausgelegt):
    "Netzwerke", "Konto", "Systemfarbe", "Sprache / Language",
    "Ertragswerte", "Zurücksetzen", "Zurück". Die Seriennummer ist seit
@@ -1078,8 +1081,9 @@ Popups, neue wie alte):**
       selbst (wie ohnehin schon ueblich) auf die SD-Karte.
 
 23. **Seite "PV-Status"** (`pv_status_page.h/.cpp`, Auftrag "Neuer
-    Bildschirm PV"): letzte/7. Wisch-Seite, direkt nach "Batterie"
-    (Reihenfolge der vorherigen 6 Seiten unveraendert).
+    Bildschirm PV"): direkt nach "Batterie" (seit Auftrag
+    "Seitenreihenfolge am CYD ändern" die 6. von 7 Seiten, davor war sie
+    die letzte - "Verlauf" ist jetzt die letzte Seite).
     2x2-Kacheln PV-Spannung/PV-Strom/PV-Leistung/heutiges
     Leistungsmaximum, TILE_H 50 wie die anderen 2x2-Kachelseiten.
     Quellen: PV-Spannung/PV-Strom laufen bereits in der bestehenden
@@ -1103,6 +1107,66 @@ Popups, neue wie alte):**
     dieselben 4 Werte wie auf dem Geraet, auch wenn PV-Spannung/-Strom/
     -Leistung zusaetzlich im Reiter "Leistung" zu sehen sind (keine
     Ausnahme von der "jede Seite bekommt einen Reiter"-Regel).
+
+24. **Aktiv-Auslesen beim Antippen** (`epever_client.cpp::
+    activeReadBattery()`, `active_read_limiter.h`, `epever_active_read.h`,
+    `fetch_task.h::RefreshRequest`): ein manueller Tipp auf eine Kachel
+    loest eine frische Messung beim Regler selbst aus (ein Befehl PRO
+    angezeigtem Datenpunkt, siehe Tabelle unten), statt wie der geplante
+    Takt nur den letzten im Portal gespeicherten Wert zu lesen -
+    ausschliesslich lesend (fest auf einen einzigen, nie
+    konfigurierbaren Lese-Modus begrenzt), nur im Tagesfenster, nur auf
+    Antippen. Wartet bis zu 50s gemeinsam auf alle neuen Zeitstempel,
+    die Rueckmeldung selbst zeigt "Lade..." bis zu 55s. Die Obergrenzen
+    (Mindestabstand zwischen zwei Tipps, max. Befehle/Stunde, max.
+    Befehle/Tag) zaehlen BEFEHLE, nicht Tipps - ein Tipp kann je nach
+    Bereich mehrere Befehle ausloesen:
+
+    | Bereich | gelesene Werte |
+    |---|---|
+    | Uebersicht "Leistung" | PV-Leistung |
+    | Uebersicht "Ertrag" | keine (nicht einzeln lesbar) |
+    | Uebersicht "Batterie" | Ladestand, Spannung |
+    | Seite "Leistung" (ganze Seite) | PV-Leistung |
+    | Seite "Ertrag" (ganze Seite) | keine (nicht einzeln lesbar) |
+    | Seite "Batterie" (ganze Seite) | Spannung, Strom, Ladestand, Temperatur |
+    | PV-Status: PV-Spannung/-Strom/-Leistung | jeweils der eigene Wert |
+    | PV-Status: "Max heute" | keine (nicht einzeln lesbar) |
+
+25. **Naechtlicher Batterie-Abruf** (`fetch_task.cpp::taskFn()`, Auftrag
+    "Batterie auch nachts abfragen"): spaetestens ab 22:55 Uhr bis 04:30
+    Uhr wird alle 10 Minuten NUR die Batterie passiv abgefragt (derselbe
+    Abruf wie tagsueber, kein aktives Auslesen) - UNABHAENGIG davon, ob
+    die Abschlussabfrage/Sicherung bestaetigt wurde (die Bestaetigung
+    lebt nur im RAM und geht bei jedem Neustart verloren; ein Neustart
+    mitten in der Nacht darf den Abruf nicht bis zum naechsten Tag
+    blockieren). Vor 22:55 (im Abschlussfenster 22:30-22:55) gilt
+    weiterhin: nur nach bestaetigter Abschlussabfrage/Sicherung. Schreibt
+    ausdruecklich nichts in Ertragsbuch, Tageskurve oder auf die SD-
+    Karte, aktualisiert ausschliesslich Batteriefelder im Speicher (kein
+    PV-Spannung/-Strom/-Leistung).
+
+26. **"Neuester Wert"-Abruf nimmt immer den aktuellsten Stand**
+    (`epever_client.cpp::fetchBatteryData()`, Auftrag "Fehler im Abruf
+    beheben"): Endzeit = jetzt (plus kleiner Puffer gegen Uhrabweichung),
+    Start schmal genug davor, damit bei der Portal-Antwort nie aeltere
+    Werte statt der echten letzten Minutenwerte zurueckkommen (frueher
+    ein zu breites 3h-Fenster mit zu wenigen erlaubten Werten - siehe
+    config.h `EPEVER_BATTERY_WINDOW_MS`/`EPEVER_BATTERY_SAMPLE_LIMIT`).
+    Gilt fuer Batterie, Leistung, PV-Spannung/-Strom, Max/Min und Status,
+    sowohl im Tages- als auch im naechtlichen Abruf (dieselbe Funktion).
+    Tagesertrag und die 3h-Leistungskurve sind davon ausdruecklich
+    ausgenommen - bleiben bei ihrem eigenen, bewusst anderen Fenster.
+
+27. **Geraete-Seriennummer fuer das Aktiv-Auslesen** (Auftrag
+    "Seriennummer-Quelle fuer das Aktiv-Auslesen"): kommt aus derselben
+    Quelle wie ueberall sonst im Projekt - dem einmal bei der
+    Ersteinrichtung (oder automatisch nach dem Login) ermittelten und in
+    der Konfiguration abgelegten Wert, NICHT aus einer eigenen, erneuten
+    Geraeteliste-Abfrage beim Antippen. Fehlt sie, wird das als eigene,
+    klare Rueckmeldung gezeigt - es wird dabei NIE ein Befehl gesendet.
+    Erscheint wie jede Geraete-Seriennummer im Projekt nie in Logs,
+    Kommentaren oder der WebUI.
 
 ## Code-Struktur
 
@@ -1167,11 +1231,11 @@ Popups, neue wie alte):**
   (`wifi_select_screen`/`credentials_screen`/`serial_number_screen`/
   `location_screen` werden auch von Netzwerke/Konto/Menü wiederverwendet)
 - `pages.h/.cpp`, `home_page.h/.cpp`, `power_page.h/.cpp`,
-  `daily_curve_page.h/.cpp`, `yield_page.h/.cpp`, `years_page.h/.cpp`,
-  `battery_page.h/.cpp`, `pv_status_page.h/.cpp` — die per Wisch-Geste
-  erreichbaren Hauptseiten (`home_page` ist Seite 1, `pv_status_page`
-  ist seit Auftrag "Neuer Bildschirm PV" die letzte/7. Seite, direkt
-  nach `battery_page`)
+  `daily_curve_page.h/.cpp`, `yield_page.h/.cpp`, `battery_page.h/.cpp`,
+  `pv_status_page.h/.cpp`, `years_page.h/.cpp` — die per Wisch-Geste
+  erreichbaren Hauptseiten (`home_page` ist Seite 1; seit Auftrag
+  "Seitenreihenfolge am CYD ändern" ist `years_page` ("Verlauf") die
+  letzte/7. Seite, direkt nach `pv_status_page`)
 - `page_nav.h/.cpp` — schmaler Umweg, damit eine Seite (z.B. `home_page`)
   zu einer anderen Wisch-Seite springen kann
 - `week_view_screen.h/.cpp` — Wochenansicht (kein Hauptmenüpunkt, nur

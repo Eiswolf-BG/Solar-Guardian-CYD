@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.0-blue)
+![version](https://img.shields.io/badge/version-2.1-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -40,13 +40,28 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   (Leistungskurve des ganzen Tages von 05:00 bis 22:00 Uhr mit dem
   Tages-Höchstwert in Watt, darunter ein Fortschrittsbalken, der sich
   über den Tag füllt), Ertrag (Heute, Woche als gleitendes
-  7-Tage-Fenster, Monat, Jahr), Verlauf (drei antippbare Reiter Tage/
-  Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate bzw.
-  Kalenderjahre), Batterie (Ladezustand, Spannung, Strom, Temperatur,
-  Ladestatus mit kurzer Erklärung der vier Zustände, sowie die
-  tatsächlichen Höchst-/Tiefstwerte der Batteriespannung des Tages) und
+  7-Tage-Fenster, Monat, Jahr), Batterie (Ladezustand, Spannung, Strom,
+  Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände, sowie
+  die tatsächlichen Höchst-/Tiefstwerte der Batteriespannung des Tages),
   PV-Status (PV-Spannung, PV-Strom, PV-Leistung und das heutige
-  Leistungsmaximum als eigene Seite nach Batterie).
+  Leistungsmaximum als eigene Seite nach Batterie) und als letzte Seite
+  Verlauf (drei antippbare Reiter Tage/Monate/Jahre, je eine
+  Balkengrafik der letzten 7 Tage, Monate bzw. Kalenderjahre).
+- **Aktuellere Werte**: Die Werte auf dem CYD waren bisher bis zu etwa
+  30 Minuten alt. Jetzt werden die jeweils neuesten Werte angezeigt
+  (in der Regel ca. 1-2 Minuten alt).
+- **Echtes Auslesen beim Antippen**: Antippen einer Kachel liest jetzt
+  echte, frische Werte direkt vom Regler ab (nur ein Lesebefehl, kein
+  Schreibzugriff) - jede dieser Auslesungen steht im Operationsprotokoll
+  des Portals. Kacheln für Ertragswerte aktualisieren weiterhin nur über
+  den normalen Abruf.
+- **Batterie auch nachts**: Die Batteriewerte werden nachts alle 10
+  Minuten aktualisiert (nur die Anzeige, die Ertragsdaten bleiben davon
+  unberührt). Die Statuszeile auf der Batterie-Seite zeigt dabei den
+  Zeitpunkt der nächsten Abfrage.
+- **Robustere Rückmeldung beim Antippen**: "Lade..." und danach wieder
+  die normale Beschriftung - kein Hängenbleiben, kein Flackern. Der
+  Hinweis im Nachtmodus bleibt dabei länger stehen.
 - **Nachtmodus**: Die Abfrage läuft nur noch zwischen 04:30 und
   22:30 Uhr - danach eine Abschlussabfrage, bestätigt per Abgleich mit
   dem Tages-Backup. Bestätigt erscheint im Kopfbereich eine kleine
@@ -224,13 +239,26 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   current as tiles, a chart of the last 3 hours), Daily curve (the power
   curve of the whole day from 05:00 to 22:00, with today's peak value in
   watts and, below it, a progress bar that fills up over the day), Yield
-  (Today, Week as a rolling 7-day window, Month, Year),
-  History (three tappable tabs Days/Months/Years, each a bar chart of
-  the last 7 days, months, or calendar years), Battery (charge level,
-  voltage, current, temperature, charging status with a short
+  (Today, Week as a rolling 7-day window, Month, Year), Battery (charge
+  level, voltage, current, temperature, charging status with a short
   explanation of all four states, plus the day's actual highest/lowest
-  battery voltage), and PV status (PV voltage, PV current, PV power, and
-  today's power peak, as its own page right after Battery).
+  battery voltage), PV status (PV voltage, PV current, PV power, and
+  today's power peak, as its own page right after Battery), and, as the
+  last page, History (three tappable tabs Days/Months/Years, each a bar
+  chart of the last 7 days, months, or calendar years).
+- **Fresher values**: Values on the CYD used to be up to about 30
+  minutes old. Now the latest available values are shown (typically
+  about 1-2 minutes old).
+- **Real readout on tap**: Tapping a tile now reads real, fresh values
+  directly from the controller (a read-only command, no write access) -
+  each of these readouts shows up in the portal's operation log. Yield
+  tiles still only update through the normal fetch.
+- **Battery updates at night too**: Battery values are now refreshed
+  every 10 minutes overnight (display only, yield data stays untouched).
+  The status line on the Battery page shows the time of the next fetch.
+- **More robust tap feedback**: "Loading..." and then back to the normal
+  label - no getting stuck, no flicker. The night-mode hint now stays on
+  screen longer.
 - **Night mode**: fetching now only runs between 04:30 and 22:30 -
   followed by a final query, confirmed by comparing it against the
   day's backup. Once confirmed, a small crescent moon appears in the

@@ -274,6 +274,14 @@ void setNextFetchAt(time_t epoch) {
     });
 }
 
+void setNightBatteryNextFetchAt(time_t epoch) {
+    mutate([&](Data& d) {
+        bool changed = minuteChanged(d.nightBatteryNextFetchAt, epoch);
+        d.nightBatteryNextFetchAt = epoch;
+        return changed;
+    });
+}
+
 void setFinalQueryDoneDate(const char* dateStr) {
     mutate([&](Data& d) {
         bool changed = strncmp(d.finalQueryDoneDate, dateStr, sizeof(d.finalQueryDoneDate) - 1) != 0;

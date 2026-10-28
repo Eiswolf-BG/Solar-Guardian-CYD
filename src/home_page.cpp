@@ -12,6 +12,7 @@
 #include "refresh_feedback_text.h"
 #include "page_nav.h"
 #include "fetch_task.h"
+#include "epever_datapoints.h"
 #include "week_view_screen.h"
 #include "location_screen.h"
 #include "i18n.h"
@@ -626,19 +627,30 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t areaHeight) {
     // gesetzt, damit die Rueckmeldung (naechster draw()-Aufruf) garantiert
     // nur in DIESER Kachel erscheint (Auftrag "Fehler in der Refresh-
     // Rueckmeldung", Punkt 1).
+    // Aktiv ausgelesene Datenpunkte je Kachel (Auftrag "Aktiv-Auslesen",
+    // Korrektur B3). "Ertrag" (Tagesertrag) ist am Portal NICHT einzeln
+    // lesbar (wie im Auftrag als Beispiel genannt) - bleibt deshalb ohne
+    // Datenpunkte, faellt auf den normalen passiven Refresh zurueck.
     if (L.power.contains(x, y)) {
         lastTappedTile = 0;
-        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+        FetchTask::RefreshRequest req;
+        req.dataPointCount = 1;
+        req.dataPointIds[0] = EpeverDatapoints::PV_POWER;
+        FetchTask::sendRefreshNow(req);
         return true;
     }
     if (L.today.contains(x, y)) {
         lastTappedTile = 1;
-        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+        FetchTask::sendRefreshNow(FetchTask::RefreshRequest());
         return true;
     }
     if (L.battery.contains(x, y)) {
         lastTappedTile = 2;
-        FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+        FetchTask::RefreshRequest req;
+        req.dataPointCount = 2;
+        req.dataPointIds[0] = EpeverDatapoints::BATTERY_SOC;
+        req.dataPointIds[1] = EpeverDatapoints::BATTERY_VOLTAGE;
+        FetchTask::sendRefreshNow(req);
         return true;
     }
     return false;

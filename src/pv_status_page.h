@@ -1,7 +1,8 @@
 #pragma once
 // Die Swipe-Seite "PV-Status" (Auftrag "Neuer Bildschirm PV"): 2x2-Kacheln
-// PV-Spannung/PV-Strom/PV-Leistung/heutiges Leistungsmaximum, letzte Seite
-// im Seitenwechsel (nach "Batterie").
+// PV-Spannung/PV-Strom/PV-Leistung/heutiges Leistungsmaximum, im
+// Seitenwechsel direkt nach "Batterie" (seit Auftrag "Seitenreihenfolge
+// am CYD aendern" gefolgt von "Verlauf", nicht mehr die letzte Seite).
 // Siehe pages.cpp fuer die Einbindung.
 #include <Arduino.h>
 

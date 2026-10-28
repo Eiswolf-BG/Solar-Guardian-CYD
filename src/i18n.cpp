@@ -117,6 +117,7 @@ namespace {
         "Läuft...",
         "Warten...",
         "Ab %02d:%02d",
+        "Nr. fehlt",
 
         // Wochenansicht (Wetterkachel antippen)
         "Morgen",
@@ -363,6 +364,7 @@ namespace {
         "Busy...",
         "Wait...",
         "From %02d:%02d",
+        "No S/N",
 
         // Week view (tap the weather tile)
         "Tomorrow",

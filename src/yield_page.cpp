@@ -304,8 +304,10 @@ bool onTap(int16_t /*x*/, int16_t /*y*/, int16_t /*areaTop*/, int16_t /*areaHeig
     // Auftrag "manueller Refresh": die ganze Seite ist jetzt antippbar
     // (vorher nur die Statuszeile) - aktualisiert "Heute" (einzig echter
     // Portal-Live-Wert hier), Woche/Monat/Jahr folgen automatisch ueber
-    // das Ertragsbuch.
-    FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+    // das Ertragsbuch. Kein Aktiv-Auslesen (Auftrag, Korrektur B3):
+    // Tagesertrag ist am Portal NICHT einzeln lesbar (wie im Auftrag als
+    // Beispiel genannt) - normaler passiver Refresh.
+    FetchTask::sendRefreshNow(FetchTask::RefreshRequest());
     return true;
 }
 

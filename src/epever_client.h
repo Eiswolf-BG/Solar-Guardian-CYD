@@ -32,6 +32,12 @@ namespace EpeverClient {
         // PV-Spannung/-Strom (Seite "Leistung") - laufen mit kleinem
         // sampleLimit in derselben Anfrage mit, siehe CLAUDE.md.
         BatteryPoint pvVoltage, pvCurrent;
+        // PV-Leistung als eigener Datenpunkt (Auftrag "Aktiv-Auslesen",
+        // Korrektur B3 - wird fuer die Uebersicht-Kachel "Leistung"
+        // gebraucht) - laeuft seitdem ebenfalls in derselben Anfrage mit,
+        // dieselbe dataPointId wie die separate 3h-Kurvenabfrage
+        // (EpeverDatapoints::PV_POWER).
+        BatteryPoint power;
         // Tages-Extremwerte der Batteriespannung (Auftrag "Max/Min-
         // Spannungskacheln") - laufen ebenfalls in derselben Anfrage mit.
         BatteryPoint voltageMax, voltageMin;
@@ -45,6 +51,30 @@ namespace EpeverClient {
     // Fehlerbehandlung im Fetch-Task (erneuter Login bei 401/Fehler).
     bool fetchBatteryData(const String& deviceNo, const String& token,
                           BatteryResult& out, int* outHttpCode, int* outApiStatus);
+
+    // Aktiv-Auslesen beim Antippen (Auftrag "Aktualisieren-Knopf soll
+    // echt etwas bewirken", Korrektur B "an die echte Portal-Anfrage
+    // anpassen") - loest beim Regler fuer JEDEN der dataPointIds EINE
+    // frische Messung aus ("userop/add" mit opType 0 = NUR Lesen, siehe
+    // epever_active_read.h fuer die Whitelist-Pruefung, die das hart
+    // durchsetzt - ein Befehl PRO Datenpunkt, nacheinander gesendet,
+    // siehe CLAUDE.md Tabelle), und wartet dann GEMEINSAM kurz wiederholt
+    // (Config::EPEVER_ACTIVE_READ_POLL_INTERVAL_MS) auf NEUERE Zeit-
+    // stempel fuer ALLE angeforderten Datenpunkte - abgefragt ueber den
+    // bereits bestehenden, portal-verifizierten passiven Abruf
+    // (fetchBatteryData()), NICHT ueber einen separaten, unbestaetigten
+    // Endpunkt. Zeitgrenze Config::EPEVER_ACTIVE_READ_WAIT_TIMEOUT_MS.
+    // Blockiert dabei den Fetch-Task (Core 0) - unkritisch, da zeitlich
+    // hart begrenzt und nur vom Fetch-Task selbst aufgerufen.
+    // dataPointCount darf hoechstens FetchTask::ACTIVE_READ_MAX_DATAPOINTS
+    // sein (wird intern zusaetzlich sicherheitshalber gedeckelt).
+    // outFresh=true nur, wenn ALLE angeforderten Werte tatsaechlich einen
+    // neueren Zeitstempel bekamen; bei Zeitgrenze liefert die Funktion
+    // trotzdem true (kein Fehler), aber outFresh=false ("Keine neuen
+    // Daten", kein echter Verbindungsfehler).
+    bool activeReadBattery(const String& deviceNo, const String& token,
+                           const int32_t* dataPointIds, uint8_t dataPointCount,
+                           BatteryResult& out, bool& outFresh, int* outHttpCode, int* outApiStatus);
 
     constexpr uint8_t POWER_CURVE_MAX_POINTS = 50;
 

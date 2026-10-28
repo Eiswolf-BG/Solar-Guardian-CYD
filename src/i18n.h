@@ -126,6 +126,9 @@ namespace I18n {
         REFRESH_BUSY_SHORT,
         REFRESH_COOLDOWN_SHORT,
         REFRESH_LOCKED_NIGHT_SHORT_FMT,
+        // Auftrag "Seriennummer-Quelle fuer das Aktiv-Auslesen" - kurze
+        // Kachel-Fassung von NO_DEVICE_NO_CONFIGURED oben.
+        REFRESH_NO_DEVICE_SHORT,
 
         // Wochenansicht (Wetterkachel antippen)
         WEEK_DAY_TOMORROW,

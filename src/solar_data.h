@@ -29,13 +29,25 @@ namespace SolarData {
     // Regeln und Rueckmeldung") - vom Fetch-Task (Core 0) gesetzt, Core 1
     // bildet daraus den angezeigten Text ueber die zentrale Textliste.
     enum class RefreshFeedback : uint8_t {
-        Working,       // Abfrage laeuft gerade
+        Working,       // Abfrage laeuft gerade (passiver Abruf)
+        // Aktiv-Auslesen (Auftrag "Aktualisieren-Knopf soll echt etwas
+        // bewirken") - zeigt DENSELBEN Text wie Working ("Lade..."), aber
+        // mit einer LAENGEREN harten Zeitgrenze (Korrektur B2, ca. 55s
+        // statt 15s - der Regler braucht laut Messung bis zu ~27s bis zum
+        // neuen Zeitstempel), siehe refresh_feedback_text.h.
+        WorkingActiveRead,
         Done,          // neuer Wert erhalten
         NoChange,      // Abfrage ok, aber Wert unveraendert
         LockedNight,   // ausserhalb des Tagesfensters (Nachtmodus/Abschlussabfrage)
         NoWifi,        // kein WLAN verbunden
         Busy,          // ein Abruf laeuft bereits
         Cooldown,      // Mindestabstand (30s) zum letzten Tipp noch nicht erreicht
+        // Geraete-Seriennummer (noch) nicht bekannt (Auftrag "Seriennummer-
+        // Quelle fuer das Aktiv-Auslesen") - zeigt das sofort als eigene,
+        // klare Meldung statt eines irrefuehrenden "Keine neuen Daten"
+        // (der Abruf liefe sonst still ins Leere, siehe fetch_task.cpp
+        // runDeviceNoOnlyCycle()). Sendet dabei NIE einen Befehl.
+        NoDeviceNo,
     };
 
     constexpr uint8_t HISTORY_MAX_POINTS = 50;
@@ -143,6 +155,14 @@ namespace SolarData {
         // (Auftrag). 0 = noch kein Zeitplan bekannt (keine Verbindung/kein
         // Konto) - Anzeige zeigt dann "--:--".
         time_t nextFetchAt = 0;
+        // Naechster NAECHTLICHER Batterie-Abruf (Auftrag "Batterie auch
+        // nachts abfragen") - EIGENES, von nextFetchAt getrenntes Feld,
+        // damit nur die Batterieseite nachts eine davon abweichende Zeit
+        // zeigt (alle anderen Seiten bleiben bei nextFetchAt/"04:30 Uhr",
+        // siehe CLAUDE.md). 0 = kein naechtlicher Abruf aktiv (Tag, oder
+        // Nacht aber Abschlussabfrage/Sicherung noch nicht bestaetigt) -
+        // battery_page.cpp faellt dann auf nextFetchAt zurueck.
+        time_t nightBatteryNextFetchAt = 0;
         char statusText[64] = {0}; // Klartext-Fehlermeldung, leer = kein Fehler
         FetchStatus fetchStatus = FetchStatus::NoAccount;
 
@@ -222,6 +242,7 @@ namespace SolarData {
     void setDailySource(float kwh, time_t measuredAt, bool fromDatapoint);
     void setLastSuccessfulFetch(time_t epoch);
     void setNextFetchAt(time_t epoch);
+    void setNightBatteryNextFetchAt(time_t epoch);
     void setFinalQueryDoneDate(const char* dateStr);
     void setStatusText(const char* text);
     void setFetchStatus(FetchStatus status);

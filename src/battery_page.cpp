@@ -3,6 +3,7 @@
 #include "solar_data.h"
 #include "app_config.h"
 #include "fetch_task.h"
+#include "epever_datapoints.h"
 #include "layout_utils.h"
 #include "layout_check.h"
 #include "tile_sprite.h"
@@ -416,11 +417,20 @@ namespace {
                 // "Naechste Abfrage: HH:MM" statt "Messung HH:MM"
                 // (Auftrag) - gleiches Prinzip wie power_page.cpp, nutzt
                 // denselben Fetch-Task-Zeitplan (Batterie laeuft im
-                // selben Zyklus wie Ertrag/Leistung).
+                // selben Zyklus wie Ertrag/Leistung). AUSNAHME nur hier
+                // auf der Batterieseite (Auftrag "Batterie auch nachts
+                // abfragen"): nachts, NACH bestaetigter Abschlussabfrage/
+                // Sicherung, zeigt diese Zeile die Zeit des naechsten
+                // naechtlichen Batterie-Abrufs (alle 10 Minuten) statt
+                // "04:30 Uhr" - nightBatteryNextFetchAt ist nur in genau
+                // diesem Fall > 0 (siehe fetch_task.cpp), alle anderen
+                // Seiten lesen weiterhin nur nextFetchAt und bleiben
+                // dadurch unveraendert.
                 char hhmm[8];
-                if (snap.nextFetchAt > 0) {
+                time_t nextAt = snap.nightBatteryNextFetchAt > 0 ? snap.nightBatteryNextFetchAt : snap.nextFetchAt;
+                if (nextAt > 0) {
                     struct tm t;
-                    localtime_r(&snap.nextFetchAt, &t);
+                    localtime_r(&nextAt, &t);
                     snprintf(hhmm, sizeof(hhmm), "%02d:%02d", t.tm_hour, t.tm_min);
                 } else {
                     strncpy(hhmm, "--:--", sizeof(hhmm) - 1);
@@ -821,7 +831,18 @@ bool onTap(int16_t x, int16_t y, int16_t areaTop, int16_t /*areaHeight*/) {
     Rect gridZone = {0, L.y0, Config::SCREEN_WIDTH, (int16_t)(L.y2 + FLAT_TILE_H - L.y0)};
     Rect tapZone = timestampTapZone(L);
     if (!gridZone.contains(x, y) && !tapZone.contains(x, y)) return false;
-    FetchTask::sendCommand(FetchTask::Command::RefreshNow);
+    // Aktiv ausgelesene Datenpunkte (Auftrag "Aktiv-Auslesen", Korrektur
+    // B3): genau die vier im Auftrag genannten Werte dieser Seite
+    // (Spannung/Strom/Ladestand/Temperatur) - Max/Min NICHT separat
+    // angestossen (laufen aber ohnehin in derselben Nachfrage mit, siehe
+    // epever_client.cpp::fetchBatteryData()).
+    FetchTask::RefreshRequest req;
+    req.dataPointCount = 4;
+    req.dataPointIds[0] = EpeverDatapoints::BATTERY_VOLTAGE;
+    req.dataPointIds[1] = EpeverDatapoints::BATTERY_CURRENT;
+    req.dataPointIds[2] = EpeverDatapoints::BATTERY_SOC;
+    req.dataPointIds[3] = EpeverDatapoints::BATTERY_TEMP;
+    FetchTask::sendRefreshNow(req);
     return true;
 }
 

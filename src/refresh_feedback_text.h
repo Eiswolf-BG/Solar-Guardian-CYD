@@ -19,12 +19,18 @@ namespace RefreshFeedbackText {
     // eine harte Obergrenze (Auftrag "Fehler in der Refresh-
     // Rueckmeldung"), damit die Anzeige nie fuer immer stehen bleibt.
     inline bool isTimed(SolarData::RefreshFeedback fb) {
-        return fb != SolarData::RefreshFeedback::Working;
+        return fb != SolarData::RefreshFeedback::Working &&
+               fb != SolarData::RefreshFeedback::WorkingActiveRead;
     }
 
     inline String textFor(SolarData::RefreshFeedback fb) {
         switch (fb) {
-            case SolarData::RefreshFeedback::Working:   return I18n::t(I18n::Str::REFRESH_WORKING);
+            case SolarData::RefreshFeedback::Working:
+            // WorkingActiveRead zeigt bewusst DENSELBEN Text ("Lade...")
+            // wie Working - nur die harte Zeitgrenze unterscheidet sich
+            // (siehe FeedbackState::update() unten), Korrektur B2.
+            case SolarData::RefreshFeedback::WorkingActiveRead:
+                return I18n::t(I18n::Str::REFRESH_WORKING);
             case SolarData::RefreshFeedback::Done:      return I18n::t(I18n::Str::REFRESH_DONE);
             case SolarData::RefreshFeedback::NoChange:  return I18n::t(I18n::Str::REFRESH_NO_CHANGE);
             case SolarData::RefreshFeedback::NoWifi:    return I18n::t(I18n::Str::REFRESH_NO_WIFI);
@@ -36,6 +42,12 @@ namespace RefreshFeedbackText {
                          Config::DAY_START_HOUR, Config::DAY_START_MINUTE);
                 return String(buf);
             }
+            // Auftrag "Seriennummer-Quelle fuer das Aktiv-Auslesen" -
+            // dieselbe, bereits vorhandene Meldung wie auf der normalen
+            // Statuszeile ohne Seriennummer (NO_DEVICE_NO_CONFIGURED),
+            // damit es nur EINEN Text dafuer gibt.
+            case SolarData::RefreshFeedback::NoDeviceNo:
+                return I18n::t(I18n::Str::NO_DEVICE_NO_CONFIGURED);
         }
         return String();
     }
@@ -45,7 +57,9 @@ namespace RefreshFeedbackText {
     // Bedeutung, aber garantiert kuerzer als die Vollversion oben.
     inline String shortTextFor(SolarData::RefreshFeedback fb) {
         switch (fb) {
-            case SolarData::RefreshFeedback::Working:   return I18n::t(I18n::Str::REFRESH_WORKING_SHORT);
+            case SolarData::RefreshFeedback::Working:
+            case SolarData::RefreshFeedback::WorkingActiveRead:
+                return I18n::t(I18n::Str::REFRESH_WORKING_SHORT);
             case SolarData::RefreshFeedback::Done:      return I18n::t(I18n::Str::REFRESH_DONE_SHORT);
             case SolarData::RefreshFeedback::NoChange:  return I18n::t(I18n::Str::REFRESH_NO_CHANGE_SHORT);
             case SolarData::RefreshFeedback::NoWifi:    return I18n::t(I18n::Str::REFRESH_NO_WIFI_SHORT);
@@ -57,6 +71,8 @@ namespace RefreshFeedbackText {
                          Config::DAY_START_HOUR, Config::DAY_START_MINUTE);
                 return String(buf);
             }
+            case SolarData::RefreshFeedback::NoDeviceNo:
+                return I18n::t(I18n::Str::REFRESH_NO_DEVICE_SHORT);
         }
         return String();
     }
@@ -103,6 +119,12 @@ namespace RefreshFeedbackText {
         uint32_t showUntilMs = 0; // 0 = nicht aktiv
         bool indefinite = false;
         uint32_t workingStartMs = 0; // nur waehrend indefinite gueltig
+        // Welche harte Obergrenze fuer DIESES "Working" gilt (Korrektur
+        // B2) - Working (passiver Abruf) 15s, WorkingActiveRead (Auftrag
+        // "Aktiv-Auslesen") 55s, da der Regler laut Messung bis zu ~27s
+        // fuer eine frische Messung braucht. Beim Eintritt in indefinite
+        // gesetzt, siehe update() unten.
+        uint32_t workingTimeoutMs = Config::REFRESH_WORKING_TIMEOUT_MS;
         String text;
         String shortText; // siehe fitToWidth() - immer zusammen mit text gesetzt
         // Ob GERADE JETZT (nach diesem update()-Aufruf) ein Feedback-Text
@@ -165,17 +187,26 @@ namespace RefreshFeedbackText {
                 shortText = shortTextFor(snap.refreshFeedback);
                 if (isTimed(snap.refreshFeedback)) {
                     indefinite = false;
-                    showUntilMs = millis() + 2000;
+                    // LockedNight (Auftrag) bewusst laenger sichtbar als
+                    // die uebrigen, selbsterklaerenden Rueckmeldungen -
+                    // sonst wird der Hinweis auf 04:30 Uhr leicht
+                    // uebersehen.
+                    uint32_t showMs = (snap.refreshFeedback == SolarData::RefreshFeedback::LockedNight)
+                        ? Config::REFRESH_LOCKED_NIGHT_SHOW_MS : 2000;
+                    showUntilMs = millis() + showMs;
                 } else {
                     indefinite = true;
                     workingStartMs = millis();
                     showUntilMs = 0;
+                    workingTimeoutMs = (snap.refreshFeedback == SolarData::RefreshFeedback::WorkingActiveRead)
+                        ? Config::EPEVER_ACTIVE_READ_FEEDBACK_TIMEOUT_MS
+                        : Config::REFRESH_WORKING_TIMEOUT_MS;
                 }
                 textChanged = true;
             }
             bool activeNow;
             if (indefinite) {
-                if (millis() - workingStartMs >= Config::REFRESH_WORKING_TIMEOUT_MS) {
+                if (millis() - workingStartMs >= workingTimeoutMs) {
                     // Harte Obergrenze erreicht - kein Folge-Ereignis
                     // eingetroffen. Wie "Keine neuen Daten" behandeln,
                     // dann ganz normal nach ca. 2s wieder verschwinden.

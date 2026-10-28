@@ -1,6 +1,7 @@
 #include "epever_client.h"
 #include "epever_datapoints.h"
 #include "epever_auth_headers.h"
+#include "epever_active_read.h"
 #include "http_deadline_guard.h"
 #include "config.h"
 #include <WiFiClientSecure.h>
@@ -237,7 +238,12 @@ namespace {
 bool fetchBatteryData(const String& deviceNo, const String& token,
                       BatteryResult& out, int* outHttpCode, int* outApiStatus) {
     int64_t nowMs = (int64_t)time(nullptr) * 1000LL;
-    int64_t startMs = nowMs - 3LL * 3600LL * 1000LL;
+    // Endzeit = jetzt + kleiner Puffer, Start grosszuegig (aber schmal
+    // genug, siehe config.h-Kommentar) davor - Auftrag "Fehler im Abruf
+    // beheben". IMMER absteigend sortiert (unten, "timeSort":"desc"),
+    // list[0] = erster/neuester Eintrag (siehe extractPoint()).
+    int64_t endMs = nowMs + Config::EPEVER_BATTERY_END_BUFFER_MS;
+    int64_t startMs = nowMs - Config::EPEVER_BATTERY_WINDOW_MS;
 
     constexpr int32_t ids[] = {
         EpeverDatapoints::BATTERY_VOLTAGE, EpeverDatapoints::BATTERY_CURRENT,
@@ -245,6 +251,11 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
         EpeverDatapoints::BATTERY_SOC, EpeverDatapoints::DAILY_GENERATION,
         EpeverDatapoints::PV_VOLTAGE, EpeverDatapoints::PV_CURRENT,
         EpeverDatapoints::BATTERY_VOLTAGE_MAX, EpeverDatapoints::BATTERY_VOLTAGE_MIN,
+        // PV_POWER dazu (Auftrag "Aktiv-Auslesen", Korrektur B3) - damit
+        // das Aktiv-Auslesen der Uebersicht-Kachel "Leistung" denselben,
+        // bereits bestehenden Abruf zum Nachfragen nutzen kann, statt
+        // einen eigenen, zusaetzlichen Request zu brauchen.
+        EpeverDatapoints::PV_POWER,
     };
 
     JsonDocument body;
@@ -256,8 +267,8 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
         o["dataPointId"] = id;
     }
     body["start"] = startMs;
-    body["end"] = nowMs;
-    body["sampleLimit"] = 5;
+    body["end"] = endMs;
+    body["sampleLimit"] = Config::EPEVER_BATTERY_SAMPLE_LIMIT;
     // KEIN "token" im Body - laut Browser-Netzwerk-Tab steckt die
     // Anmeldung hier ausschliesslich im Header "token" (siehe unten).
 
@@ -315,6 +326,7 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
     out.pvCurrent = extractPoint(list, EpeverDatapoints::PV_CURRENT);
     out.voltageMax = extractPoint(list, EpeverDatapoints::BATTERY_VOLTAGE_MAX);
     out.voltageMin = extractPoint(list, EpeverDatapoints::BATTERY_VOLTAGE_MIN);
+    out.power = extractPoint(list, EpeverDatapoints::PV_POWER);
 
     Serial.printf("[fetch] Batterie ok: U=%.2fV I=%.2fA SOC=%.1f%% T=%.1fC Tagesertrag=%.2fkWh PV U=%.1fV I=%.2fA\n",
                   out.voltage.valid ? out.voltage.value : 0.0f,
@@ -327,6 +339,142 @@ bool fetchBatteryData(const String& deviceNo, const String& token,
     // Ladestatus-Rohwert-Log NUR bei Aenderung - siehe fetch_task.cpp
     // (das sich den zuletzt gesehenen Wert merkt), nicht hier.
 
+    return true;
+}
+
+namespace {
+    // Ordnet einer dataPointId den passenden Messwert in einem bereits
+    // geparsten BatteryResult zu - fuer den "frisch?"-Vergleich je
+    // angefordertem Datenpunkt (Auftrag "Aktiv-Auslesen", Korrektur B3).
+    // nullptr = Datenpunkt wird vom passiven Abruf (noch) nicht
+    // mitgefuehrt.
+    const BatteryPoint* pointForDataPointId(const BatteryResult& r, int32_t id) {
+        if (id == EpeverDatapoints::BATTERY_VOLTAGE) return &r.voltage;
+        if (id == EpeverDatapoints::BATTERY_CURRENT) return &r.current;
+        if (id == EpeverDatapoints::CHARGE_STATUS) return &r.chargeStatus;
+        if (id == EpeverDatapoints::BATTERY_TEMP) return &r.temperature;
+        if (id == EpeverDatapoints::BATTERY_SOC) return &r.soc;
+        if (id == EpeverDatapoints::DAILY_GENERATION) return &r.dailyGeneration;
+        if (id == EpeverDatapoints::PV_VOLTAGE) return &r.pvVoltage;
+        if (id == EpeverDatapoints::PV_CURRENT) return &r.pvCurrent;
+        if (id == EpeverDatapoints::PV_POWER) return &r.power;
+        if (id == EpeverDatapoints::BATTERY_VOLTAGE_MAX) return &r.voltageMax;
+        if (id == EpeverDatapoints::BATTERY_VOLTAGE_MIN) return &r.voltageMin;
+        return nullptr;
+    }
+
+    // EIN Befehl fuer GENAU EINEN Datenpunkt ("userop/add") - Alex' Live-
+    // Mitschnitt des Portals: ein Klick auf einen Wert loest pro Wert
+    // einen eigenen Befehl aus (bei der Spannung z.B. zwei - Wert plus
+    // Alarmschwelle; wir senden hier bewusst NUR den Wert selbst).
+    // Port 443 (NICHT 7002 wie der passive Abruf), gleicher Pfad-
+    // Baustein "usrCloud/vn/..." und damit gleicher Auth-Stil wie
+    // fetchEnergy() (Appid-Header per httpPostJson()-Standardwert, Token
+    // im Body statt als Header). slaveIndex als TEXT (nicht als Zahl!),
+    // value als JSON null - exakt wie im Mitschnitt. Die Antwort
+    // (status/info/Kontoname) wird bewusst NICHT geloggt (Auftrag).
+    bool triggerActiveReadOne(const String& deviceNo, const String& token, int32_t dataPointId) {
+        constexpr int32_t opType = EpeverActiveRead::ALLOWED_OP_TYPE;
+        if (!EpeverActiveRead::isOpTypeAllowed(opType)) return false; // nie erreicht (feste Konstante), rein defensiv
+
+        JsonDocument body;
+        body["dataPointRelId"] = dataPointId;
+        body["deviceNo"] = deviceNo;
+        body["opType"] = opType;
+        body["slaveIndex"] = Config::EPEVER_ACTIVE_READ_SLAVE_INDEX;
+        body["value"] = (const char*)nullptr;
+        body["token"] = token;
+
+        String bodyStr;
+        serializeJson(body, bodyStr);
+
+        JsonDocument resp;
+        PostResult res = httpPostJson(Config::EPEVER_ACTIVE_READ_TRIGGER_URL, bodyStr, resp, nullptr);
+
+        if (res.httpCode != 200 || !res.jsonOk) {
+            Serial.printf("[fetch] Aktiv-Auslesen: Befehl fehlgeschlagen, HTTP-Code=%d\n", res.httpCode);
+            return false;
+        }
+        int status = resp["status"] | -1;
+        if (status != 0) {
+            Serial.printf("[fetch] Aktiv-Auslesen: Befehl abgelehnt, status=%d\n", status);
+            return false;
+        }
+        return true;
+    }
+}
+
+bool activeReadBattery(const String& deviceNo, const String& token,
+                       const int32_t* dataPointIds, uint8_t dataPointCount,
+                       BatteryResult& out, bool& outFresh, int* outHttpCode, int* outApiStatus) {
+    outFresh = false;
+    if (outHttpCode) *outHttpCode = -1;
+    if (outApiStatus) *outApiStatus = -1;
+    if (dataPointCount == 0) return false;
+
+    constexpr uint8_t MAX_DP = 8; // Sicherheitsnetz, Aufrufer deckelt bereits auf 4
+    if (dataPointCount > MAX_DP) dataPointCount = MAX_DP;
+
+    // Baseline: aktuelle Zeitstempel VOR dem Anstossen holen, ueber den
+    // bereits bestehenden, portal-verifizierten passiven Abruf - so
+    // braucht es keinen separaten, unbestaetigten "Status"-Endpunkt.
+    BatteryResult baseline;
+    int baseHttpCode = 0, baseApiStatus = 0;
+    if (!fetchBatteryData(deviceNo, token, baseline, &baseHttpCode, &baseApiStatus)) {
+        if (outHttpCode) *outHttpCode = baseHttpCode;
+        if (outApiStatus) *outApiStatus = baseApiStatus;
+        return false;
+    }
+    time_t previousTimes[MAX_DP];
+    for (uint8_t i = 0; i < dataPointCount; i++) {
+        const BatteryPoint* p = pointForDataPointId(baseline, dataPointIds[i]);
+        previousTimes[i] = (p && p->valid) ? p->time : 0;
+    }
+
+    // Schritt 1: fuer JEDEN angeforderten Datenpunkt einen eigenen
+    // Befehl senden, NACHEINANDER (Auftrag B3).
+    bool anyTriggered = false;
+    for (uint8_t i = 0; i < dataPointCount; i++) {
+        if (triggerActiveReadOne(deviceNo, token, dataPointIds[i])) anyTriggered = true;
+    }
+    if (!anyTriggered) return false;
+
+    // Schritt 2: GEMEINSAM auf neuere Zeitstempel fuer ALLE angeforderten
+    // Datenpunkte warten (eine Gesamtgrenze, Korrektur B2) - nichts
+    // bleibt haengen.
+    uint32_t pollStart = millis();
+    bool firstPoll = true;
+    BatteryResult lastSeen = baseline;
+    while ((uint32_t)(millis() - pollStart) < Config::EPEVER_ACTIVE_READ_WAIT_TIMEOUT_MS) {
+        delay(firstPoll ? Config::EPEVER_ACTIVE_READ_FIRST_POLL_DELAY_MS : Config::EPEVER_ACTIVE_READ_POLL_INTERVAL_MS);
+        firstPoll = false;
+
+        BatteryResult polled;
+        int pollHttpCode = 0, pollApiStatus = 0;
+        bool ok = fetchBatteryData(deviceNo, token, polled, &pollHttpCode, &pollApiStatus);
+        if (!ok) continue; // einzelner Nachfrage-Fehlschlag - einfach beim naechsten Versuch erneut pruefen
+
+        lastSeen = polled;
+        if (outHttpCode) *outHttpCode = pollHttpCode;
+        if (outApiStatus) *outApiStatus = pollApiStatus;
+
+        bool allFresh = true;
+        for (uint8_t i = 0; i < dataPointCount; i++) {
+            const BatteryPoint* p = pointForDataPointId(polled, dataPointIds[i]);
+            if (!p || !p->valid || p->time <= previousTimes[i]) { allFresh = false; break; }
+        }
+        if (allFresh) {
+            out = polled;
+            outFresh = true;
+            Serial.println("[fetch] Aktiv-Auslesen: alle angeforderten Werte frisch");
+            return true;
+        }
+    }
+
+    // Zeitgrenze erreicht - kein Fehler (die Befehle liefen durch), aber
+    // nicht (alle) Werte wurden frisch.
+    out = lastSeen;
+    Serial.println("[fetch] Aktiv-Auslesen: Zeitgrenze erreicht, nicht alle Werte wurden frisch");
     return true;
 }
 

@@ -12,19 +12,23 @@ namespace Pages {
 
 namespace {
     // Reihenfolge der Seiten: Uebersicht, Leistung, Tagesverlauf, Ertrag,
-    // Jahre, Batterie - zentral an dieser einen Stelle, siehe CLAUDE.md.
-    // Die Uebersicht (4 Kacheln) ist seit dem Auftrag "Hauptscreen/Wetter"
-    // die erste Seite nach dem Booten.
+    // Batterie, PV-Status, Verlauf - zentral an dieser einen Stelle,
+    // siehe CLAUDE.md. Die Uebersicht (4 Kacheln) ist seit dem Auftrag
+    // "Hauptscreen/Wetter" die erste Seite nach dem Booten.
+    // "Verlauf" (Tage/Monate/Jahre, vormals "Jahre") ist seit Auftrag
+    // "Seitenreihenfolge am CYD aendern" bewusst die LETZTE Seite - damit
+    // stehen alle Zahlen-/Ertrags-/Spannungsseiten zusammen, und das
+    // Saeulen-Diagramm bildet den Abschluss. Inhalt/Farben/
+    // Aktualisierungslogik der Seite selbst unveraendert, nur die
+    // Position in diesem Array hat sich geaendert.
     constexpr Page PAGES[] = {
         {I18n::Str::PAGE_HOME_TITLE, HomePage::draw, HomePage::update, HomePage::onTap, HomePage::onLongPress, I18n::Str::HELP_BODY_PAGE_HOME},
         {I18n::Str::PAGE_POWER_TITLE, PowerPage::draw, PowerPage::update, PowerPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_POWER},
         {I18n::Str::PAGE_DAILY_TITLE, DailyCurvePage::draw, DailyCurvePage::update, nullptr, nullptr, I18n::Str::HELP_BODY_PAGE_DAILY},
         {I18n::Str::PAGE_YIELD_TITLE, YieldPage::draw, YieldPage::update, YieldPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YIELD},
-        {I18n::Str::PAGE_YEARS_TITLE, YearsPage::draw, YearsPage::update, YearsPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YEARS},
         {I18n::Str::PAGE_BATTERY_TITLE, BatteryPage::draw, BatteryPage::update, BatteryPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_BATTERY},
-        // Auftrag "Neuer Bildschirm PV" - bewusst LETZTE Seite, Reihenfolge
-        // der bisherigen 6 Seiten bleibt unveraendert.
         {I18n::Str::PAGE_PV_STATUS_TITLE, PvStatusPage::draw, PvStatusPage::update, PvStatusPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_PV_STATUS},
+        {I18n::Str::PAGE_YEARS_TITLE, YearsPage::draw, YearsPage::update, YearsPage::onTap, nullptr, I18n::Str::HELP_BODY_PAGE_YEARS},
     };
     constexpr uint8_t PAGE_COUNT = sizeof(PAGES) / sizeof(PAGES[0]);
 }
