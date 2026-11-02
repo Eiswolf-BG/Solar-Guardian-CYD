@@ -36,7 +36,7 @@ namespace {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solar Guardian</title>
 <style>
-:root{--accent:#39ff14;--bg:#0a0a0a;--card:#141414;--text:#e8e8e8;--dim:#8a8a8a;}
+:root{--accent:#39ff14;--bg:#000;--card:#141414;--text:#e8e8e8;--dim:#8a8a8a;}
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
 header{padding:10px 14px;border-bottom:1px solid #222;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;}
