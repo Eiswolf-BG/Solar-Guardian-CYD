@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.2-blue)
+![version](https://img.shields.io/badge/version-2.3-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -118,6 +118,13 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   proportional zum Wert, und die Tage-Ansicht zeigt den genauen
   Tagesertrag mit zwei Nachkommastellen in richtiger, lückenloser
   Reihenfolge.
+- **Animierte Haus-Grafik** unten in der Web-Ansicht (auf allen Reitern
+  außer Wetter und Daten): tagsüber eine Tagesansicht mit Sonne, nachts
+  eine Nachtansicht mit Mond - der Wechsel erfolgt zum tatsächlichen
+  Sonnenauf- und -untergang des Standorts. Tagsüber laufen leuchtende
+  Punkte entlang des Energiewegs nur, wenn die Anlage gerade Ertrag
+  liefert, und schneller, je mehr sie produziert; nachts bewegt sich ein
+  einzelner, ruhiger Lichtpunkt.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
@@ -328,6 +335,13 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   axis, the bar charts (Days/Months/Years) now scale correctly in
   proportion to the value, and the Days view shows the exact daily
   yield with two decimal places in correct, gapless order.
+- **Animated house graphic** at the bottom of the web view (on every tab
+  except Weather and Data): a daytime scene with the sun during the day
+  and a nighttime scene with the moon at night, switching at the
+  location's actual sunrise and sunset. During the day, glowing light
+  points flow along the energy path only while the system is producing
+  power, and faster the more it produces; at night a single, calm light
+  point keeps moving.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.

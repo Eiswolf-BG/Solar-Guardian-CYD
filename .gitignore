@@ -22,6 +22,21 @@ History/
 # lokal, nie committen.
 /test/
 
+# Vorlagen-Testseiten fuer die animierte Haus-Grafik (Auftrag "Animierte
+# Haus-Grafik in der WebUI" / Ueberarbeitungen "Tag/Nacht nach Sonnenstand"
+# und "zwei Bild-Varianten") - enthalten die base64-Bilddaten nur als
+# Rohmaterial fuer tools/generate_house_image.py, bleiben rein lokal (das
+# erzeugte src/house_image.h wird stattdessen committet).
+/tag.html
+/test_grafik.html
+/solarenergy.html
+
+# Erzeugungs-Skript fuer die Haus-Grafik-Bilder - haengt an den obigen,
+# rein lokalen Vorlagen und wird nur gebraucht, wenn eines der Bilder
+# ersetzt wird. Das Ergebnis (src/house_image.h) wird committet, das
+# Skript selbst bleibt lokal.
+/tools/
+
 # Mehrtaegige Portal-Messung (Auftrag) - rein lokales Diagnosewerkzeug,
 # bleibt unversioniert. Der Aufruf in main.cpp ist entsprechend per
 # #ifdef PORTAL_DAY_PROBE (siehe config.h) abgesichert, damit ein

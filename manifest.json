@@ -1,6 +1,6 @@
 {
   "name": "Solar Guardian CYD",
-  "version": "2.2",
+  "version": "2.3",
   "new_install_prompt_erase": true,
   "builds": [
     {

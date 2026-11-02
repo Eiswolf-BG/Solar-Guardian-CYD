@@ -1,5 +1,8 @@
 #include "web_server.h"
 #include "web_files.h"
+#include "house_image.h"
+#include "sun_times.h"
+#include "easter_egg.h"
 #include "solar_data.h"
 #include "weather_data.h"
 #include "yield_ledger.h"
@@ -112,6 +115,15 @@ footer div{margin-top:3px;}
 .filesRow button.dlFolder{color:var(--accent);border-color:var(--accent);font-size:.68rem;}
 #filesProgress{color:var(--dim);font-size:.78rem;margin:6px 0;}
 .err{color:#ff5050;}
+/* Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
+   Ueberarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten") -
+   Aussehen/Massverhaeltnis 1:1 aus der bestaetigten Vorlage solarenergy.html
+   uebernommen (viewBox 1408x768, Punktgroesse/-farbe/-glow unveraendert). */
+.houseWrap{margin-top:16px;}
+.houseWrap.hidden{display:none;}
+.houseHero{position:relative;width:100%;aspect-ratio:1408/768;border-radius:12px;overflow:hidden;background:#000;}
+.houseHero img,.houseHero svg{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.houseHero img{opacity:0;transition:opacity 1.2s;}
 </style>
 </head>
 <body>
@@ -207,6 +219,30 @@ footer div{margin-top:3px;}
     </div>
   </div>
 </section>
+<div class="houseWrap" id="houseWrap">
+<div class="houseHero">
+<img id="houseImgV1Day" alt="">
+<img id="houseImgV1Night" alt="">
+<img id="houseImgV2Day" alt="">
+<img id="houseImgV2Night" alt="">
+<svg viewBox="0 0 1408 768" preserveAspectRatio="none" aria-hidden="true">
+<defs><filter id="hg" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="4" result="hb"/><feMerge><feMergeNode in="hb"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<g fill="none" stroke="none">
+<path id="hna" d="M890 163 L886 153 L874 135 L865 122 L862 118 L856 110 L842 101 L823 95 L809 95 L795 98 L780 102 L767 105 L752 109 L739 112 L724 116 L704 122 L690 125 L680 128 L669 130 L658 133 L641 138 L621 143 L609 146 L593 150 L570 156 L552 161 L542 164 L533 166 L515 170 L492 176 L473 182 L462 184 L455 190 L456 208 L465 228 L472 239 L480 249 L493 267 L502 280 L506 286 L515 299 L526 315 L538 331 L542 345 L529 352 L514 356 L509 364 L509 384 L510 406 L510 420 L510 430 L512 446 L514 465 L512 480"/>
+<path id="hnb" d="M560 356 L570 354 L580 352 L597 347 L612 342 L625 340 L638 335 L652 330 L667 326 L680 322 L687 328 L686 346 L684 362 L685 374 L685 392 L685 407 L678 424 L666 436 L653 442 L637 451 L618 458 L602 461 L590 463 L574 467 L554 472 L534 475 L512 480"/>
+<path id="hnc" d="M560 356 L570 354 L580 352 L597 347 L612 342 L625 340 L638 335 L652 330 L667 326 L684 321 L700 316 L710 314 L724 310 L739 305 L753 300 L770 295 L792 289 L811 283 L824 279 L838 275 L852 276 L860 288 L863 304 L862 318 L862 336 L862 354 L863 372 L863 383"/>
+<path id="hda" d="M801 253 L796 244 L787 229 L780 218 L766 208 L747 200 L731 199 L716 202 L702 206 L689 210 L675 214 L656 218 L636 223 L622 226 L610 229 L594 234 L574 239 L558 243 L543 247 L529 251 L519 253 L508 256 L492 260 L477 264 L461 269 L449 274 L448 287 L456 306 L468 322 L480 340 L488 352 L493 359 L503 373 L516 392 L530 404 L538 408 L532 406 L514 403 L498 411 L492 425 L492 439 L493 452 L493 464 L494 483 L500 501 L505 506 L496 511"/>
+<path id="hdb" d="M549 407 L559 404 L575 399 L588 395 L597 393 L613 388 L630 392 L635 407 L634 424 L634 442 L639 459 L644 464 L636 468 L620 474 L605 479 L586 487 L565 495 L547 500 L530 504 L513 503"/>
+<path id="hdc" d="M549 407 L559 404 L575 399 L588 395 L597 393 L613 388 L635 382 L654 376 L673 370 L688 366 L698 363 L713 358 L732 352 L744 349 L756 349 L774 351 L781 358 L780 370 L779 384 L780 400 L780 415 L780 435"/>
+<path id="hxa" d="M791 111 L772 116 L759 118 L747 122 L732 129 L717 136 L698 142 L680 149 L667 154 L659 158 L650 160 L636 164 L617 171 L599 177 L588 181 L572 188 L551 196 L536 202 L527 206 L517 209 L502 216 L488 227 L486 237 L493 247 L502 260 L512 275 L521 288 L530 302 L538 314 L545 322 L552 331 L557 340 L565 351 L576 366 L587 382 L592 390 L594 404 L596 426 L596 445 L596 460 L597 472 L597 479 L597 489 L598 503 L597 522 L593 544 L583 559 L572 563"/>
+<path id="hxb" d="M768 309 L774 323 L775 335 L774 343 L781 356 L792 374 L798 383 L794 386 L781 396 L772 414 L768 433 L766 447 L766 456 L766 464 L767 476 L768 492 L768 510"/>
+<path id="hxc" d="M768 309 L774 323 L775 335 L774 343 L781 356 L792 374 L807 382 L825 383 L838 382 L852 376 L870 368 L882 364 L894 360 L911 354 L921 350 L933 345 L951 338 L969 330 L985 323 L995 319 L1004 316 L1020 310 L1036 307 L1042 316 L1041 336 L1040 350 L1041 359 L1042 370 L1042 383"/>
+<path id="hya" d="M703 172 L681 172 L668 174 L658 178 L642 184 L624 190 L605 198 L586 205 L574 207 L567 209 L553 216 L535 223 L518 229 L503 236 L492 239 L477 243 L458 249 L446 253 L437 256 L421 262 L408 273 L406 286 L411 300 L418 314 L427 325 L437 337 L446 352 L458 367 L471 377 L480 390 L489 408 L500 426 L508 443 L512 460 L512 475 L511 492 L509 509 L509 520 L509 530 L510 544 L511 563 L506 581 L496 595 L486 598 L476 589 L466 578 L463 569"/>
+<path id="hyb" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L708 437 L699 446 L684 459 L676 478 L675 494 L675 502 L676 517 L676 539 L676 550"/>
+<path id="hyc" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L715 434 L730 434 L745 428 L762 419 L778 412 L787 410 L799 406 L815 401 L828 396 L843 390 L857 384 L870 377 L885 370 L897 366 L911 361 L927 356 L937 356 L940 369 L939 388 L938 403"/>
+</g><g id="houseDots" filter="url(#hg)"></g></svg>
+</div>
+</div>
 </main>
 <footer>
   <div><span id="footerConnDot" class="statusDot"></span><span id="footerConnText"></span></div>
@@ -236,7 +272,9 @@ var L={
      filesProgressFmt:'Lade Datei {i} von {n}: {name}',filesBackupDone:'Backup wurde heruntergeladen (liegt im Download-Ordner, je nach Browser wirst du nach dem Speicherort gefragt).',
      filesDownloadFailed:'Download fehlgeschlagen.',
      maxVoltage:'Max. Spannung',minVoltage:'Min. Spannung',maxToday:'Max heute',
-     pvStatus:'PV-Status',portalAgeFmt:'Portaldaten {m} Min alt'},
+     pvStatus:'PV-Status',portalAgeFmt:'Portaldaten {m} Min alt',
+     houseAltDay:'Schematische Tagesansicht von Haus, Garage und Auto mit dem Weg der Solarenergie',
+     houseAltNight:'Schematische Nachtansicht von Haus, Garage und Auto mit dem Weg der Solarenergie'},
  en:{tabs:['Overview','Power','Daily curve','Yield','Battery','PV status','History','Weather','Data'],
      power:'Power',today:'Today',battery:'Battery',week:'Week',month:'Month',year:'Year',
      voltage:'Voltage',current:'Current',temp:'Temperature',status:'Status',weather:'Weather',
@@ -258,7 +296,9 @@ var L={
      filesProgressFmt:'Loading file {i} of {n}: {name}',filesBackupDone:'Backup downloaded (check your downloads folder - depending on your browser, you may be asked where to save it).',
      filesDownloadFailed:'Download failed.',
      maxVoltage:'Max. voltage',minVoltage:'Min. voltage',maxToday:'Max today',
-     pvStatus:'PV status',portalAgeFmt:'Portal data {m} min old'}
+     pvStatus:'PV status',portalAgeFmt:'Portal data {m} min old',
+     houseAltDay:'Schematic daytime illustration of house, garage and car showing the path of the solar energy',
+     houseAltNight:'Schematic nighttime illustration of house, garage and car showing the path of the solar energy'}
 };
 var lang='de', t=L.de;
 var last={};
@@ -277,6 +317,7 @@ var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','ta
 var TAB_POWER=tabIds.indexOf('tab-power');
 var TAB_DAILY=tabIds.indexOf('tab-daily');
 var TAB_HISTORY=tabIds.indexOf('tab-history');
+var TAB_WEATHER=tabIds.indexOf('tab-weather');
 var TAB_FILES=tabIds.indexOf('tab-files');
 var activeTab=0;
 var lastHist=null;
@@ -315,6 +356,10 @@ function showTab(){
   // "Tage" zeigte ueberhaupt Daten.
   if (activeTab===TAB_HISTORY) { buildHistSubnav(); pollHistory(); }
   if (activeTab===TAB_FILES) filesInit();
+  // Haus-Grafik (Auftrag "Animierte Haus-Grafik"): auf allen Reitern ausser
+  // Wetter und Daten sichtbar, dort wuerde sie mit dem Inhalt kollidieren.
+  document.getElementById('houseWrap').className =
+      (activeTab===TAB_WEATHER || activeTab===TAB_FILES) ? 'houseWrap hidden' : 'houseWrap';
 }
 
 // ---- Reiter "Daten" (Datei-Explorer, Auftrag "WebUI-Reiter Daten") ----
@@ -838,6 +883,145 @@ function pollHistory(){
   }).catch(function(){});
 }
 
+// ---- Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
+// Ueberarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten")
+// ----
+// Aussehen/Wege/Punktgroesse/Glow/Ueberblendung/Geschwindigkeiten 1:1 aus
+// der bestaetigten Vorlage solarenergy.html
+// uebernommen (viewBox 1408x768, Punktradius 5, Farbe #7df3ff, Glow-
+// Filter, je EIN Punkt pro Weg, Daempfungsfaktor dt*3, Nacht-Tempo 14px/s
+// konstant, Tag-Tempo-Formel wie bisher). Datenquelle fuer den Tag-Modus
+// ist weiterhin der ohnehin abgerufene PV-Leistungswert, fuer den Tag/
+// Nacht-Wechsel data.sunDay (echter Sonnenstand - NICHT dasselbe wie
+// data.night, das ist der feste Abfrage-Ruhefenster-Takt). Welche der
+// zwei neutral benannten Bild-Varianten ("v1"/"v2") angezeigt wird, kommt
+// aus data.variant (1 oder 2) - rein technisch, kein Netzwerk-Mehrverkehr.
+var HOUSE_MAX_W=2000; // deckelt die Tag-Tempo-Formel, siehe Vorlage
+var HOUSE_STALE_MIN=30; // gleicher Schwellwert wie config.h EPEVER_STALE_AFTER_MS
+var HOUSE_NIGHT_SPEED=14; // Pixel/s, siehe Vorlage
+var houseReduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+// Reine Vorschau zum Testen (Auftrag "Vorschau zum Testen") - erzwingt
+// ueber einen URL-Zusatz Modus/Variante/Leistungswert, rein clientseitig,
+// schreibt/aendert nichts auf dem Geraet, bleibt unbeworben (nicht in
+// README/Release-Notes erwaehnt). Ohne Zusatz gilt die normale Logik.
+var houseForce = (function(){
+  var qp = new URLSearchParams(window.location.search);
+  var g = qp.get('grafik');
+  var w = qp.get('watt');
+  var v = qp.get('variante');
+  return {
+    mode: (g==='tag') ? 'day' : (g==='nacht' ? 'night' : null),
+    watt: (w!==null && !isNaN(+w)) ? +w : null,
+    variant: (v==='1') ? 'v1' : (v==='2' ? 'v2' : null)
+  };
+})();
+// Vier Kombinationen (Variante x Tag/Nacht) - je drei Wege, ein Punkt pro
+// Weg, eigene Bild-Route/eigenes <img>-Element.
+var houseSets={
+  v1_night:['hna','hnb','hnc'], v1_day:['hda','hdb','hdc'],
+  v2_night:['hxa','hxb','hxc'], v2_day:['hya','hyb','hyc']
+};
+var houseImgIds={
+  v1_day:'houseImgV1Day', v1_night:'houseImgV1Night',
+  v2_day:'houseImgV2Day', v2_night:'houseImgV2Night'
+};
+var houseRoutes={
+  v1_day:'/house_v1_day_v3.jpg', v1_night:'/house_v1_night_v3.jpg',
+  v2_day:'/house_v2_day_v3.jpg', v2_night:'/house_v2_night_v3.jpg'
+};
+var houseAll={}, houseAlpha={}, houseLast=null, houseWatts=0;
+Object.keys(houseSets).forEach(function(k){ houseAlpha[k]=0; });
+var houseImgLoaded=false, houseCurKey=null, houseSrcLoaded={v1_day:false,v1_night:false,v2_day:false,v2_night:false};
+function houseInit(){
+  var NS='http://www.w3.org/2000/svg';
+  var layer=document.getElementById('houseDots');
+  Object.keys(houseSets).forEach(function(k){
+    houseAll[k]=houseSets[k].map(function(id){
+      var p=document.getElementById(id);
+      var P={el:p,len:p.getTotalLength(),dots:[]};
+      var c=document.createElementNS(NS,'circle');
+      c.setAttribute('r','5');
+      c.setAttribute('fill','#7df3ff');
+      c.setAttribute('opacity','0');
+      layer.appendChild(c);
+      P.dots.push({c:c,t:0});
+      return P;
+    });
+  });
+  requestAnimationFrame(houseFrame);
+}
+function houseFrame(now){
+  // Pausiert effektiv, solange der Tab nicht sichtbar ist (rAF wird vom
+  // Browser dann ohnehin stark gedrosselt) - keine Bewegung, aber die
+  // Schleife bleibt am Leben, damit sie beim Zurueckkehren sofort
+  // weiterlaeuft, statt neu angestossen werden zu muessen.
+  if (document.hidden) { houseLast=null; requestAnimationFrame(houseFrame); return; }
+  if (!houseLast) houseLast=now;
+  var dt=Math.min(0.1,(now-houseLast)/1000);
+  houseLast=now;
+  Object.keys(houseSets).forEach(function(k){
+    var isNight = k.indexOf('night')>=0;
+    var on = (k===houseCurKey) && (isNight || houseWatts>=5) ? 1 : 0;
+    houseAlpha[k] += (on-houseAlpha[k])*Math.min(1,dt*3);
+    var speed = isNight ? HOUSE_NIGHT_SPEED : 30+170*Math.min(houseWatts,HOUSE_MAX_W)/HOUSE_MAX_W;
+    houseAll[k].forEach(function(P){
+      P.dots.forEach(function(d){
+        d.t += dt*speed/P.len*(on?1:0);
+        if (d.t>1) d.t-=1;
+        var pt=P.el.getPointAtLength(d.t*P.len);
+        d.c.setAttribute('cx',pt.x);
+        d.c.setAttribute('cy',pt.y);
+        d.c.setAttribute('opacity',houseAlpha[k].toFixed(2));
+      });
+    });
+  });
+  requestAnimationFrame(houseFrame);
+}
+// Laedt das Bild einer Variante/Modus-Kombination genau einmal (idempotent) -
+// NIE mehr als die zwei Bilder der gerade aktiven Variante.
+function houseLoadImage(key){
+  if (houseSrcLoaded[key]) return;
+  houseSrcLoaded[key]=true;
+  document.getElementById(houseImgIds[key]).src = houseRoutes[key];
+}
+// Blendet per CSS-Transition (1,2s, siehe .houseHero img) auf die neue
+// Variante/Modus-Kombination um und stoesst bei Bedarf deren Bild-
+// Ladevorgang an.
+function houseSetCur(key){
+  houseLoadImage(key);
+  if (houseCurKey===key) return;
+  houseCurKey=key;
+  Object.keys(houseImgIds).forEach(function(k){
+    var img=document.getElementById(houseImgIds[k]);
+    img.style.opacity = k===key?1:0;
+    img.setAttribute('aria-hidden', k===key?'false':'true');
+  });
+}
+// Setzt nur den Soll-Wert - die Geschwindigkeit gleitet in houseFrame() ohne
+// Sprung zum neuen Tempo, Punkte springen nie an eine andere Stelle.
+function houseUpdate(data){
+  var p=data.power||{};
+  var valid = typeof p.w==='number';
+  var stale = typeof p.ageMin==='number' && p.ageMin>=HOUSE_STALE_MIN;
+  houseWatts = houseForce.watt!==null ? houseForce.watt : ((valid && !stale) ? p.w : 0);
+  var isDay = houseForce.mode ? (houseForce.mode==='day') : !!data.sunDay;
+  var variant = houseForce.variant ? houseForce.variant : (data.variant===1 ? 'v1' : 'v2');
+  var key = variant+'_'+(isDay?'day':'night');
+
+  if (!houseImgLoaded) {
+    houseImgLoaded=true;
+    houseSetCur(key); // laedt zuerst das Bild der aktuellen Variante/des aktuellen Modus
+    var firstImg = document.getElementById(houseImgIds[key]);
+    var siblingKey = variant+'_'+(isDay?'night':'day'); // selbe Variante, anderer Modus
+    var startOther = function(){ houseLoadImage(siblingKey); };
+    firstImg.addEventListener('load', startOther, {once:true});
+    firstImg.addEventListener('error', startOther, {once:true});
+    if (!houseReduceMotion) houseInit(); // bei "weniger Bewegung": nur Standbild, keine Punkte
+  } else {
+    houseSetCur(key);
+  }
+}
+
 function render(data){
   if(data.lang && data.lang!==lang){ lang=data.lang; t=L[lang]||L.de; buildTabs(); showTab(); }
   document.documentElement.lang=lang;
@@ -861,6 +1045,11 @@ function render(data){
   setText('lblPvsVolt',t.voltage); setText('lblPvsCurr',t.current);
   setText('lblPvsPower',t.power); setText('lblPvsMax',t.maxToday); setText('lblPvsStatus',t.status);
   setText('heroLabel',t.weather);
+  document.getElementById('houseImgV1Day').alt=t.houseAltDay;
+  document.getElementById('houseImgV1Night').alt=t.houseAltNight;
+  document.getElementById('houseImgV2Day').alt=t.houseAltDay;
+  document.getElementById('houseImgV2Night').alt=t.houseAltNight;
+  houseUpdate(data);
 
   var p=data.power||{};
   setText('ovPower', fmt0(p.w)); setText('pPower', fmt0(p.w));
@@ -1028,6 +1217,36 @@ setInterval(poll,5000);
         snprintf(out, outSize, "%02d:%02d", t.tm_hour, t.tm_min);
     }
 
+    // Lokaler UTC-Versatz in Sekunden (DST-sicher) - portabler Ersatz fuer
+    // das auf diesem Toolchain fehlende struct tm::tm_gmtoff (ESP32-
+    // Arduino/newlib stellt es hier nicht bereit, siehe Build-Fehler bei
+    // einem direkten Zugriff). mktime() interpretiert die UTC-Felder als
+    // waeren sie lokale Zeit und liefert dadurch genau den Versatz zurueck,
+    // inklusive korrekter Sommerzeit fuer das Datum von "now" (ueber die
+    // POSIX-TZ-Regel aus configTzTime()).
+    long localUtcOffsetSeconds(time_t now) {
+        struct tm utcTm;
+        gmtime_r(&now, &utcTm);
+        time_t utcAsLocalEpoch = mktime(&utcTm);
+        return (long)(now - utcAsLocalEpoch);
+    }
+
+    // Echter Sonnenstand fuer die Haus-Grafik (Auftrag "Tag/Nacht nach
+    // Sonnenstand", NICHT YieldLedger::isNightModeConfirmedNow() - das ist
+    // der feste Abfrage-Ruhefenster-Takt). Rueckfall Nacht (false), wenn
+    // kein Standort gesetzt oder die Uhrzeit (noch) nicht gueltig ist
+    // (siehe sun_times.h).
+    bool isGraphicDaytimeNow() {
+        if (!appConfig.locationSet) return false;
+        struct tm nowTm;
+        if (!getLocalTime(&nowTm, 5)) return false;
+        SunTimes::Result r = SunTimes::compute(appConfig.locationLat, appConfig.locationLon,
+                                                nowTm.tm_yday, nowTm.tm_hour * 60 + nowTm.tm_min,
+                                                localUtcOffsetSeconds(time(nullptr)));
+        if (!r.valid) return false;
+        return r.isDay;
+    }
+
     // Kleine, rein lesende JSON-Antwort (Auftrag: unter ca. 3KB, keine
     // Zugangsdaten/Token/Seriennummer/Koordinaten - nur der Ortsname darf
     // erscheinen).
@@ -1041,6 +1260,32 @@ setInterval(poll,5000);
         doc["lang"] = (appConfig.language == 1) ? "en" : "de";
         doc["fwv"] = Config::FW_VERSION;
         doc["night"] = YieldLedger::isNightModeConfirmedNow();
+        // Echter Sonnenstand fuer die Haus-Grafik (Auftrag "Tag/Nacht nach
+        // Sonnenstand") - bewusst GETRENNT von "night" oben (fester Abfrage-
+        // Ruhefenster-Takt). Nur ein Kennzeichen + optional die Uhrzeiten,
+        // NIE Koordinaten in der Antwort.
+        doc["sunDay"] = isGraphicDaytimeNow();
+        // Bild-Variante der Haus-Grafik (Auftrag "zwei Bild-Varianten") -
+        // haengt am vorhandenen Sondermodus-Flag (EasterEgg::
+        // certificateValid(), siehe easter_egg.h), keine zweite Speicherung.
+        // Rein neutrales Kennzeichen (1 oder 2), NIE ein Name/Text dazu.
+        doc["variant"] = EasterEgg::certificateValid() ? 1 : 2;
+        {
+            struct tm sunTm;
+            if (appConfig.locationSet && getLocalTime(&sunTm, 5)) {
+                SunTimes::Result sr = SunTimes::compute(appConfig.locationLat, appConfig.locationLon,
+                                                         sunTm.tm_yday, sunTm.tm_hour * 60 + sunTm.tm_min,
+                                                         localUtcOffsetSeconds(time(nullptr)));
+                if (sr.valid && !sr.polar) {
+                    char riseBuf[6], setBuf[6];
+                    snprintf(riseBuf, sizeof(riseBuf), "%02d:%02d", sr.sunriseMinLocal / 60, sr.sunriseMinLocal % 60);
+                    snprintf(setBuf, sizeof(setBuf), "%02d:%02d", sr.sunsetMinLocal / 60, sr.sunsetMinLocal % 60);
+                    JsonObject sun = doc["sun"].to<JsonObject>();
+                    sun["rise"] = riseBuf;
+                    sun["set"] = setBuf;
+                }
+            }
+        }
         doc["portalOk"] = (snap.fetchStatus == SolarData::FetchStatus::Ok);
         char accentHex[8];
         snprintf(accentHex, sizeof(accentHex), "#%02x%02x%02x",
@@ -1229,6 +1474,38 @@ setInterval(poll,5000);
         }
     }
 
+    // Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
+    // Ueberarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-
+    // Varianten"): liefert die in house_image.h eingebetteten JPEGs direkt
+    // aus dem Flash, genau wie sendPageChunked() oben - kein SD-Zugriff,
+    // blockiert den WebServer nur kurz pro 2KB-Stueck (yield() dazwischen).
+    // Langer Cache-Header, weil sich die Bilder nie aendern - die
+    // Versionsnummer in den vier Routen (muss hier UND in den
+    // houseRoutes-JS-Strings in PAGE_HTML identisch sein) wird nur bei
+    // einem tatsaechlichen Bildwechsel erhoeht, damit ein Update beim
+    // Nutzer automatisch die neue Version laedt statt der gecachten alten.
+    // Die fruehere Einzelbild-Route "/house_v1.jpg" und die fruehere Tag/
+    // Nacht-ohne-Varianten-Fassung ("/house_day_v2.jpg"/
+    // "/house_night_v2.jpg") wurden entfernt (liefern jetzt 404, kein
+    // Alias).
+    void sendHouseImage(const uint8_t* data, size_t len) {
+        server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+        server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+        server.send(200, "image/jpeg", "");
+        constexpr size_t CHUNK = 2048;
+        size_t sentBytes = 0;
+        while (sentBytes < len) {
+            size_t n = (len - sentBytes < CHUNK) ? (len - sentBytes) : CHUNK;
+            server.sendContent_P((const char*)data + sentBytes, n);
+            sentBytes += n;
+            yield(); // Auftrag: keine lange Schleife ohne yield()
+        }
+    }
+    void handleHouseV1DayImage() { sendHouseImage(HOUSE_IMAGE_V1_DAY_JPG, HOUSE_IMAGE_V1_DAY_JPG_LEN); }
+    void handleHouseV1NightImage() { sendHouseImage(HOUSE_IMAGE_V1_NIGHT_JPG, HOUSE_IMAGE_V1_NIGHT_JPG_LEN); }
+    void handleHouseV2DayImage() { sendHouseImage(HOUSE_IMAGE_V2_DAY_JPG, HOUSE_IMAGE_V2_DAY_JPG_LEN); }
+    void handleHouseV2NightImage() { sendHouseImage(HOUSE_IMAGE_V2_NIGHT_JPG, HOUSE_IMAGE_V2_NIGHT_JPG_LEN); }
+
     void handleNotFound() {
         server.send(404, "text/plain", "Not found");
     }
@@ -1238,6 +1515,10 @@ void tick() {
     if (!started) {
         if (WiFi.status() != WL_CONNECTED) return;
         server.on("/", sendPageChunked);
+        server.on("/house_v1_day_v3.jpg", handleHouseV1DayImage);
+        server.on("/house_v1_night_v3.jpg", handleHouseV1NightImage);
+        server.on("/house_v2_day_v3.jpg", handleHouseV2DayImage);
+        server.on("/house_v2_night_v3.jpg", handleHouseV2NightImage);
         server.on("/api/data", handleApiData);
         server.on("/api/day", handleApiDay);
         server.on("/api/history", handleApiHistory);

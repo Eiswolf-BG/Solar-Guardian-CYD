@@ -603,6 +603,78 @@ Popups, neue wie alte):**
   Release händisch mit der Versionsnummer im Web-Flasher-Manifest
   (`manifest.json` im Wurzelverzeichnis) übereinstimmen** - beide Stellen
   zusammen pflegen, nicht nur eine davon vergessen.
+- **Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
+  Überarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten"):**
+  unterhalb des jeweiligen Reiter-Inhalts, auf allen Reitern außer "Wetter"
+  und "Daten" (dort würde sie kollidieren). Zeigt VIER sich überblendende
+  JPEGs (zwei technisch neutral benannte Bild-Varianten "v1"/"v2", je Tag-/
+  Nachtbild, Haus/Garage/Auto, `src/house_image.h`, PROGMEM, aus `tools/
+  generate_house_image.py` erzeugt - NIE von Hand editieren, bei neuen
+  Bildern das Skript erneut laufen lassen) mit einem SVG-Overlay aus zwölf
+  festen Wegen (drei je Variante/Tag-Nacht-Kombination), auf denen sich je
+  ein leuchtender Punkt bewegt - Aussehen/Wege/Punktgröße/Glow/
+  Überblendung/Geschwindigkeiten unverändert aus der bestätigten Vorlage
+  übernommen (viewBox 1408x768, Punktradius 5, Farbe `#7df3ff`, Glow-
+  Filter, Daempfungsfaktor dt*3, Bild-Überblendung per CSS
+  `transition:opacity 1.2s`).
+  - **Tag-Modus:** ein Punkt pro Weg, Tempo nach PV-Leistung (`data.power.w`,
+    kein zusätzlicher Netzwerk-Aufruf, Formel 30-200px/s bis 2000W linear,
+    danach gedeckelt). Punkte stehen still und blenden weich aus bei
+    0/<5W/fehlendem/veraltetem Wert (>30 Min, gleicher Schwellwert wie
+    `Config::EPEVER_STALE_AFTER_MS`).
+  - **Nacht-Modus:** ein Punkt pro Weg, konstant 14px/s, komplett ohne
+    Leistungslogik, immer aktiv solange der Modus "Nacht" ist.
+  - **Moduswahl nach echtem Sonnenstand** (`data.sunDay`,
+    `web_server.cpp::isGraphicDaytimeNow()`) - bewusst GETRENNT von
+    `data.night` (das ist weiterhin der feste Abfrage-Ruhefenster-Takt
+    `YieldLedger::isNightModeConfirmedNow()` [22:55, 04:30), nicht der
+    Sonnenstand). Die Wetterabfrage (Open-Meteo) liefert aktuell KEINEN
+    Sonnenauf-/-untergang, deshalb rechnet das Gerät selbst (NOAA-
+    Näherungsformel, `src/sun_times.h`, reine Funktion ohne IO, nativ
+    testbar über `test/test_sun_times`) aus Datum (`tm_yday`) und dem
+    bereits gespeicherten Standort (`appConfig.locationLat/Lon`) - KEINE
+    neue Netzwerkabfrage. DST-sicher über einen manuell berechneten
+    UTC-Versatz (`localUtcOffsetSeconds()` in `web_server.cpp` - das auf
+    diesem Toolchain fehlende `struct tm::tm_gmtoff` wird per
+    `mktime()`-Differenztrick ersetzt). Fallback Nacht, wenn kein Standort
+    gesetzt oder die Uhrzeit (noch) nicht gültig ist. Die API-Antwort
+    enthält nur das Kennzeichen plus optional `sun.rise`/`sun.set`
+    (HH:MM) - NIE Koordinaten.
+  - **Bild-Variante nach vorhandenem Sondermodus-Flag** (`EasterEgg::
+    certificateValid()`, siehe `easter_egg.h` - Ablauf/Bedeutung bewusst
+    nicht dokumentiert, auch hier nicht): aktiv -> Variante 1, sonst
+    Variante 2 (Standard). KEINE eigene/zweite Speicherung dafür angelegt.
+    Die API-Antwort enthält nur `doc["variant"]` (1 oder 2) - NIE einen
+    Namen/Text dazu. Wechselt der Sondermodus während die WebUI offen ist,
+    übernimmt die Seite das beim nächsten `/api/data`-Abruf (alle 5s) und
+    blendet zur anderen Variante um.
+  - Alle vier Bilder über EIGENE, exakte Routen (`/house_v1_day_v3.jpg`,
+    `/house_v1_night_v3.jpg`, `/house_v2_day_v3.jpg`,
+    `/house_v2_night_v3.jpg`, `handleHouseV1DayImage()` usw.) direkt aus
+    dem Flash ausgeliefert, komplett unabhängig von `web_files.cpp`/der
+    SD-Datei-Logik. Langer Cache-Header (`max-age=31536000, immutable`),
+    da sich die Bilder nie ändern - bei einem künftigen Bildwechsel die
+    Versionsnummer in ALLEN VIER Routen UND den passenden JS-Strings
+    (`houseRoutes`) gemeinsam erhöhen, sonst bekommen Nutzer mit altem
+    Browser-Cache das alte Bild weiter ausgeliefert. Alle früheren Routen
+    (`/house_v1.jpg`, `/house_day_v2.jpg`, `/house_night_v2.jpg`) sind
+    vollständig entfernt (404, kein Alias).
+  - Die WebUI lädt IMMER nur die zwei Bilder der gerade aktiven Variante,
+    nie alle vier: beim ersten erfolgreichen `/api/data`-Abruf zuerst das
+    Bild der aktuellen Variante/des aktuellen Modus, das jeweils andere
+    (gleiche Variante, anderer Modus) erst danach im Hintergrund (nach
+    dessen `load`/`error`-Event) - danach nur je einmal (Browser-Cache
+    übernimmt den Rest). Wechselt die Variante später (Sondermodus-
+    Umschaltung), wird das dafür nötige Bild erst dann nachgeladen, nie
+    vorab. Pausiert bei unsichtbarem Tab (`document.hidden`) und zeigt bei
+    `prefers-reduced-motion: reduce` nur das Standbild ohne Punkte.
+  - **Vorschau zum Testen** (rein clientseitig, schreibt/ändert nichts auf
+    dem Gerät, bewusst nicht in README/Release-Notes erwähnt): URL-Zusatz
+    `?grafik=tag&watt=800`, `?grafik=nacht` und/oder `?variante=1`/
+    `?variante=2` erzwingt im Browser den jeweiligen Modus/Leistungswert/
+    die jeweilige Variante, unabhängig vom echten Sonnenstand bzw.
+    Sondermodus - nur zum Ansehen aller Zustände unabhängig von Tageszeit
+    und Gerätezustand.
 
 ## Swipe-Struktur (Hauptbildschirm)
 
