@@ -1,4 +1,5 @@
 #include "fetch_task.h"
+#include "epever_datapoints.h"
 #include "wifi_connect_manager.h"
 #include "wifi_status.h"
 #include "solar_data.h"
@@ -149,6 +150,13 @@ namespace {
     // (Auftrag "Aktiv-Auslesen", Korrektur B3) - von handleCommand()
     // Command::RefreshNow gesetzt, von der due-Stelle unten konsumiert.
     RefreshRequest pendingActiveRead;
+    // Auftrag "Batterie auch nachts per Tipp aktualisieren": ein
+    // naechtlicher Batterie-Tipp laeuft NICHT ueber forceFetchNow/
+    // pendingActiveRead (die stossen den vollen Tageszyklus an, inkl.
+    // Ertragsbuch/SD) - eigener, komplett getrennter Pfad, der NUR
+    // runBatteryFetch() mit updateNonBatteryFields=false aufruft.
+    bool nightBatteryTapPending = false;
+    RefreshRequest pendingNightBatteryRead;
     bool firstFetchHeapLogged = false;
     bool firstBatteryHeapLogged = false;
     bool firstPowerCurveHeapLogged = false;
@@ -755,6 +763,27 @@ namespace {
         }
     }
 
+    // Auftrag "Batterie auch nachts per Tipp aktualisieren": true, wenn
+    // JEDER angeforderte Datenpunkt zu den reinen Batteriewerten gehoert
+    // (Spannung/Strom/Temperatur/Ladestand) - nur dann darf ein Tipp
+    // nachts ausnahmsweise einen aktiven Abruf ausloesen. Ein leerer
+    // Request (dataPointCount==0, passiver Tipp) gilt NICHT als
+    // batterie-only (betrifft z.B. die Seite "Ertrag", die nachts
+    // weiterhin gesperrt bleibt).
+    bool isBatteryOnlyRequest(const RefreshRequest& refresh) {
+        if (refresh.dataPointCount == 0) return false;
+        for (uint8_t i = 0; i < refresh.dataPointCount; i++) {
+            int32_t id = refresh.dataPointIds[i];
+            if (id != EpeverDatapoints::BATTERY_VOLTAGE &&
+                id != EpeverDatapoints::BATTERY_CURRENT &&
+                id != EpeverDatapoints::BATTERY_TEMP &&
+                id != EpeverDatapoints::BATTERY_SOC) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void handleCommand(Command cmd, const RefreshRequest& refresh) {
         switch (cmd) {
             case Command::ReconnectNow:
@@ -811,7 +840,7 @@ namespace {
                     // die laeuft bereits unabhaengig vom Tipp im
                     // Hintergrund (siehe tryResolveEquipmentList()).
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoDeviceNo);
-                } else if (!hasValidTime || !DayWindow::isDayWindow(nowTm)) {
+                } else if ((!hasValidTime || !DayWindow::isDayWindow(nowTm)) && !isBatteryOnlyRequest(refresh)) {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::LockedNight);
                 } else if (WiFi.status() != WL_CONNECTED) {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoWifi);
@@ -831,15 +860,28 @@ namespace {
                     SolarData::setRefreshFeedback(SolarData::RefreshFeedback::Cooldown);
                 } else {
                     lastManualRefreshMs = now;
-                    pendingActiveRead = refresh;
                     // Die Operationsprotokoll-Eintraege entstehen schon
                     // mit dem SENDEN der Befehle (nicht erst bei Erfolg) -
-                    // deshalb hier und nicht erst nach runFetchCycle().
+                    // deshalb hier und nicht erst nach runFetchCycle()/
+                    // runBatteryFetch().
                     if (refresh.dataPointCount > 0) {
                         ActiveReadLimiter::recordTap(activeReadLimiterState, now, refresh.dataPointCount);
                     }
-                    forceFetchNow = true;
-                    manualRefreshPending = true;
+                    bool isNight = !hasValidTime || !DayWindow::isDayWindow(nowTm);
+                    if (isNight) {
+                        // Nachts (nur batterie-only moeglich, siehe Pruefung
+                        // oben): eigener, komplett getrennter Pfad - NIE
+                        // forceFetchNow/pendingActiveRead (die wuerden den
+                        // vollen Tageszyklus samt Ertragsbuch/SD-Zugriffen
+                        // anstossen, siehe Auftrag "nichts in Ledger, Kurve
+                        // oder SD schreiben").
+                        pendingNightBatteryRead = refresh;
+                        nightBatteryTapPending = true;
+                    } else {
+                        pendingActiveRead = refresh;
+                        forceFetchNow = true;
+                        manualRefreshPending = true;
+                    }
                     SolarData::setRefreshFeedback(refresh.dataPointCount > 0
                         ? SolarData::RefreshFeedback::WorkingActiveRead
                         : SolarData::RefreshFeedback::Working);
@@ -875,6 +917,32 @@ namespace {
             QueueItem item;
             while (xQueueReceive(commandQueue, &item, 0) == pdTRUE) {
                 handleCommand(item.cmd, item.refresh);
+            }
+
+            // Auftrag "Batterie auch nachts per Tipp aktualisieren":
+            // komplett unabhaengig vom Tagesfenster/allowFetch-Pfad unten -
+            // ruft NUR runBatteryFetch() mit updateNonBatteryFields=false
+            // auf (wie der planmaessige naechtliche Batterie-Abruf), KEIN
+            // runFetchCycle(), also keine Ertragsbuch-/SD-Schreibzugriffe.
+            if (nightBatteryTapPending) {
+                nightBatteryTapPending = false;
+                RefreshRequest req = pendingNightBatteryRead;
+                pendingNightBatteryRead = RefreshRequest();
+                if (hasAccount && hasDeviceNo && WiFi.status() == WL_CONNECTED) {
+                    uint32_t changeCounterBefore = SolarData::snapshot().changeCounter;
+                    float unusedDailyGenKwh = 0.0f;
+                    bool unusedDailyGenValid = false;
+                    bool ok = runBatteryFetch(unusedDailyGenKwh, unusedDailyGenValid,
+                                               req.dataPointIds, req.dataPointCount,
+                                               /*updateNonBatteryFields=*/false);
+                    Serial.printf("[fetch] Naechtlicher Batterie-Tipp-Abruf: ok=%d\n", ok ? 1 : 0);
+                    uint32_t changeCounterAfter = SolarData::snapshot().changeCounter;
+                    SolarData::setRefreshFeedback(changeCounterAfter != changeCounterBefore
+                        ? SolarData::RefreshFeedback::Done
+                        : SolarData::RefreshFeedback::NoChange);
+                } else {
+                    SolarData::setRefreshFeedback(SolarData::RefreshFeedback::NoWifi);
+                }
             }
 
             if (!manualDisconnect) WifiConnectManager::tick();

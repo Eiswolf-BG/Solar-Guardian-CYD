@@ -58,6 +58,195 @@ namespace {
         f.close();
     }
 
+    // ---- Auftrag "History live schreiben" / "months.csv und years.csv" ----
+    // Generische Helfer fuer eine CSV-Datei im Stil von days.csv
+    // ("<schluessel>;<kwh>"), aber im Unterschied zu days.csv (reines
+    // Anhaengen) muss hier die Zeile der LAUFENDEN Periode bei jeder
+    // Wertaenderung ersetzt werden - gesucht wird dafuer immer anhand des
+    // Schluessels selbst (NICHT einer festen Zeilennummer), damit das auch
+    // bei einer unsortierten Datei (wie days.csv es sein darf) zuverlaessig
+    // funktioniert. Schreibt ueber eine Tmp-Datei + Umbenennen (Schutz vor
+    // Stromausfall mitten im Schreiben, gleiches Muster wie ueberall sonst
+    // im Projekt).
+
+    bool readCsvValueForKey(const char* path, const char* key, float& outValue) {
+        if (!SD.exists(path)) return false;
+        File f = SD.open(path, FILE_READ);
+        if (!f) return false;
+        bool found = false;
+        while (f.available()) {
+            String line = f.readStringUntil('\n');
+            line.trim();
+            if (line.length() == 0) continue;
+            int sep = line.indexOf(';');
+            if (sep > 0 && line.substring(0, sep) == key) {
+                outValue = line.substring(sep + 1).toFloat();
+                found = true;
+                break;
+            }
+        }
+        f.close();
+        return found;
+    }
+
+    // Ersetzt die Zeile fuer "key", falls vorhanden (nie kleiner als der
+    // dort bereits gespeicherte Wert - Auftrag), sonst haengt sie an.
+    // Alle anderen Zeilen bleiben unveraendert UND in ihrer urspruenglichen
+    // Reihenfolge stehen.
+    bool upsertCsvRow(const char* path, const char* tmpPath, const char* key, float value) {
+        if (SD.exists(tmpPath)) SD.remove(tmpPath);
+        File wf = SD.open(tmpPath, FILE_WRITE);
+        if (!wf) return false;
+
+        bool found = false;
+        if (SD.exists(path)) {
+            File rf = SD.open(path, FILE_READ);
+            if (rf) {
+                while (rf.available()) {
+                    String line = rf.readStringUntil('\n');
+                    line.trim();
+                    if (line.length() == 0) continue;
+                    int sep = line.indexOf(';');
+                    if (!found && sep > 0 && line.substring(0, sep) == key) {
+                        found = true;
+                        float existing = line.substring(sep + 1).toFloat();
+                        float finalValue = max(value, existing);
+                        wf.printf("%s;%.2f\n", key, (double)finalValue);
+                    } else {
+                        wf.println(line);
+                    }
+                }
+                rf.close();
+            }
+        }
+        if (!found) {
+            wf.printf("%s;%.2f\n", key, (double)value);
+        }
+        wf.close();
+
+        if (SD.exists(path)) SD.remove(path);
+        return SD.rename(tmpPath, path);
+    }
+
+    bool monthsCsvEnsured = false;
+    bool yearsCsvEnsured = false;
+
+    // Einmalig beim ersten Start mit dieser Version: months.csv/years.csv
+    // aus den vorhandenen months.json/years.json erzeugen, OHNE diese
+    // Dateien zu veraendern oder zu loeschen (Auftrag).
+    void ensureMonthsCsvExists() {
+        if (monthsCsvEnsured) return;
+        monthsCsvEnsured = true;
+        if (SD.exists(Config::SD_MONTHS_CSV)) return;
+        if (SD.exists(Config::SD_MONTHS_CSV_TMP)) SD.remove(Config::SD_MONTHS_CSV_TMP);
+        File wf = SD.open(Config::SD_MONTHS_CSV_TMP, FILE_WRITE);
+        if (!wf) return;
+        if (SD.exists(Config::SD_MONTHS_FILE)) {
+            File rf = SD.open(Config::SD_MONTHS_FILE, FILE_READ);
+            if (rf) {
+                JsonDocument doc;
+                if (!deserializeJson(doc, rf)) {
+                    for (JsonPair kv : doc.as<JsonObject>()) {
+                        wf.printf("%s;%.2f\n", kv.key().c_str(), (double)kv.value().as<float>());
+                    }
+                }
+                rf.close();
+            }
+        }
+        wf.close();
+        SD.rename(Config::SD_MONTHS_CSV_TMP, Config::SD_MONTHS_CSV);
+        Serial.println("[yield] months.csv einmalig aus months.json erzeugt");
+    }
+
+    void ensureYearsCsvExists() {
+        if (yearsCsvEnsured) return;
+        yearsCsvEnsured = true;
+        if (SD.exists(Config::SD_YEARS_CSV)) return;
+        if (SD.exists(Config::SD_YEARS_CSV_TMP)) SD.remove(Config::SD_YEARS_CSV_TMP);
+        File wf = SD.open(Config::SD_YEARS_CSV_TMP, FILE_WRITE);
+        if (!wf) return;
+        if (SD.exists(Config::SD_YEARS_FILE)) {
+            File rf = SD.open(Config::SD_YEARS_FILE, FILE_READ);
+            if (rf) {
+                JsonDocument doc;
+                if (!deserializeJson(doc, rf)) {
+                    for (JsonPair kv : doc.as<JsonObject>()) {
+                        wf.printf("%s;%.2f\n", kv.key().c_str(), (double)kv.value().as<float>());
+                    }
+                }
+                rf.close();
+            }
+        }
+        wf.close();
+        SD.rename(Config::SD_YEARS_CSV_TMP, Config::SD_YEARS_CSV);
+        Serial.println("[yield] years.csv einmalig aus years.json erzeugt");
+    }
+
+    char lastWrittenMonthCsvKey[8] = {0};
+    float lastWrittenMonthCsvValue = -1.0f;
+    char lastWrittenYearCsvKey[5] = {0};
+    float lastWrittenYearCsvValue = -1.0f;
+
+    // Bei JEDER echten Aenderung von Tag/Monat/Jahr sofort die laufende
+    // Zeile in months.csv/years.csv aktualisieren (Auftrag "History live
+    // schreiben") - schreibt nur, wenn sich Schluessel oder Wert seit dem
+    // letzten Schreiben wirklich geaendert haben (SD schonen).
+    void updateLiveHistoryCsv() {
+        if (!state.initialized || !state.monthKey[0] || !state.yearKey[0]) return;
+        ensureMonthsCsvExists();
+        ensureYearsCsvExists();
+
+        float monthTotal = state.monthBase + state.todayMax;
+        bool monthChanged = strcmp(lastWrittenMonthCsvKey, state.monthKey) != 0 ||
+                             fabsf(monthTotal - lastWrittenMonthCsvValue) > 0.001f;
+        if (monthChanged && upsertCsvRow(Config::SD_MONTHS_CSV, Config::SD_MONTHS_CSV_TMP, state.monthKey, monthTotal)) {
+            strncpy(lastWrittenMonthCsvKey, state.monthKey, sizeof(lastWrittenMonthCsvKey) - 1);
+            lastWrittenMonthCsvValue = monthTotal;
+        }
+
+        float yearTotal = state.yearBase + state.todayMax;
+        bool yearChanged = strcmp(lastWrittenYearCsvKey, state.yearKey) != 0 ||
+                            fabsf(yearTotal - lastWrittenYearCsvValue) > 0.001f;
+        if (yearChanged && upsertCsvRow(Config::SD_YEARS_CSV, Config::SD_YEARS_CSV_TMP, state.yearKey, yearTotal)) {
+            strncpy(lastWrittenYearCsvKey, state.yearKey, sizeof(lastWrittenYearCsvKey) - 1);
+            lastWrittenYearCsvValue = yearTotal;
+        }
+    }
+
+    // Beim Start: falls months.csv/years.csv fuer den AKTUELLEN Monat/Jahr
+    // bereits einen hoeheren Wert kennen als gerade aus yield.json geladen
+    // (z.B. weil yield.json verloren ging/beschaedigt war), den laufenden
+    // Wert daraus wiederherstellen - nie verkleinern (Auftrag).
+    void tryRestoreMonthYearFromCsv(const char* todayStr) {
+        char monthKey[8];
+        snprintf(monthKey, sizeof(monthKey), "%.7s", todayStr);
+        char yearKey[5];
+        snprintf(yearKey, sizeof(yearKey), "%.4s", todayStr);
+
+        if (state.monthKey[0] && strcmp(state.monthKey, monthKey) == 0) {
+            float csvVal;
+            if (readCsvValueForKey(Config::SD_MONTHS_CSV, monthKey, csvVal)) {
+                float ramVal = state.monthBase + state.todayMax;
+                if (csvVal > ramVal) {
+                    state.monthBase = csvVal - state.todayMax;
+                    dirty = true;
+                    Serial.printf("[yield] Monat aus months.csv wiederhergestellt: %s, %.2f kWh\n", monthKey, (double)csvVal);
+                }
+            }
+        }
+        if (state.yearKey[0] && strcmp(state.yearKey, yearKey) == 0) {
+            float csvVal;
+            if (readCsvValueForKey(Config::SD_YEARS_CSV, yearKey, csvVal)) {
+                float ramVal = state.yearBase + state.todayMax;
+                if (csvVal > ramVal) {
+                    state.yearBase = csvVal - state.todayMax;
+                    dirty = true;
+                    Serial.printf("[yield] Jahr aus years.csv wiederhergestellt: %s, %.2f kWh\n", yearKey, (double)csvVal);
+                }
+            }
+        }
+    }
+
     void pruneLastDays(const char* newDateStr) {
         DayEntry kept[6];
         uint8_t keptCount = 0;
@@ -259,6 +448,11 @@ namespace {
             int oldYearNum = atoi(state.yearKey);
             if (oldYearNum > 0) {
                 writeYearToYearsFile(oldYearNum, state.yearBase);
+                ensureYearsCsvExists();
+                if (upsertCsvRow(Config::SD_YEARS_CSV, Config::SD_YEARS_CSV_TMP, state.yearKey, state.yearBase)) {
+                    strncpy(lastWrittenYearCsvKey, state.yearKey, sizeof(lastWrittenYearCsvKey) - 1);
+                    lastWrittenYearCsvValue = state.yearBase;
+                }
                 Serial.printf("[yield] Jahreswechsel: %d abgeschlossen mit %.2f kWh\n", oldYearNum, (double)state.yearBase);
             }
             state.yearBase = 0.0f;
@@ -270,6 +464,11 @@ namespace {
             // das ist exakt die Endsumme des alten Monats.
             if (state.monthKey[0]) {
                 writeMonthToMonthsFile(state.monthKey, state.monthBase);
+                ensureMonthsCsvExists();
+                if (upsertCsvRow(Config::SD_MONTHS_CSV, Config::SD_MONTHS_CSV_TMP, state.monthKey, state.monthBase)) {
+                    strncpy(lastWrittenMonthCsvKey, state.monthKey, sizeof(lastWrittenMonthCsvKey) - 1);
+                    lastWrittenMonthCsvValue = state.monthBase;
+                }
                 Serial.printf("[yield] Monatswechsel: %s abgeschlossen mit %.2f kWh\n", state.monthKey, (double)state.monthBase);
             }
             state.monthBase = 0.0f;
@@ -621,6 +820,7 @@ void tick() {
     if (!restoreAttempted) {
         restoreAttempted = true;
         tryRestoreFromBackup(todayStr);
+        tryRestoreMonthYearFromCsv(todayStr);
         if (state.lastDaysCount < Config::YIELD_ROLLING_WEEK_DAYS) backfillLastDaysFromCsv(todayStr);
 #ifdef NIGHT_MODE_DIAG_TEST
         // Logzeile "Neustart im Nachtmodus" (Auftrag) - nur HIER beim
@@ -682,6 +882,11 @@ void tick() {
             writeHistoryBackup(state.currentDate, state.todayMax);
         }
     }
+
+    // Auftrag "History live schreiben": unabhaengig vom Speicherintervall
+    // oben (das gilt nur fuer yield.json) - schreibt nur bei echter
+    // Aenderung, siehe updateLiveHistoryCsv().
+    updateLiveHistoryCsv();
 
     uint32_t now = millis();
     if (dirty && now - lastSaveMs >= Config::YIELD_SAVE_MIN_INTERVAL_MS) {

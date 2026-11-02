@@ -253,8 +253,11 @@ namespace {
             }
 
             if (nightMode) {
+                // Auftrag "Mondsichel immer weiss": bewusst IMMER TFT_WHITE,
+                // unabhaengig von der eingestellten Systemfarbe (nicht
+                // "accent") - die einzige Zeichenstelle fuer dieses Symbol.
                 Rect mz = moonIconZone();
-                MoonIcon::draw(t, (int16_t)(mz.x + mz.w / 2), (int16_t)(mz.y + mz.h / 2), (int16_t)(mz.w / 2), accent);
+                MoonIcon::draw(t, (int16_t)(mz.x + mz.w / 2), (int16_t)(mz.y + mz.h / 2), (int16_t)(mz.w / 2), TFT_WHITE);
             }
         });
     }

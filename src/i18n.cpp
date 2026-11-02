@@ -251,6 +251,11 @@ namespace {
         "PV-Leistung",
         "Max heute",
         "Zeigt Spannung, Strom und Leistung der Solarmodule sowie den heutigen Leistungs-Höchstwert (derselbe Wert wie im Tagesverlauf). Die Werte kommen vom Solarregler über das Solar-Guardian-Portal und aktualisieren sich alle 5 Minuten. Kacheln antippen aktualisiert sofort. Nachts ist 0 W normal.",
+
+        // Seite "Wetter" (Wochenansicht)
+        "Wetter",
+        "Keine aktuellen Wetterdaten",
+        "Zeigt die Wettervorhersage für die nächsten Tage: Wochentag, Symbol sowie Höchst- und Tiefsttemperatur. Dieselben Daten wie auf der Übersicht und in der Wetter-Wochenübersicht der Web-Oberfläche, von Open-Meteo. Ohne Standort oder bei veralteten Daten erscheint ein Hinweis statt Werten.",
     };
 
     constexpr const char* EN[] = {
@@ -498,6 +503,11 @@ namespace {
         "PV power",
         "Max today",
         "Shows voltage, current, and power of the solar panels, plus today's power peak (the same value as on the Daily curve page). The values come from the solar controller via the Solar Guardian portal and refresh every 5 minutes. Tap a tile to refresh immediately. 0 W at night is normal.",
+
+        // "Weather" page (week view)
+        "Weather",
+        "No current weather data",
+        "Shows the forecast for the coming days: weekday, icon, and high/low temperature. Same data as on the overview and the web interface's weekly weather view, from Open-Meteo. Without a location, or if the data is outdated, a hint appears instead of values.",
     };
 
     static_assert(sizeof(DE) / sizeof(DE[0]) == (size_t)Str::COUNT, "DE table size mismatch - add/remove an entry to match enum Str");

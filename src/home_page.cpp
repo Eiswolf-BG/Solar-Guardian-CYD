@@ -17,6 +17,7 @@
 #include "location_screen.h"
 #include "i18n.h"
 #include "config.h"
+#include "app_font.h"
 #include <math.h>
 
 namespace HomePage {
@@ -248,24 +249,126 @@ namespace {
         return TFT_RED;
     }
 
-    void drawBatteryIcon(TFT_eSPI& t, int16_t cx, int16_t cy, int16_t w, int16_t h, float pct, bool valid) {
-        int16_t bodyW = (int16_t)(w - 3);
-        int16_t capW = 3, capH = (int16_t)(h / 3);
-        int16_t x = (int16_t)(cx - w / 2);
-        int16_t y = (int16_t)(cy - h / 2);
+    // Autobatterie-Symbol (Auftrag "Neues Batteriesymbol: Autobatterie",
+    // loest das bisherige, wie eine Handybatterie aussehende Symbol ab) -
+    // breiter Koerper mit Rahmen, oben zwei kleine Polkappen (links Minus,
+    // rechts Plus, je mit kleinem Zeichen), Fuellstand steigt von UNTEN
+    // nach OBEN (anders als vorher links-nach-rechts). cx/cy lokal
+    // (relativ zur Zeichenflaeche "t"), w/h = Gesamtgroesse INKLUSIVE der
+    // Polkappen. Gleiche Farblogik/-schwellen wie bisher.
+    // outBody*: liefert das gezeichnete Koerper-Rechteck (OHNE Polkappen)
+    // zurueck, damit der Aufrufer z.B. den Prozentwert mittig "im Bauch"
+    // der Batterie platzieren kann (Auftrag-Korrektur) - optional,
+    // nullptr wenn nicht gebraucht.
+    void drawBatteryIcon(TFT_eSPI& t, int16_t cx, int16_t cy, int16_t w, int16_t h, float pct, bool valid,
+                          int16_t* outBodyX = nullptr, int16_t* outBodyY = nullptr,
+                          int16_t* outBodyW = nullptr, int16_t* outBodyH = nullptr) {
         uint16_t color = valid ? batteryColorFor(pct) : Display::secondaryColor();
-        t.drawRoundRect(x, y, bodyW, h, 2, color);
-        t.fillRect((int16_t)(x + bodyW), (int16_t)(cy - capH / 2), capW, capH, color);
+
+        int16_t capH = (int16_t)(h * 3 / 10);
+        if (capH < 2) capH = 2;
+        int16_t bodyH = (int16_t)(h - capH);
+        int16_t bodyX = (int16_t)(cx - w / 2);
+        int16_t bodyY = (int16_t)(cy - h / 2 + capH);
+        if (outBodyX) *outBodyX = bodyX;
+        if (outBodyY) *outBodyY = bodyY;
+        if (outBodyW) *outBodyW = w;
+        if (outBodyH) *outBodyH = bodyH;
+
+        t.drawRoundRect(bodyX, bodyY, w, bodyH, 1, color);
+
+        int16_t capW = (int16_t)(w * 18 / 100);
+        if (capW < 2) capW = 2;
+        int16_t capY = (int16_t)(bodyY - capH + 1);
+        int16_t negX = (int16_t)(bodyX + w * 15 / 100);
+        int16_t posX = (int16_t)(bodyX + w - w * 15 / 100 - capW);
+        t.fillRect(negX, capY, capW, capH, color);
+        t.fillRect(posX, capY, capW, capH, color);
+
+        // Kleines Minus-/Plus-Zeichen auf den Kappen, in der Hintergrund-
+        // farbe (Schwarz) - nur, wenn genug Platz dafuer ist (bei der
+        // kleinen Kachel-Groesse bewusst weggelassen statt verpixelt).
+        if (capW >= 4 && capH >= 4) {
+            int16_t midY = (int16_t)(capY + capH / 2);
+            t.drawFastHLine((int16_t)(negX + 1), midY, (int16_t)(capW - 2), TFT_BLACK);
+            t.drawFastHLine((int16_t)(posX + 1), midY, (int16_t)(capW - 2), TFT_BLACK);
+            if (capH >= 5) {
+                int16_t midX = (int16_t)(posX + capW / 2);
+                t.drawFastVLine(midX, (int16_t)(capY + 1), (int16_t)(capH - 2), TFT_BLACK);
+            }
+        }
+
         if (valid) {
             float frac = pct / 100.0f;
             if (frac < 0.0f) frac = 0.0f;
             if (frac > 1.0f) frac = 1.0f;
             int16_t innerPad = 2;
-            int16_t fillW = (int16_t)((bodyW - 2 * innerPad) * frac);
-            if (fillW > 0) {
-                t.fillRect((int16_t)(x + innerPad), (int16_t)(y + innerPad), fillW, (int16_t)(h - 2 * innerPad), color);
+            int16_t innerH = (int16_t)(bodyH - 2 * innerPad);
+            int16_t fillH = (int16_t)(innerH * frac);
+            if (fillH > 0) {
+                t.fillRect((int16_t)(bodyX + innerPad), (int16_t)(bodyY + bodyH - innerPad - fillH),
+                           (int16_t)(w - 2 * innerPad), fillH, color);
             }
         }
+    }
+
+    // Zeichnet "numStr"+"signStr" (zwei Farben, ohne Luecke dazwischen)
+    // ETWAS GROESSER als die normale Size-1-Schrift, aber kleiner als der
+    // naechste Schriftsprung auf Size 2 (Auftrag-Korrektur "nur ein
+    // kleines bisschen groesser") - die Schriftart kennt dafuer keine
+    // eigene Zwischengroesse, deshalb wird bei Size 1 in einen kleinen
+    // Hilfspuffer gezeichnet und von dort aus mit einem festen Faktor
+    // (naechster Nachbar, kein Interpolieren - reicht fuer so wenige
+    // Pixel) auf die Zielflaeche vergroessert. cx/cy = Mittelpunkt auf
+    // der Zielflaeche "t". Gibt die tatsaechlich gezeichnete Breite/Hoehe
+    // zurueck (fuer LayoutCheck).
+    void drawSlightlyBiggerText(TFT_eSPI& t, int16_t cx, int16_t cy, const char* numStr, const char* signStr,
+                                 uint16_t numColor, uint16_t signColor, int16_t* outW, int16_t* outH) {
+        constexpr float SCALE = 1.3f;
+        // Kleiner, fester Abstand zwischen Zahl und "%" (Auftrag-
+        // Korrektur "ein kleines Leerzeichen, aber keinen grossen
+        // Abstand") - in der kleinen Hilfspuffer-Groesse VOR dem
+        // Skalieren, wird beim Vergroessern automatisch mitskaliert.
+        constexpr int16_t SIGN_GAP = 2;
+        t.setTextSize(1);
+        t.setTextDatum(TL_DATUM);
+        int16_t numW = t.textWidth(numStr);
+        int16_t signW = signStr[0] ? t.textWidth(signStr) : 0;
+        int16_t gap = signStr[0] ? SIGN_GAP : 0;
+        int16_t totalW = (int16_t)(numW + gap + signW);
+        int16_t th = t.fontHeight();
+        if (totalW <= 0 || th <= 0) { if (outW) *outW = 0; if (outH) *outH = 0; return; }
+
+        TFT_eSprite tmp(&tft);
+        tmp.setColorDepth(16);
+        if (!tmp.createSprite(totalW, th)) { if (outW) *outW = 0; if (outH) *outH = 0; return; }
+        tmp.setFreeFont(&AppFont11pt);
+        tmp.setTextSize(1);
+        tmp.fillSprite(TFT_BLACK);
+        tmp.setTextDatum(TL_DATUM);
+        tmp.setTextColor(numColor, TFT_BLACK);
+        tmp.drawString(numStr, 0, 0);
+        if (signStr[0]) {
+            tmp.setTextColor(signColor, TFT_BLACK);
+            tmp.drawString(signStr, (int16_t)(numW + gap), 0);
+        }
+
+        int16_t destW = (int16_t)(totalW * SCALE);
+        int16_t destH = (int16_t)(th * SCALE);
+        int16_t destX = (int16_t)(cx - destW / 2);
+        int16_t destY = (int16_t)(cy - destH / 2);
+        for (int16_t dy = 0; dy < destH; dy++) {
+            int16_t sy = (int16_t)(dy / SCALE);
+            if (sy >= th) sy = (int16_t)(th - 1);
+            for (int16_t dx = 0; dx < destW; dx++) {
+                int16_t sx = (int16_t)(dx / SCALE);
+                if (sx >= totalW) sx = (int16_t)(totalW - 1);
+                t.drawPixel((int16_t)(destX + dx), (int16_t)(destY + dy), tmp.readPixel(sx, sy));
+            }
+        }
+        tmp.deleteSprite();
+        if (outW) *outW = destW;
+        if (outH) *outH = destH;
     }
 
     // labelOverride: siehe renderLabelValueTile() - Wert/Symbol bleiben
@@ -292,40 +395,82 @@ namespace {
         char pctStr[8];   // nur fuer die Groessenberechnung (inkl. "%")
         char pctNum[8];   // Zahlenteil allein, Sekundaerfarbe
         if (valid) {
-            snprintf(pctStr, sizeof(pctStr), "%.0f %%", (double)snap.batterySocPercent);
+            // Kein Leerzeichen vor "%" (Auftrag) - Zahl+Zeichen gelten als
+            // EINE zusammengehoerige Einheit, auch bei 1/2/3-stelligen
+            // Werten (5%/24%/100%).
+            snprintf(pctStr, sizeof(pctStr), "%.0f%%", (double)snap.batterySocPercent);
             snprintf(pctNum, sizeof(pctNum), "%.0f", (double)snap.batterySocPercent);
         } else {
             strncpy(pctStr, "--", sizeof(pctStr));
             strncpy(pctNum, "--", sizeof(pctNum));
         }
 
+        // Auftrag "Hauptscreen, Batteriekachel": Spannung oben, Symbol
+        // MITTIG dazwischen, Prozentwert darunter - alle drei horizontal
+        // mittig in der Kachel, gleichmaessig verteilt. Keine gleich
+        // grossen Drittel-Zonen (das machte den Prozentwert beim ersten
+        // Versuch zu klein) - die Spannungs-Zone bekommt nur so viel wie
+        // fuer Size 1 noetig (verhindert das Abschneide-Problem vom
+        // zweiten Versuch), das Symbol eine feste, gut erkennbare Groesse,
+        // der Prozentwert den Rest.
+        char voltNum[12];
+        if (valid) {
+            formatDecimal(snap.batteryVoltage, 2, voltNum, sizeof(voltNum));
+        } else {
+            strncpy(voltNum, "--", sizeof(voltNum));
+        }
+
         constexpr int16_t LABEL_H = 22;
-        int16_t valueZoneTop = LABEL_H;
-        int16_t valueZoneH = (int16_t)(h - LABEL_H - 6);
-        int16_t valueCY = (int16_t)(valueZoneTop + valueZoneH / 2);
+        constexpr int16_t VOLT_ZONE_H = 25; // Mindesthoehe fuer Size 1, siehe CLAUDE.md Layout-Regel
+        constexpr int16_t ICON_ZONE_H = 28;
+        constexpr int16_t BOTTOM_GAP = 4; // Abstand Prozentwert -> Kachel-Unterkante
+        int16_t voltCY = (int16_t)(LABEL_H + VOLT_ZONE_H / 2);
+        int16_t iconCY = (int16_t)(LABEL_H + VOLT_ZONE_H + ICON_ZONE_H / 2);
+        int16_t iconBottom = (int16_t)(iconCY + ICON_ZONE_H / 2);
+        // Prozentwert exakt mittig zwischen Batterie-Unterkante und
+        // Kachel-Unterkante (Auftrag-Korrektur), nicht mehr nach der
+        // uebrigen Zonenhoehe berechnet.
+        int16_t pctCY = (int16_t)((iconBottom + (h - BOTTOM_GAP)) / 2);
 
-        LayoutUtils::FitResult fit = fitNumberNoTruncate(t, pctStr, (int16_t)(w - 26), valueZoneH, VALUE_SIZES, 2);
-        t.setTextSize(fit.textSize);
-        int16_t textW = t.textWidth(pctStr);
-        int16_t iconW = 20, iconH = 11;
-        int16_t totalW = (int16_t)(iconW + 6 + textW);
-        int16_t startX = (int16_t)(w / 2 - totalW / 2);
-
-        drawBatteryIcon(t, (int16_t)(startX + iconW / 2), valueCY, iconW, iconH, snap.batterySocPercent, valid);
-        // Zahlenwert in Sekundaerfarbe, Einheit "%" in Systemfarbe (Auftrag
-        // "Farbregeln vereinheitlichen").
-        t.setTextDatum(ML_DATUM);
+        t.setTextSize(1);
+        t.setTextDatum(MC_DATUM);
         t.setTextColor(Display::valueColor(valid, accent), TFT_BLACK);
-        t.drawString(pctNum, (int16_t)(startX + iconW + 6), valueCY);
-        int16_t numW = t.textWidth(pctNum);
-        t.setTextColor(accent, TFT_BLACK);
-        t.drawString(" %", (int16_t)(startX + iconW + 6 + numW), valueCY);
+        // Zahl + Einheit als EIN String gemessen/gezeichnet (anders als
+        // der Prozentwert unten, der zweifarbig ist) - hier reicht eine
+        // Farbe, die Einheit ist bei einem fehlenden Wert ohnehin nicht
+        // separat bedeutsam.
+        String voltStr = String(voltNum) + " " + I18n::t(I18n::Str::VOLT_UNIT);
+        t.drawString(voltStr, (int16_t)(w / 2), voltCY);
         t.setTextDatum(TL_DATUM);
         {
+            int16_t vw = t.textWidth(voltStr);
             int16_t th = t.fontHeight();
-            LayoutCheck::containedRect("Kachel-Wert", absX, absY, w, h,
-                                        (int16_t)(absX + startX), (int16_t)(absY + valueCY - th / 2), totalW, th);
+            LayoutCheck::containedRect("Kachel-Spannung", absX, absY, w, h,
+                                        (int16_t)(absX + w / 2 - vw / 2), (int16_t)(absY + voltCY - th / 2), vw, th);
         }
+
+        // Autobatterie-Symbol mittig in der Kachel (Auftrag Punkt a) -
+        // Fuellstand/Farbe unveraendert.
+        int16_t iconH = (int16_t)(ICON_ZONE_H - 6);
+        int16_t iconW = (int16_t)(iconH * 3 / 2);
+        drawBatteryIcon(t, (int16_t)(w / 2), iconCY, iconW, iconH, snap.batterySocPercent, valid);
+        LayoutCheck::containedRect("Kachel-Symbol", absX, absY, w, h,
+                                    (int16_t)(absX + w / 2 - iconW / 2), (int16_t)(absY + iconCY - iconH / 2), iconW, iconH);
+
+        // Prozentwert darunter, mittig, Zahl+"%" OHNE Leerzeichen als EINE
+        // Einheit zentriert (Auftrag Punkt b/c) - Zahl in Sekundaerfarbe,
+        // Einheitszeichen in Systemfarbe (Auftrag "Farbregeln
+        // vereinheitlichen"), zusammen zentriert. Gilt gleich fuer "--"
+        // (Auftrag Punkt e: gleiche Zone, kein Layout-Sprung). Auftrag-
+        // Korrektur: nur ein kleines bisschen groesser als Size 1 (siehe
+        // drawSlightlyBiggerText() oben) statt des grossen Sprungs auf
+        // Size 2.
+        const char* pctSign = valid ? "%" : "";
+        int16_t drawnW = 0, drawnH = 0;
+        drawSlightlyBiggerText(t, (int16_t)(w / 2), pctCY, pctNum, pctSign,
+                                Display::valueColor(valid, accent), accent, &drawnW, &drawnH);
+        LayoutCheck::containedRect("Kachel-Wert", absX, absY, w, h,
+                                    (int16_t)(absX + w / 2 - drawnW / 2), (int16_t)(absY + pctCY - drawnH / 2), drawnW, drawnH);
     }
 
     // Wortweiser Umbruch nach echter Pixelbreite - gleiches Prinzip wie in

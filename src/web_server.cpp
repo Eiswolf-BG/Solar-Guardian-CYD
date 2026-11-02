@@ -264,6 +264,20 @@ var lang='de', t=L.de;
 var last={};
 var tabsEl=document.getElementById('tabs');
 var tabIds=['tab-overview','tab-power','tab-daily','tab-yield','tab-battery','tab-pvstatus','tab-history','tab-weather','tab-files'];
+// Feste, sprachunabhaengige Indizes ueber tabIds statt Zahlen-Literale
+// (Bugfix "Daten-Reiter beim ersten Klick leer"): die Zahlen-Literale
+// unten in showTab() waren auf den Stand VOR dem Einfuegen von
+// "PV-Status" (zwischen Batterie und Verlauf) eingefroren und zeigten
+// seitdem auf die FALSCHEN Tabs (Verlauf statt PV-Status, Wetter statt
+// Daten) - der Daten-Reiter rief filesInit() dadurch nie beim eigenen
+// Klick auf, nur zufaellig vorab beim Besuch des (falschen) Wetter-Tabs,
+// dessen Inhalt dann beim naechsten Klick auf Daten schon im Hintergrund
+// geladen war. ueber indexOf() bleibt das robust, auch wenn Tabs kuenftig
+// erneut umsortiert werden.
+var TAB_POWER=tabIds.indexOf('tab-power');
+var TAB_DAILY=tabIds.indexOf('tab-daily');
+var TAB_HISTORY=tabIds.indexOf('tab-history');
+var TAB_FILES=tabIds.indexOf('tab-files');
 var activeTab=0;
 var lastHist=null;
 var lastDay=null;
@@ -293,14 +307,14 @@ function showTab(){
   // bekannten Werten sofort nachzeichnen, statt auf den naechsten Poll
   // zu warten. Tage/Tagesverlauf/Verlauf-Tabs holen ihre Daten erst bei
   // Aktivierung (eigene, kleine Abrufe statt Dauerlast, siehe Auftrag).
-  if (activeTab===1) drawChart(lastHist);
-  if (activeTab===2) pollDay();
+  if (activeTab===TAB_POWER) drawChart(lastHist);
+  if (activeTab===TAB_DAILY) pollDay();
   // Bug behoben: der Tage/Monate/Jahre-Unterreiter (histSubnav) wurde nie
   // gebaut, nur beim Klick auf einen seiner (nie existierenden) Knoepfe -
   // Monate/Jahre waren dadurch unerreichbar, nur die Standardansicht
   // "Tage" zeigte ueberhaupt Daten.
-  if (activeTab===5) { buildHistSubnav(); pollHistory(); }
-  if (activeTab===7) filesInit();
+  if (activeTab===TAB_HISTORY) { buildHistSubnav(); pollHistory(); }
+  if (activeTab===TAB_FILES) filesInit();
 }
 
 // ---- Reiter "Daten" (Datei-Explorer, Auftrag "WebUI-Reiter Daten") ----

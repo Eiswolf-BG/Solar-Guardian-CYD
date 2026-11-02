@@ -578,6 +578,9 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
             LayoutUtils::FitResult socFit = LayoutUtils::fitText(t, socStr, socZoneW, SOC_ZONE_H, SOC_SIZES, 3);
             t.setTextSize(socFit.textSize);
             if (socFit.text == socStr) {
+                // Kein Batteriesymbol auf dieser Seite (Auftrag-Korrektur:
+                // passte dort nicht ins Layout, siehe Alex' Rueckmeldung) -
+                // nur die grosse, zentrierte Prozentzahl wie bisher.
                 int16_t numW = t.textWidth(socNum);
                 int16_t totalW = t.textWidth(socStr);
                 int16_t startX = (int16_t)(socZoneW / 2 - totalW / 2);

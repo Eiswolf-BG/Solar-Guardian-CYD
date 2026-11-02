@@ -28,7 +28,7 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "2.1";
+    constexpr const char* FW_VERSION = "2.2";
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----
@@ -124,6 +124,18 @@ namespace Config {
     // handleDayChange()), nie rueckwirkend erraten.
     constexpr const char* SD_MONTHS_FILE     = "/SolarHistory/months.json";
     constexpr const char* SD_MONTHS_TMP_FILE = "/SolarHistory/months.json.tmp";
+
+    // CSV-Fassungen von Monats-/Jahresuebersicht (Auftrag "History live
+    // schreiben"/"months.csv und years.csv") - gleicher Stil wie
+    // SD_YIELD_DAYS_CSV ("YYYY-MM;kwh" bzw. "YYYY;kwh"), aber anders als
+    // dort wird die Zeile der LAUFENDEN Periode bei jeder echten
+    // Wertaenderung ueberschrieben statt nur einmal am Periodenende
+    // angehaengt (siehe yield_ledger.cpp). Einmalig aus den vorhandenen
+    // *_FILE-JSON-Dateien erzeugt, ohne diese zu veraendern.
+    constexpr const char* SD_MONTHS_CSV     = "/SolarHistory/months.csv";
+    constexpr const char* SD_MONTHS_CSV_TMP = "/SolarHistory/months.csv.tmp";
+    constexpr const char* SD_YEARS_CSV      = "/SolarHistory/years.csv";
+    constexpr const char* SD_YEARS_CSV_TMP  = "/SolarHistory/years.csv.tmp";
 
     // Balkenanzahl fuer alle 3 Reiter der Seite "Jahre" (Tage/Monate/
     // Jahre) - jeweils laufende Periode + bis zu 6 fruehere, siehe Auftrag

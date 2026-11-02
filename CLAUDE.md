@@ -1168,6 +1168,52 @@ Popups, neue wie alte):**
     Erscheint wie jede Geraete-Seriennummer im Projekt nie in Logs,
     Kommentaren oder der WebUI.
 
+28. **Monats-/Jahreswerte live gesichert** (`yield_ledger.cpp`): Die
+    laufende Periode wird bei jeder echten Aenderung sofort in
+    `/SolarHistory/months.csv`/`years.csv` geschrieben (Zeile wird
+    ersetzt, nicht angehaengt - gleicher Stil wie `days.csv`), nie
+    kleiner als der gespeicherte Wert. Beim Start einmalig aus den
+    vorhandenen `months.json`/`years.json` erzeugt, ohne diese zu
+    veraendern. Wiederherstellung nach einem Neustart laeuft parallel
+    zum bestehenden Tagesertrag-Backup.
+29. **WebUI-Reiter "Daten" beim ersten Klick leer** (`web_server.cpp`):
+    behoben - die Tab-Aktivierungslogik verwendete hartkodierte
+    Zahlen-Indizes, die seit dem Einfuegen von "PV-Status" nicht mehr
+    zum tatsaechlichen Reiter passten. Jetzt ueber `tabIds.indexOf()`
+    berechnet, bleibt damit auch bei kuenftigen Reiter-Aenderungen
+    korrekt.
+30. **Batterie-Tipp auch nachts** (`fetch_task.cpp`): ein Tipp auf eine
+    reine Batteriewert-Kachel (Spannung/Strom/SOC/Temperatur) loest
+    jetzt auch ausserhalb des Tagesfensters einen echten, frischen
+    Abruf aus - eigener Pfad (`nightBatteryTapPending`), schreibt
+    nichts in Ertragsbuch/Kurve/SD. Andere Kacheln bleiben nachts wie
+    bisher gesperrt.
+31. **Mondsichel immer weiss** (`main_screen.cpp`): die Nachtmodus-
+    Mondsichel im Kopfbereich ist jetzt fest `TFT_WHITE`, unabhaengig
+    von der gewaehlten Systemfarbe.
+32. **Seite "Wetter" (Wochenansicht)** (`week_page.h/.cpp`, neu): letzte
+    Wisch-Seite, zeigt Wochentag/Symbol/Hoechst-Tiefsttemperatur pro
+    Tag aus `WeatherData` (dieselbe Quelle wie Uebersicht und WebUI,
+    keine eigene Abfrage), mit Hinweistext bei fehlendem Standort oder
+    veralteten Daten.
+33. **Batteriekachel Uebersicht ueberarbeitet** (`home_page.cpp`):
+    zeigt jetzt zusaetzlich die Spannung, das neue Autobatterie-Symbol
+    (siehe Punkt 34) und den Ladezustand in Prozent ohne Leerzeichen
+    vor dem "%"-Zeichen.
+34. **Neues Batteriesymbol "Autobatterie"** (`home_page.cpp`,
+    `drawBatteryIcon()`): loest das bisherige, einer Handybatterie
+    aehnelnde Symbol ab - breiter Koerper mit Rahmen, zwei Polkappen
+    oben (Minus/Plus), Fuellstand steigt von unten nach oben, gleiche
+    Farbschwellen wie zuvor (gruen/gelb/rot).
+35. **Ertrag-Seite, Kachel "Jahr"** (`yield_page.cpp`): zeigt den Wert
+    auf dem Geraet jetzt gerundet ohne Nachkommastelle, dadurch groesser
+    und besser lesbar. Heute/Woche/Monat unveraendert, WebUI und
+    CSV-/JSON-Dateien behalten weiter die genauen Werte.
+36. **Seitenreihenfolge aktualisiert** (`pages.cpp`): Uebersicht,
+    PV-Status, Batterie, Leistung, Tagesverlauf, Ertrag, Verlauf,
+    Wetter (8 Seiten). Seitenpunkte-Anzeige bleibt dynamisch ueber
+    `Pages::count()`, keine Aenderung noetig.
+
 ## Code-Struktur
 
 - `config.h` — alle Konstanten (Pins, Größen, Zeiten, Farbpalette, API-URLs)

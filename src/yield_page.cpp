@@ -94,6 +94,16 @@ namespace {
         out[outSize - 1] = 0;
     }
 
+    // Auftrag "Jahr-Kachel ohne Nachkommastelle": NUR die Anzeige auf
+    // dieser Geraete-Kachel - WebUI und CSV/JSON-Dateien behalten weiter
+    // die genauen Werte (siehe web_server.cpp/yield_ledger.cpp,
+    // unveraendert). Kuerzt den Wert niemals ab (CLAUDE.md "Zahlen werden
+    // nie gekuerzt") - gerundet ist er im Gegenteil IMMER kuerzer als die
+    // Zwei-Nachkommastellen-Fassung, nie laenger.
+    void formatKwhRounded(float value, char* out, size_t outSize) {
+        snprintf(out, outSize, "%.0f", (double)value);
+    }
+
     // Kachel: Name klein oben, Wert per fitText in der Mitte, Einheit
     // "kWh" in einer EIGENEN Zeile unter dem Wert - nie nebeneinander,
     // nie ueberlappend (siehe CLAUDE.md Layout-Regel). Zeichnet in
@@ -210,8 +220,18 @@ void draw(int16_t areaTop, int16_t areaHeight, bool forceRedraw) {
     };
     for (uint8_t i = 0; i < 4; i++) {
         char valStr[16];
-        if (yv.valid) formatKwh(specs[i].value, valStr, sizeof(valStr));
-        else strncpy(valStr, "--", sizeof(valStr));
+        if (yv.valid) {
+            // Nur die Kachel "Jahr" (letzter Eintrag in specs[]) rundet
+            // auf dem Geraet ganzzahlig (Auftrag) - Heute/Woche/Monat
+            // bleiben bei zwei Nachkommastellen.
+            if (specs[i].labelKey == I18n::Str::YIELD_TILE_YEAR) {
+                formatKwhRounded(specs[i].value, valStr, sizeof(valStr));
+            } else {
+                formatKwh(specs[i].value, valStr, sizeof(valStr));
+            }
+        } else {
+            strncpy(valStr, "--", sizeof(valStr));
+        }
         String sig = String(valStr) + (yv.valid ? "1" : "0") + (stale ? "s" : "");
         if (sig != lastTileSig[i]) {
             lastTileSig[i] = sig;

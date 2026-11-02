@@ -263,6 +263,12 @@ namespace I18n {
         PV_MAX_TODAY_LABEL,
         HELP_BODY_PAGE_PV_STATUS,
 
+        // Seite "Wetter" (Wochenansicht, Auftrag "Neuer CYD-Screen:
+        // Wetter-Wochenansicht") - letzte Seite in der Wisch-Reihenfolge.
+        PAGE_WEEKWEATHER_TITLE,
+        WEEKWEATHER_NO_DATA,
+        HELP_BODY_PAGE_WEEKWEATHER,
+
         COUNT
     };
 
