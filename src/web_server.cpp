@@ -144,6 +144,7 @@ footer div{margin-top:3px;}
     <div class="card"><div class="label" id="lblPower">Leistung</div><div class="value"><span id="ovPower">--</span><span class="unit">W</span></div></div>
     <div class="card"><div class="label" id="lblToday">Heute</div><div class="value"><span id="ovToday">--</span><span class="unit">kWh</span></div></div>
     <div class="card"><div class="label" id="lblBattery">Batterie</div><div class="value"><span id="ovBatt">--</span><span class="unit">%</span></div></div>
+    <div class="card"><div class="label" id="lblOvVolt">Spannung</div><div class="value"><span id="ovVolt">--</span><span class="unit">V</span></div></div>
   </div>
 </section>
 <section id="tab-power">
@@ -1037,6 +1038,7 @@ function render(data){
 
   ['lblPower','lblPvPower'].forEach(function(id){ setText(id,t.power); });
   setText('lblToday',t.today); setText('lblBattery',t.battery);
+  setText('lblOvVolt',t.voltage);
   setText('lblPvVolt',t.voltage); setText('lblPvCurr',t.current); setText('lblPvMax',t.maxToday);
   setText('lblYToday',t.today); setText('lblYWeek',t.week); setText('lblYMonth',t.month); setText('lblYYear',t.year);
   setText('lblBSoc',t.battery); setText('lblBVolt',t.voltage); setText('lblBCurr',t.current);
@@ -1082,6 +1084,7 @@ function render(data){
 
   var b=data.batt||{};
   setText('ovBatt', fmt0(b.soc));
+  setText('ovVolt', fmt2(b.v));
   setText('bSoc', fmt0(b.soc)); setText('bVolt', fmt2(b.v)); setText('bCurr', fmt2(b.i));
   setText('bTemp', fmt1(b.temp)); setText('bStatus', b.status||'--');
   setText('bVMax', fmt2(b.vmax)); setText('bVMin', fmt2(b.vmin));

@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.3-blue)
+![version](https://img.shields.io/badge/version-2.4-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -105,7 +105,9 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Leistungskurve) und Daten (Dateien auf der SD-Karte ansehen, herunterladen,
   bearbeiten und löschen, inklusive des Ordners `/SolarHistory` - der
   bleibt dort zum Schutz der Solardaten nur zum Ansehen und
-  Herunterladen) - genau wie am Gerät. Der Reiter "Daten" zeigt seinen
+  Herunterladen) - genau wie am Gerät. Die Übersichtsseite zeigt neben
+  Leistung, Heute und Batterie jetzt auch die Batteriespannung als
+  eigene Kachel. Der Reiter "Daten" zeigt seinen
   Inhalt jetzt schon beim ersten Antippen zuverlässig an. Dort lässt sich
   jede Datei einzeln oder ein ganzer Ordner als ZIP herunterladen, und
   ein Knopf "Backup erstellen" sichert Einstellungen und Solardaten
@@ -158,7 +160,8 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 1. SD-Karte (FAT32-formatiert) ins Gerät einlegen - wird für die
    Konfiguration und das Ertragsbuch benötigt.
 2. Firmware über den [Web-Flasher](https://eiswolf-bg.github.io/Solar-Guardian-CYD/)
-   installieren (Chrome, Edge oder Opera, USB-Kabel).
+   installieren (Chrome, Edge oder Opera, USB-Kabel). Dort lassen sich
+   die letzten drei Versionen auswählen.
 3. Beim ersten Start: Touch kalibrieren, WLAN auswählen, Solar-Guardian-
    E-Mail und Passwort eingeben.
 
@@ -324,7 +327,8 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   power chart), and Data (view, download, edit, and delete files on the SD
   card, including the `/SolarHistory` folder - which stays
   view-and-download-only there to protect your solar data) - just
-  like on the device. The Data tab now reliably shows its content the
+  like on the device. The Overview tab now also shows battery voltage
+  as its own tile, next to Power, Today, and Battery. The Data tab now reliably shows its content the
   very first time you open it. It lets you download any single file
   or a whole folder as a ZIP, and a "Create backup" button saves
   settings and solar data together in one ZIP file. Now also
@@ -374,7 +378,8 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 1. Insert a FAT32-formatted SD card into the device - needed for
    configuration and the yield log.
 2. Install the firmware via the [Web Flasher](https://eiswolf-bg.github.io/Solar-Guardian-CYD/)
-   (Chrome, Edge, or Opera, USB cable).
+   (Chrome, Edge, or Opera, USB cable). The last three versions are
+   selectable there.
 3. On first boot: calibrate touch, select WiFi, enter your Solar Guardian
    email and password.
 

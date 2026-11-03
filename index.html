@@ -107,6 +107,25 @@
             --esp-tools-button-text-color: #0a0f0d;
             --esp-tools-button-border-radius: 4px;
         }
+
+        .version-select {
+            display: block;
+            width: 100%;
+            margin: 0 auto 25px;
+            background-color: rgba(57, 255, 20, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--accent-color);
+            font-family: inherit;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 20px;
+            text-align: center;
+            text-align-last: center;
+        }
+        .version-select option {
+            background-color: var(--card-bg);
+            color: var(--accent-color);
+        }
     </style>
 </head>
 <body>
@@ -117,7 +136,11 @@
     <a class="stars-badge" href="https://github.com/Eiswolf-BG/Solar-Guardian-CYD" target="_blank" rel="noopener">
         <img src="https://img.shields.io/github/stars/Eiswolf-BG/Solar-Guardian-CYD?style=social" alt="GitHub stars">
     </a>
-    <div class="version-badge">Version: v2.3</div>
+    <select class="version-select" id="versionSelect">
+        <option value="manifest.json" data-version="v2.4" selected>v2.4 (current)</option>
+        <option value="versions/v2.3/manifest.json" data-version="v2.3">v2.3</option>
+        <option value="versions/v2.2/manifest.json" data-version="v2.2">v2.2</option>
+    </select>
 
     <p>Install the Solar Guardian firmware directly from your browser to your Cheap Yellow Display.</p>
 
@@ -128,7 +151,7 @@
         4. Sit back and wait for the process to finish<br>
         5. An SD card (FAT32) is required for first-time setup
     </div>
-    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+    <esp-web-install-button id="installBtn" manifest="manifest.json"></esp-web-install-button>
 
     <div class="browser-note">Requires Chrome, Edge, or Opera (Web Serial API)</div>
 </div>
@@ -181,6 +204,21 @@
     requestAnimationFrame(draw);
   }
   draw();
+})();
+</script>
+<script>
+// Version selector (last 3 releases) - switches the install button's
+// manifest to the chosen version's own manifest.json. The newest
+// version's parts stay at the repo root; older versions live in their
+// own versions/vX.Y/ subfolder with their own manifest + firmware.bin
+// (bootloader.bin/partitions.bin are copied in unchanged, see CLAUDE.md).
+(function () {
+  const select = document.getElementById('versionSelect');
+  const btn = document.getElementById('installBtn');
+  if (!select || !btn) return;
+  select.addEventListener('change', function () {
+    btn.setAttribute('manifest', select.value);
+  });
 })();
 </script>
 </body>

@@ -603,6 +603,22 @@ Popups, neue wie alte):**
   Release händisch mit der Versionsnummer im Web-Flasher-Manifest
   (`manifest.json` im Wurzelverzeichnis) übereinstimmen** - beide Stellen
   zusammen pflegen, nicht nur eine davon vergessen.
+- **Web-Flasher: letzte 3 Versionen wählbar** (Auftrag "Web-Flasher:
+  die letzten drei Versionen zur Auswahl", 03.11.): `index.html` hat ein
+  `<select id="versionSelect">` mit den drei neuesten Versionen
+  (neueste = Wurzelverzeichnis/`manifest.json`, vorausgewählt und als
+  "(current)" markiert; die beiden älteren liegen je in einem eigenen
+  Unterordner `versions/vX.Y/` mit eigenem `firmware.bin` +
+  `manifest.json`, `bootloader.bin`/`partitions.bin` werden dort
+  unverändert hinein kopiert, sofern sie sich seit der jeweiligen
+  Version nicht geändert haben - mit `git show vX.Y:bootloader.bin`
+  prüfen, nicht annehmen). **Bei JEDEM künftigen Release:** die neue
+  Version kommt als Wurzel-`manifest.json`/-`firmware.bin` rein, die
+  bisherige Wurzel-Version wandert nach `versions/`, und der jetzt
+  vierte (älteste) `versions/`-Ordner wird gelöscht - es bleiben immer
+  genau drei wählbare Versionen. `versionSelect` in `index.html`
+  entsprechend um einen Eintrag verschieben (neueste raus aus der
+  Liste wird nie gebraucht, da sie ja die Wurzel-Version ist).
 - **Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
   Überarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten"):**
   unterhalb des jeweiligen Reiter-Inhalts, auf allen Reitern außer "Wetter"
