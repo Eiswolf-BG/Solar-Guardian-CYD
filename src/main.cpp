@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <SD.h>
+#include <esp_task_wdt.h>
 
 #include "config.h"
 #include "display.h"
@@ -117,6 +118,19 @@ namespace {
 
 void setup() {
     Serial.begin(115200);
+
+    // Boot-Loop-Fix (09.11., siehe CLAUDE.md "Bekannte Probleme"): MET
+    // Norway liefert die Wetterantwort inzwischen deutlich groesser aus
+    // als frueher (~39KB statt weniger hundert Byte) - allein das Parsen
+    // dieser Antwort braucht auf dem ESP32 ca. 13s zusammenhaengende
+    // Rechenzeit, zusammen mit dem ohnehin langsamen Solar-Portal-Abruf
+    // kam das Geraet dabei ueber das ESP-IDF-Standardlimit von 5s fuer den
+    // Task-Watchdog - das loeste zuverlaessig bei JEDEM Zyklus einen
+    // Absturz+Neustart aus (Boot-Loop). 20s statt 5s, Panik bleibt aktiv -
+    // ein echtes (unendliches) Haengenbleiben wuerde also weiterhin
+    // zuverlaessig erkannt und fuehrt zum Neustart.
+    esp_task_wdt_init(Config::TASK_WDT_TIMEOUT_SEC, true);
+
     logResetReason();
 
     Display::begin();

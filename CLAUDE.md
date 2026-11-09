@@ -1301,6 +1301,37 @@ Popups, neue wie alte):**
     PV-Status, Batterie, Leistung, Tagesverlauf, Ertrag, Verlauf,
     Wetter (8 Seiten). Seitenpunkte-Anzeige bleibt dynamisch ueber
     `Pages::count()`, keine Aenderung noetig.
+37. **Boot-Loop-Fix (09.11., v2.5)** (`main.cpp`, `config.h::
+    Config::TASK_WDT_TIMEOUT_SEC`): MET Norway liefert die Wetterantwort
+    inzwischen deutlich groesser aus als frueher (~39KB statt weniger
+    hundert Byte) - allein das Parsen dieser Antwort braucht auf dem
+    ESP32 ca. 13s zusammenhaengende Rechenzeit, zusammen mit dem ohnehin
+    langsamen Solar-Portal-Abruf kam das Geraet dabei ueber das
+    ESP-IDF-Standardlimit von 5s fuer den Task-Watchdog - loeste
+    zuverlaessig bei jedem Zyklus einen Absturz+Neustart aus. Fix:
+    `esp_task_wdt_init(Config::TASK_WDT_TIMEOUT_SEC, true)` in
+    `main.cpp::setup()`, Limit auf 20s erhoeht (Panik bleibt aktiv, ein
+    echtes Haengenbleiben wird weiterhin erkannt). Offen/zu entscheiden:
+    ob sich die Wetterantwort stattdessen kleiner halten liesse (z.B.
+    kompaktere Abfrage/Filtern beim Einlesen), siehe Ruecksprache mit
+    Alex nach Release v2.5.
+38. **Wetteranimation in der Haus-Grafik** (`web_server.cpp`, Auftrag
+    "Wetteranimation", v2.5): Regen/Schnee-Partikel-Overlay (`#wx`-Canvas)
+    ueber der animierten Haus-Grafik, Kategorie/Stufe kommt aus dem
+    ohnehin abgerufenen WMO-Wettercode (kein Zusatz-Netzwerkverkehr,
+    `precipForCode()` + neues `weather.precip{type,level}`-Feld in
+    `/api/data`), weicher Uebergang bei Kategoriewechsel, pausiert bei
+    inaktivem Tab, respektiert "weniger Bewegung", weniger Partikel auf
+    schmalen Bildschirmen. Lokaler Test-Parameter `?wetter=...` bleibt
+    unbeworben (nicht in README/Release-Notes). Fuer "leichter Schnee"
+    (Stufe 1) gibt es im verwendeten WMO-Code-Satz keinen eigenen Code -
+    es existiert daher nur Schnee-Stufe 2 und 3. Dabei gefundener und
+    behobener Darstellungs-Bug: der neue Canvas hat (bekanntes
+    Browser-Rendering-Verhalten bei ueberlappenden `position:absolute`-
+    Ebenen mit eigener Compositing-Ebene) die Haus-Grafik komplett
+    unsichtbar gemacht, obwohl im DOM alles korrekt war (Bild geladen,
+    opacity:1) - behoben durch explizite `z-index`-Reihenfolge
+    (Bild/SVG=1, Canvas=2).
 
 ## Code-Struktur
 

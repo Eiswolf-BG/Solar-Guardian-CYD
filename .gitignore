@@ -31,6 +31,11 @@ History/
 /test_grafik.html
 /solarenergy.html
 
+# Vorlagen-Testseite fuer die Wetteranimation (Auftrag "Wetteranimation") -
+# enthaelt nur lokale Testwerkzeuge (Wetter-Buttons/Watt-Regler), die NICHT
+# in die echte WebUI uebernommen werden, bleibt rein lokal.
+/wetter.html
+
 # Erzeugungs-Skript fuer die Haus-Grafik-Bilder - haengt an den obigen,
 # rein lokalen Vorlagen und wird nur gebraucht, wenn eines der Bilder
 # ersetzt wird. Das Ergebnis (src/house_image.h) wird committet, das

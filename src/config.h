@@ -28,7 +28,17 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "2.4";
+    constexpr const char* FW_VERSION = "2.5";
+
+    // Task-Watchdog-Zeitlimit (Core 0, siehe main.cpp::setup() und
+    // CLAUDE.md "Bekannte Probleme"/Boot-Loop-Fix 09.11.): Standard waere
+    // 5s - reicht nicht mehr, seit MET Norway eine deutlich groessere
+    // Wetterantwort liefert (deren Verarbeitung allein schon ca. 13s
+    // braucht). 20s laesst dafuer genug Luft, ein echtes (unendliches)
+    // Haengenbleiben wuerde weiterhin zuverlaessig erkannt (Panik bleibt
+    // aktiv). Siehe Punkt 7 im zugehoerigen Auftrag: ob sich die
+    // Wetterantwort stattdessen kleiner halten liesse, ist noch offen.
+    constexpr uint32_t TASK_WDT_TIMEOUT_SEC = 20;
 
     // ---- Bildschirm (Hochformat 240x320, native Panel-Ausrichtung, siehe
     // display.cpp::begin() -> tft.setRotation(0)) ----
@@ -375,6 +385,7 @@ namespace Config {
     constexpr uint32_t WEATHER_FETCH_INTERVAL_MS = 30UL * 60UL * 1000UL; // alle 30 Minuten
     constexpr uint32_t WEATHER_RETRY_INTERVAL_MS = 2UL * 60UL * 1000UL;  // bei Fehler alle 2 Minuten erneut
     constexpr uint8_t WEATHER_FORECAST_DAYS = 7;
+    constexpr uint32_t WEATHER_PRECIP_STALE_SEC = 3UL * 60UL * 60UL; // Niederschlags-Animation (WebUI): aeltere Wetterdaten gelten als "kein Niederschlag"
 
     // ---- Aktuelles Wetter: Symbol/Bewoelkung ueber MET Norway (trifft
     // Realitaet laut Vergleich besser), Open-Meteo bleibt Rueckfall sowie

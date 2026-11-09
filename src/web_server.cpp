@@ -122,8 +122,9 @@ footer div{margin-top:3px;}
 .houseWrap{margin-top:16px;}
 .houseWrap.hidden{display:none;}
 .houseHero{position:relative;width:100%;aspect-ratio:1408/768;border-radius:12px;overflow:hidden;background:#000;}
-.houseHero img,.houseHero svg{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.houseHero img,.houseHero svg{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1;}
 .houseHero img{opacity:0;transition:opacity 1.2s;}
+#wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:transparent;z-index:2;}
 </style>
 </head>
 <body>
@@ -242,6 +243,7 @@ footer div{margin-top:3px;}
 <path id="hyb" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L708 437 L699 446 L684 459 L676 478 L675 494 L675 502 L676 517 L676 539 L676 550"/>
 <path id="hyc" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L715 434 L730 434 L745 428 L762 419 L778 412 L787 410 L799 406 L815 401 L828 396 L843 390 L857 384 L870 377 L885 370 L897 366 L911 361 L927 356 L937 356 L940 369 L939 388 L938 403"/>
 </g><g id="houseDots" filter="url(#hg)"></g></svg>
+<canvas id="wx"></canvas>
 </div>
 </div>
 </main>
@@ -1023,6 +1025,84 @@ function houseUpdate(data){
   }
 }
 
+// Wetteranimation (Regen/Schnee) im Haus-Hero-Container (Auftrag
+// "Wetteranimation") - Partikel-System/Aussehen 1:1 aus der bestaetigten
+// Vorlage wetter.html uebernommen (WX-Tabelle, Gain-Ueberblendung wxG,
+// Regen-/Schnee-Zeichnung). Die Wetter-Buttons/der Watt-Regler aus der
+// Vorlage sind reine Testwerkzeuge und werden bewusst NICHT uebernommen -
+// die Kategorie kommt hier ausschliesslich aus data.weather.precip
+// (type+level), das der Server aus dem ohnehin abgerufenen WMO-Code
+// ableitet (kein Zusatz-Netzwerkverkehr).
+var wxCv = document.getElementById('wx'), wxCx = wxCv.getContext('2d');
+var wxP = [], wxG = 0, wxLast = 0, wxT = 0, wxType = 'trocken';
+var WX = {
+  niesel:{k:'rain',n:45,sp:0.8,a:0.28}, regen:{k:'rain',n:130,sp:1,a:0.42}, starkregen:{k:'rain',n:280,sp:1.25,a:0.5},
+  schnee:{k:'snow',n:70,sp:1,a:0.85}, starkschnee:{k:'snow',n:190,sp:1.3,a:0.9}
+};
+// Reine Vorschau zum Testen (gleiches Muster wie houseForce oben) - rein
+// clientseitig, schreibt/aendert nichts auf dem Geraet, bleibt unbeworben
+// (nicht in README/Release-Notes erwaehnt). Ohne Zusatz gilt data.weather.precip.
+var wxForce = (function(){
+  var qp = new URLSearchParams(window.location.search);
+  var w = qp.get('wetter');
+  return (w && (WX[w] || w === 'trocken')) ? w : null;
+})();
+function wxSetFromServer(precip){
+  if (wxForce) { wxType = wxForce; return; }
+  if (!precip || precip.type === 'none' || !precip.level) { wxType = 'trocken'; return; }
+  wxType = (precip.type === 'snow')
+    ? (precip.level >= 3 ? 'starkschnee' : 'schnee')
+    : (precip.level >= 3 ? 'starkregen' : (precip.level >= 2 ? 'regen' : 'niesel'));
+}
+function wxNew(k){
+  return k==='rain'
+    ? {x:Math.random(),y:Math.random(),v:0.75+Math.random()*0.5,l:0.7+Math.random()*0.6}
+    : {x:Math.random(),y:Math.random(),v:0.6+Math.random()*0.8,r:0.8+Math.random()*1.8,ph:Math.random()*6.28,f:0.4+Math.random()*0.8};
+}
+function wxFrame(now){
+  // Pausiert wie houseFrame effektiv, solange der Tab nicht sichtbar ist.
+  if (document.hidden) { wxLast = 0; requestAnimationFrame(wxFrame); return; }
+  if (!wxLast) wxLast = now;
+  var dt = Math.min(0.1, (now - wxLast) / 1000); wxLast = now; wxT += dt;
+  var d = window.devicePixelRatio || 1, W = wxCv.clientWidth, H = wxCv.clientHeight;
+  if (!W) { requestAnimationFrame(wxFrame); return; }
+  if (wxCv.width !== Math.round(W*d)) { wxCv.width = Math.round(W*d); wxCv.height = Math.round(H*d); }
+  var c = wxCx; c.setTransform(d,0,0,d,0,0); c.clearRect(0,0,W,H);
+  var cfg = WX[wxType];
+  wxG += ((cfg?1:0) - wxG) * Math.min(1, dt*2.5); // weiches Ein-/Ausblenden bei Kategoriewechsel, kein Sprung
+  if ((cfg && wxG > 0.01) || wxG > 0.02) {
+    var narrow = W < 420; // Handy-Breite: weniger Partikel, schont CPU
+    var nTarget = cfg ? Math.round(cfg.n * (narrow ? 0.45 : 1)) : wxP.length;
+    if (cfg) {
+      if (wxP.kind !== cfg.k) { wxP = []; wxP.kind = cfg.k; }
+      while (wxP.length < nTarget) wxP.push(wxNew(cfg.k));
+      if (wxP.length > nTarget) wxP.length = nTarget;
+    }
+    var sc = W/720, a = (cfg ? cfg.a : 0.3) * wxG, sp = cfg ? cfg.sp : 1;
+    if (wxP.kind === 'rain') {
+      c.strokeStyle = 'rgba(170,200,255,'+a+')'; c.lineWidth = 1.1*Math.max(1,sc); c.beginPath();
+      wxP.forEach(function(p){
+        p.y += dt*p.v*sp*1.15; p.x -= dt*0.05*sp;
+        if (p.y > 1.02) { p.y = -0.05; p.x = Math.random()*1.1; }
+        if (p.x < -0.05) p.x += 1.1;
+        var x = p.x*W, y = p.y*H, L = p.l*16*sc*sp;
+        c.moveTo(x,y); c.lineTo(x-L*0.09, y-L);
+      });
+      c.stroke();
+    } else if (wxP.kind === 'snow') {
+      c.fillStyle = 'rgba(255,255,255,'+a+')';
+      wxP.forEach(function(p){
+        p.y += dt*p.v*sp*0.09;
+        if (p.y > 1.02) { p.y = -0.03; p.x = Math.random(); }
+        var x = p.x*W + Math.sin(wxT*p.f+p.ph)*10*sc, y = p.y*H;
+        c.beginPath(); c.arc(x, y, p.r*sc*1.1, 0, 6.283); c.fill();
+      });
+    }
+  }
+  requestAnimationFrame(wxFrame);
+}
+if (!houseReduceMotion) requestAnimationFrame(wxFrame); // "weniger Bewegung": keine Partikel
+
 function render(data){
   if(data.lang && data.lang!==lang){ lang=data.lang; t=L[lang]||L.de; buildTabs(); showTab(); }
   document.documentElement.lang=lang;
@@ -1052,6 +1132,7 @@ function render(data){
   document.getElementById('houseImgV2Day').alt=t.houseAltDay;
   document.getElementById('houseImgV2Night').alt=t.houseAltNight;
   houseUpdate(data);
+  wxSetFromServer(data.weather && data.weather.precip);
 
   var p=data.power||{};
   setText('ovPower', fmt0(p.w)); setText('pPower', fmt0(p.w));
@@ -1213,6 +1294,45 @@ setInterval(poll,5000);
         return String("--");
     }
 
+    // Niederschlagskategorie fuer die Wetteranimation in der WebUI
+    // (Auftrag "Wetteranimation") - leitet sich AUSSCHLIESSLICH aus dem
+    // ohnehin schon abgerufenen WMO-Wettercode ab, kein zusaetzlicher
+    // Netzwerk-Request. "none" bei unbekanntem Code, fehlenden Daten oder
+    // Daten aelter als 3 Stunden (Config::WEATHER_PRECIP_STALE_SEC).
+    // Zuordnung laut Auftrag:
+    //   niesel (Regen Stufe 1): 51/53/55/56/57
+    //   regen (Stufe 2): 61/63/80/81/66
+    //   starkregen (Stufe 3): 65/82/67/95-99
+    //   schnee (Stufe 2): 71/73/77/85
+    //   starkschnee (Stufe 3): 75/86
+    // Fuer "leichter Schnee" (Stufe 1) gibt es im WMO-Code-Satz, den diese
+    // App abruft, keinen eigenen Code - 71 ("slight snow fall") ist laut
+    // Auftrag bereits Stufe 2 zugeordnet, es bleibt also bewusst KEINE
+    // Stufe-1-Schnee-Kategorie bestehen (an Alex zurueckgemeldet).
+    void precipForCode(int16_t code, bool valid, time_t measuredAt, const char*& outType, uint8_t& outLevel) {
+        outType = "none";
+        outLevel = 0;
+        if (!valid) return;
+        time_t now = time(nullptr);
+        if (measuredAt <= 0 || (now > measuredAt && (uint32_t)(now - measuredAt) > Config::WEATHER_PRECIP_STALE_SEC)) return;
+
+        switch (code) {
+            case 51: case 53: case 55: case 56: case 57:
+                outType = "rain"; outLevel = 1; return;
+            case 61: case 63: case 80: case 81: case 66:
+                outType = "rain"; outLevel = 2; return;
+            case 65: case 82: case 67:
+            case 95: case 96: case 97: case 98: case 99:
+                outType = "rain"; outLevel = 3; return;
+            case 71: case 73: case 77: case 85:
+                outType = "snow"; outLevel = 2; return;
+            case 75: case 86:
+                outType = "snow"; outLevel = 3; return;
+            default:
+                return;
+        }
+    }
+
     void formatHHMM(time_t epoch, char* out, size_t outSize) {
         if (epoch <= 0) { strncpy(out, "--:--", outSize - 1); out[outSize - 1] = 0; return; }
         struct tm t;
@@ -1358,6 +1478,14 @@ setInterval(poll,5000);
         weatherObj["temp"] = weather.currentValid ? weather.currentTempC : (float)NAN;
         weatherObj["code"] = weather.currentWeatherCode;
         weatherObj["day"] = weather.isDay;
+        {
+            const char* precipType;
+            uint8_t precipLevel;
+            precipForCode(weather.currentWeatherCode, weather.currentValid, weather.measuredAt, precipType, precipLevel);
+            JsonObject precip = weatherObj["precip"].to<JsonObject>();
+            precip["type"] = precipType;
+            precip["level"] = precipLevel;
+        }
         JsonArray days = weatherObj["days"].to<JsonArray>();
         for (uint8_t i = 0; i < weather.dayCount; i++) {
             const WeatherData::DayForecast& d = weather.days[i];

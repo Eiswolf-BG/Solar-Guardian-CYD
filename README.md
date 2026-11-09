@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.4-blue)
+![version](https://img.shields.io/badge/version-2.5-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -126,7 +126,8 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
   Sonnenauf- und -untergang des Standorts. Tagsüber laufen leuchtende
   Punkte entlang des Energiewegs nur, wenn die Anlage gerade Ertrag
   liefert, und schneller, je mehr sie produziert; nachts bewegt sich ein
-  einzelner, ruhiger Lichtpunkt.
+  einzelner, ruhiger Lichtpunkt. Bei Niederschlag in der Region zeigt die
+  Grafik passend dazu Regen oder Schnee.
 - **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
 - **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
 - Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
@@ -345,7 +346,8 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
   location's actual sunrise and sunset. During the day, glowing light
   points flow along the energy path only while the system is producing
   power, and faster the more it produces; at night a single, calm light
-  point keeps moving.
+  point keeps moving. When it's raining or snowing in the area, the
+  graphic shows matching rain or snow.
 - **Boot logo** "sun in a shield", shown for 7 seconds on every start.
 - **Brightness** of the backlight, steplessly adjustable in the menu.
 - Tapping the WiFi icon in the header opens "Networks" directly.

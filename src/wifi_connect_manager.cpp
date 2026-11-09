@@ -44,6 +44,14 @@ namespace {
 
     void startAttempt(uint8_t slot) {
         WiFi.mode(WIFI_STA);
+        // War Teil eines Loesungsversuchs fuer den Boot-Loop vom 09.11.
+        // (siehe CLAUDE.md "Bekannte Probleme"/esp_task_wdt_init() in
+        // main.cpp fuer die tatsaechliche Ursache und den wirksamen Fix) -
+        // hat den Absturz NICHT behoben, bleibt aber als sinnvolle
+        // Grundeinstellung bestehen: das Geraet haengt dauerhaft am
+        // Netzteil, WiFi-Modem-Sleep bringt hier keinen Vorteil, nur
+        // potenzielle Verzoegerungen beim Aufwachen.
+        WiFi.setSleep(false);
         WiFi.disconnect();
         const AppConfig::WifiSlot& s = appConfig.wifiSlots[slot];
         if (s.password.length() > 0) {
