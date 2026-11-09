@@ -121,10 +121,10 @@ footer div{margin-top:3px;}
    uebernommen (viewBox 1408x768, Punktgroesse/-farbe/-glow unveraendert). */
 .houseWrap{margin-top:16px;}
 .houseWrap.hidden{display:none;}
-.houseHero{position:relative;width:100%;aspect-ratio:1408/768;border-radius:12px;overflow:hidden;background:#000;}
+.houseHero{position:relative;width:100%;aspect-ratio:1408/768;border-radius:12px;overflow:hidden;background:#000;box-shadow:inset 0 0 40px 10px #000;}
 .houseHero img,.houseHero svg{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1;}
 .houseHero img{opacity:0;transition:opacity 1.2s;}
-#wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:transparent;z-index:2;}
+#wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:transparent;border:none;border-radius:0;z-index:2;}
 </style>
 </head>
 <body>
@@ -229,20 +229,14 @@ footer div{margin-top:3px;}
 <img id="houseImgV2Night" alt="">
 <svg viewBox="0 0 1408 768" preserveAspectRatio="none" aria-hidden="true">
 <defs><filter id="hg" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="4" result="hb"/><feMerge><feMergeNode in="hb"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-<g fill="none" stroke="none">
+<g id="housePaths" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#hg)">
 <path id="hna" d="M890 163 L886 153 L874 135 L865 122 L862 118 L856 110 L842 101 L823 95 L809 95 L795 98 L780 102 L767 105 L752 109 L739 112 L724 116 L704 122 L690 125 L680 128 L669 130 L658 133 L641 138 L621 143 L609 146 L593 150 L570 156 L552 161 L542 164 L533 166 L515 170 L492 176 L473 182 L462 184 L455 190 L456 208 L465 228 L472 239 L480 249 L493 267 L502 280 L506 286 L515 299 L526 315 L538 331 L542 345 L529 352 L514 356 L509 364 L509 384 L510 406 L510 420 L510 430 L512 446 L514 465 L512 480"/>
 <path id="hnb" d="M560 356 L570 354 L580 352 L597 347 L612 342 L625 340 L638 335 L652 330 L667 326 L680 322 L687 328 L686 346 L684 362 L685 374 L685 392 L685 407 L678 424 L666 436 L653 442 L637 451 L618 458 L602 461 L590 463 L574 467 L554 472 L534 475 L512 480"/>
 <path id="hnc" d="M560 356 L570 354 L580 352 L597 347 L612 342 L625 340 L638 335 L652 330 L667 326 L684 321 L700 316 L710 314 L724 310 L739 305 L753 300 L770 295 L792 289 L811 283 L824 279 L838 275 L852 276 L860 288 L863 304 L862 318 L862 336 L862 354 L863 372 L863 383"/>
-<path id="hda" d="M801 253 L796 244 L787 229 L780 218 L766 208 L747 200 L731 199 L716 202 L702 206 L689 210 L675 214 L656 218 L636 223 L622 226 L610 229 L594 234 L574 239 L558 243 L543 247 L529 251 L519 253 L508 256 L492 260 L477 264 L461 269 L449 274 L448 287 L456 306 L468 322 L480 340 L488 352 L493 359 L503 373 L516 392 L530 404 L538 408 L532 406 L514 403 L498 411 L492 425 L492 439 L493 452 L493 464 L494 483 L500 501 L505 506 L496 511"/>
-<path id="hdb" d="M549 407 L559 404 L575 399 L588 395 L597 393 L613 388 L630 392 L635 407 L634 424 L634 442 L639 459 L644 464 L636 468 L620 474 L605 479 L586 487 L565 495 L547 500 L530 504 L513 503"/>
-<path id="hdc" d="M549 407 L559 404 L575 399 L588 395 L597 393 L613 388 L635 382 L654 376 L673 370 L688 366 L698 363 L713 358 L732 352 L744 349 L756 349 L774 351 L781 358 L780 370 L779 384 L780 400 L780 415 L780 435"/>
 <path id="hxa" d="M791 111 L772 116 L759 118 L747 122 L732 129 L717 136 L698 142 L680 149 L667 154 L659 158 L650 160 L636 164 L617 171 L599 177 L588 181 L572 188 L551 196 L536 202 L527 206 L517 209 L502 216 L488 227 L486 237 L493 247 L502 260 L512 275 L521 288 L530 302 L538 314 L545 322 L552 331 L557 340 L565 351 L576 366 L587 382 L592 390 L594 404 L596 426 L596 445 L596 460 L597 472 L597 479 L597 489 L598 503 L597 522 L593 544 L583 559 L572 563"/>
 <path id="hxb" d="M768 309 L774 323 L775 335 L774 343 L781 356 L792 374 L798 383 L794 386 L781 396 L772 414 L768 433 L766 447 L766 456 L766 464 L767 476 L768 492 L768 510"/>
 <path id="hxc" d="M768 309 L774 323 L775 335 L774 343 L781 356 L792 374 L807 382 L825 383 L838 382 L852 376 L870 368 L882 364 L894 360 L911 354 L921 350 L933 345 L951 338 L969 330 L985 323 L995 319 L1004 316 L1020 310 L1036 307 L1042 316 L1041 336 L1040 350 L1041 359 L1042 370 L1042 383"/>
-<path id="hya" d="M703 172 L681 172 L668 174 L658 178 L642 184 L624 190 L605 198 L586 205 L574 207 L567 209 L553 216 L535 223 L518 229 L503 236 L492 239 L477 243 L458 249 L446 253 L437 256 L421 262 L408 273 L406 286 L411 300 L418 314 L427 325 L437 337 L446 352 L458 367 L471 377 L480 390 L489 408 L500 426 L508 443 L512 460 L512 475 L511 492 L509 509 L509 520 L509 530 L510 544 L511 563 L506 581 L496 595 L486 598 L476 589 L466 578 L463 569"/>
-<path id="hyb" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L708 437 L699 446 L684 459 L676 478 L675 494 L675 502 L676 517 L676 539 L676 550"/>
-<path id="hyc" d="M675 355 L680 372 L682 383 L682 390 L688 404 L701 423 L715 434 L730 434 L745 428 L762 419 L778 412 L787 410 L799 406 L815 401 L828 396 L843 390 L857 384 L870 377 L885 370 L897 366 L911 361 L927 356 L937 356 L940 369 L939 388 L938 403"/>
-</g><g id="houseDots" filter="url(#hg)"></g></svg>
+</g><g id="houseRunner" fill="none" stroke-linecap="round" filter="url(#hg)"></g></svg>
 <canvas id="wx"></canvas>
 </div>
 </div>
@@ -902,6 +896,32 @@ function pollHistory(){
 var HOUSE_MAX_W=2000; // deckelt die Tag-Tempo-Formel, siehe Vorlage
 var HOUSE_STALE_MIN=30; // gleicher Schwellwert wie config.h EPEVER_STALE_AFTER_MS
 var HOUSE_NIGHT_SPEED=14; // Pixel/s, siehe Vorlage
+// Kabel-Schlauch (Auftrag "Rahmen/neue Bilder/Schlauch-Kabel", Werte in
+// SVG-viewBox-Einheiten, 1408 breit) - am Bildschirm geprueft (siehe
+// CLAUDE.md), ca. 1,5-2x so dick wie die fruehere, in den Fotos
+// eingebackene Leuchtlinie, ohne klobig zu wirken.
+var HOUSE_TUBE_W=5;
+var HOUSE_TUBE_COLOR='#7df3ff';
+var HOUSE_TUBE_ON=0.85;  // Stroemung fliesst: Schlauch voll leuchtend
+var HOUSE_TUBE_DIM=0.32; // kein Stromfluss: sichtbar, aber gedaempft
+// Lauflicht statt Kugel (Auftrag "Lauflicht statt Kugel") - kein
+// <circle> mehr, sondern ein zweiter Stroke auf einer Pfad-Kopie mit
+// stroke-dasharray/-dashoffset: ein kurzes Segment (SEG_FRAC der
+// Pfadlaenge, mind. SEG_MIN_PX viewBox-Einheiten) wandert im Schlauch.
+// Farbe dunkler/blauer als der helle Schlauch (Auftragsvorgabe), Breite
+// knapp schmaler als der Schlauch, damit sie ihn nie ueberragt.
+var HOUSE_RUNNER_COLOR='#1f6fff';
+var HOUSE_RUNNER_W=HOUSE_TUBE_W-1;
+var HOUSE_RUNNER_SEG_FRAC=0.05; // 5% der Pfadlaenge (Vorgabe: 4-6%)
+var HOUSE_RUNNER_SEG_MIN=20;    // viewBox-Einheiten, Untergrenze
+// Weiches Ausklingen nach hinten: zwei zusaetzliche, schwaechere Kopien
+// kurz hinter dem Hauptsegment (einfacher, robuster "Comet-Schweif"
+// statt eines Farbverlaufs entlang beliebig gekruemmter Pfade, der sich
+// mit reinen SVG-Gradients nicht sauber pfadfolgend umsetzen laesst).
+var HOUSE_RUNNER_TAILS=[
+  {offsetFrac:0.55, opacity:0.45},
+  {offsetFrac:1.10, opacity:0.18}
+];
 var houseReduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 // Reine Vorschau zum Testen (Auftrag "Vorschau zum Testen") - erzwingt
 // ueber einen URL-Zusatz Modus/Variante/Leistungswert, rein clientseitig,
@@ -919,37 +939,59 @@ var houseForce = (function(){
   };
 })();
 // Vier Kombinationen (Variante x Tag/Nacht) - je drei Wege, ein Punkt pro
-// Weg, eigene Bild-Route/eigenes <img>-Element.
+// Weg, eigene Bild-Route/eigenes <img>-Element. Tag und Nacht teilen
+// sich seit den neuen Hausbildern (Auftrag "Rahmen/neue Bilder/
+// Schlauch-Kabel") dieselben Pfade - die Bilder wurden gezielt auf
+// identische Geometrie zum jeweiligen Nachtbild angepasst (mit dem
+// Debug-Overlay gegengeprueft, siehe CLAUDE.md), die frueheren eigenen
+// Tag-Pfade hda/hdb/hdc/hya/hyb/hyc sind dadurch ueberfluessig und
+// wurden entfernt (auch aus dem SVG unten).
 var houseSets={
-  v1_night:['hna','hnb','hnc'], v1_day:['hda','hdb','hdc'],
-  v2_night:['hxa','hxb','hxc'], v2_day:['hya','hyb','hyc']
+  v1_night:['hna','hnb','hnc'], v1_day:['hna','hnb','hnc'],
+  v2_night:['hxa','hxb','hxc'], v2_day:['hxa','hxb','hxc']
 };
 var houseImgIds={
   v1_day:'houseImgV1Day', v1_night:'houseImgV1Night',
   v2_day:'houseImgV2Day', v2_night:'houseImgV2Night'
 };
 var houseRoutes={
-  v1_day:'/house_v1_day_v3.jpg', v1_night:'/house_v1_night_v3.jpg',
-  v2_day:'/house_v2_day_v3.jpg', v2_night:'/house_v2_night_v3.jpg'
+  v1_day:'/house_v1_day_v4.jpg', v1_night:'/house_v1_night_v4.jpg',
+  v2_day:'/house_v2_day_v4.jpg', v2_night:'/house_v2_night_v4.jpg'
 };
-var houseAll={}, houseAlpha={}, houseLast=null, houseWatts=0;
+var houseAlpha={}, houseLast=null, houseWatts=0;
 Object.keys(houseSets).forEach(function(k){ houseAlpha[k]=0; });
 var houseImgLoaded=false, houseCurKey=null, houseSrcLoaded={v1_day:false,v1_night:false,v2_day:false,v2_night:false};
+// Eindeutige Pfad-IDs ueber alle houseSets hinweg - Tag und Nacht
+// teilen sich jetzt dieselbe ID (siehe houseSets oben), deshalb EINE
+// Zustandsstruktur pro tatsaechlicher <path>, nicht mehr eine pro
+// (Kombination,Pfad)-Paar wie vorher bei den Punkten.
+var housePathIds=Array.from(new Set([].concat.apply([],Object.keys(houseSets).map(function(k){return houseSets[k];}))));
+var houseP={}; // id -> {el,len,segLen,t,runAlpha,head,tails}
 function houseInit(){
   var NS='http://www.w3.org/2000/svg';
-  var layer=document.getElementById('houseDots');
-  Object.keys(houseSets).forEach(function(k){
-    houseAll[k]=houseSets[k].map(function(id){
-      var p=document.getElementById(id);
-      var P={el:p,len:p.getTotalLength(),dots:[]};
-      var c=document.createElementNS(NS,'circle');
-      c.setAttribute('r','5');
-      c.setAttribute('fill','#7df3ff');
-      c.setAttribute('opacity','0');
-      layer.appendChild(c);
-      P.dots.push({c:c,t:0});
-      return P;
-    });
+  var runnerLayer=document.getElementById('houseRunner');
+  housePathIds.forEach(function(id){
+    var p=document.getElementById(id);
+    var len=p.getTotalLength();
+    // Segmentlaenge 4-6% der Pfadlaenge (hier 5%), mind. HOUSE_RUNNER_SEG_MIN
+    // viewBox-Einheiten (Auftragsvorgabe).
+    var segLen=Math.max(HOUSE_RUNNER_SEG_MIN, len*HOUSE_RUNNER_SEG_FRAC);
+    var dash=segLen.toFixed(1)+','+Math.max(0,len-segLen).toFixed(1);
+    function makeRunnerPath(){
+      var rp=document.createElementNS(NS,'path');
+      rp.setAttribute('d',p.getAttribute('d'));
+      rp.setAttribute('stroke',HOUSE_RUNNER_COLOR);
+      rp.setAttribute('stroke-width',HOUSE_RUNNER_W);
+      rp.setAttribute('stroke-dasharray',dash);
+      rp.setAttribute('stroke-opacity','0');
+      runnerLayer.appendChild(rp);
+      return rp;
+    }
+    houseP[id]={
+      el:p, len:len, segLen:segLen, t:0, runAlpha:0,
+      head:makeRunnerPath(),
+      tails:HOUSE_RUNNER_TAILS.map(makeRunnerPath)
+    };
   });
   requestAnimationFrame(houseFrame);
 }
@@ -962,20 +1004,58 @@ function houseFrame(now){
   if (!houseLast) houseLast=now;
   var dt=Math.min(0.1,(now-houseLast)/1000);
   houseLast=now;
+  // Kabel als Schlauch (Auftrag "Rahmen/neue Bilder/Schlauch-Kabel"):
+  // Tag und Nacht derselben Variante teilen sich jetzt dieselbe Pfad-ID
+  // (siehe houseSets oben). Alpha/"on" werden deshalb zuerst PRO
+  // KOMBINATION berechnet (houseAlpha[k], unveraendert), dann je
+  // Pfad-ID auf den groessten Wert ueber alle k zusammengefuehrt, die
+  // diese ID nutzen - erst danach wird einmal pro tatsaechlichem Pfad
+  // gezeichnet (Schlauch UND Lauflicht), nicht mehr pro k.
+  var pathState = {};
   Object.keys(houseSets).forEach(function(k){
     var isNight = k.indexOf('night')>=0;
     var on = (k===houseCurKey) && (isNight || houseWatts>=5) ? 1 : 0;
     houseAlpha[k] += (on-houseAlpha[k])*Math.min(1,dt*3);
     var speed = isNight ? HOUSE_NIGHT_SPEED : 30+170*Math.min(houseWatts,HOUSE_MAX_W)/HOUSE_MAX_W;
-    houseAll[k].forEach(function(P){
-      P.dots.forEach(function(d){
-        d.t += dt*speed/P.len*(on?1:0);
-        if (d.t>1) d.t-=1;
-        var pt=P.el.getPointAtLength(d.t*P.len);
-        d.c.setAttribute('cx',pt.x);
-        d.c.setAttribute('cy',pt.y);
-        d.c.setAttribute('opacity',houseAlpha[k].toFixed(2));
-      });
+    houseSets[k].forEach(function(id){
+      var st = pathState[id] || (pathState[id] = {alpha:0, on:0, speed:speed});
+      st.alpha = Math.max(st.alpha, houseAlpha[k]);
+      if (on) { st.on = 1; st.speed = speed; }
+    });
+  });
+  Object.keys(houseP).forEach(function(id){
+    var P = houseP[id];
+    var st = pathState[id] || {alpha:0, on:0, speed:HOUSE_NIGHT_SPEED};
+
+    // Schlauch (Basis-Stroke) - bleibt bei fehlendem Stromfluss
+    // sichtbar, aber gedaempft (HOUSE_TUBE_DIM), bei Stromfluss voll
+    // leuchtend (HOUSE_TUBE_ON).
+    var tubeIntensity = st.on ? HOUSE_TUBE_ON : HOUSE_TUBE_DIM;
+    P.el.setAttribute('stroke', HOUSE_TUBE_COLOR);
+    P.el.setAttribute('stroke-width', HOUSE_TUBE_W);
+    P.el.setAttribute('stroke-opacity', (st.alpha*tubeIntensity).toFixed(2));
+
+    // Position nur fortschreiben, wenn Strom fliesst - steht sonst
+    // still (wie zuvor der Punkt).
+    P.t += dt*st.speed/P.len*(st.on?1:0);
+    if (P.t>1) P.t -= 1;
+
+    // Lauflicht sanft ein-/ausblenden (1,2s, Auftrag "Lauflicht statt
+    // Kugel") - anders als zuvor beim Punkt (der immer sichtbar blieb)
+    // verschwindet es jetzt bei fehlendem Stromfluss komplett, der
+    // Schlauch bleibt als einziges Signal "gedaempft" sichtbar.
+    P.runAlpha += ((st.on?1:0) - P.runAlpha) * Math.min(1, dt/1.2);
+    var runOpacity = st.alpha * P.runAlpha;
+
+    var headOffset = -(P.t*P.len);
+    P.head.setAttribute('stroke-dashoffset', headOffset.toFixed(1));
+    P.head.setAttribute('stroke-opacity', runOpacity.toFixed(2));
+    HOUSE_RUNNER_TAILS.forEach(function(cfg, i){
+      var tp = P.tails[i];
+      // Kleinerer (weniger negativer) Offset = etwas frueherer Punkt
+      // auf dem Pfad = "hinter" dem Kopf in Laufrichtung.
+      tp.setAttribute('stroke-dashoffset', (headOffset + cfg.offsetFrac*P.segLen).toFixed(1));
+      tp.setAttribute('stroke-opacity', (runOpacity*cfg.opacity).toFixed(2));
     });
   });
   requestAnimationFrame(houseFrame);
@@ -1646,10 +1726,10 @@ void tick() {
     if (!started) {
         if (WiFi.status() != WL_CONNECTED) return;
         server.on("/", sendPageChunked);
-        server.on("/house_v1_day_v3.jpg", handleHouseV1DayImage);
-        server.on("/house_v1_night_v3.jpg", handleHouseV1NightImage);
-        server.on("/house_v2_day_v3.jpg", handleHouseV2DayImage);
-        server.on("/house_v2_night_v3.jpg", handleHouseV2NightImage);
+        server.on("/house_v1_day_v4.jpg", handleHouseV1DayImage);
+        server.on("/house_v1_night_v4.jpg", handleHouseV1NightImage);
+        server.on("/house_v2_day_v4.jpg", handleHouseV2DayImage);
+        server.on("/house_v2_night_v4.jpg", handleHouseV2NightImage);
         server.on("/api/data", handleApiData);
         server.on("/api/day", handleApiDay);
         server.on("/api/history", handleApiHistory);

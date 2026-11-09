@@ -42,6 +42,11 @@ History/
 # Skript selbst bleibt lokal.
 /tools/
 
+# Rohmaterial (JPEGs) fuer neue Haus-Grafik-Bilder - nur Quelle fuer
+# tools/generate_house_image.py/solarenergy.html, das Ergebnis
+# (src/house_image.h) wird stattdessen committet.
+/neue_bilder/
+
 # Mehrtaegige Portal-Messung (Auftrag) - rein lokales Diagnosewerkzeug,
 # bleibt unversioniert. Der Aufruf in main.cpp ist entsprechend per
 # #ifdef PORTAL_DAY_PROBE (siehe config.h) abgesichert, damit ein
