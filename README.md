@@ -19,142 +19,183 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ## Deutsch
 
 Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
-"Cheap Yellow Display" (CYD, ESP32-2432S028, 2,8" Touch-TFT).
+"Cheap Yellow Display" (CYD, ESP32-2432S028, 2,8" Touch-TFT). Es zeigt die
+wichtigsten Werte der Solaranlage sowohl direkt am Gerät als auch im
+Browser und führt dabei ein eigenes Ertragsbuch mit Verlauf und Backup.
 
-### Funktionen
+### Highlights
 
-- **Übersicht** (erste Seite nach dem Booten): vier Kacheln auf einen
-  Blick - Wetter (Symbol + aktuelle Temperatur, antippen öffnet die
-  [Wochenansicht](#standort-und-wetter)), aktuelle Leistung, heutiger
-  Ertrag und Batterie (Spannung, Füllstandssymbol in Autobatterie-Optik,
-  das seine Farbe je nach Ladezustand wechselt - grün/gelb/rot -, sowie
-  der Ladezustand in Prozent). Leistung/Ertrag/Batterie antippen fragt
-  die Werte sofort neu ab - die Kachel zeigt dabei kurz "Lade..." und
-  danach wieder ihre normale Beschriftung, die Seite selbst wird dadurch
-  nicht gewechselt (zu den Wisch-Seiten gelangt man weiterhin per
-  Wischen). Die Wetterkachel verhält sich unverändert und öffnet immer
-  die Wochenansicht. Auf den Seiten Leistung, Ertrag, Batterie und
-  PV-Status löst Antippen einer Kachel ebenfalls eine sofortige
-  Neuabfrage mit derselben "Lade..."-Rückmeldung aus.
-- **Wisch-Seiten** (Reihenfolge: Übersicht, PV-Status, Batterie,
-  Leistung, Tagesverlauf, Ertrag, Verlauf, Wetter): PV-Status
-  (PV-Spannung, PV-Strom, PV-Leistung und das heutige
-  Leistungsmaximum), Batterie (Ladezustand, Spannung, Strom,
-  Temperatur, Ladestatus mit kurzer Erklärung der vier Zustände, sowie
-  die tatsächlichen Höchst-/Tiefstwerte der Batteriespannung des
-  Tages), Leistung (aktuelle PV-Leistung groß, PV-Spannung/-Strom als
-  Kacheln, Kurve der letzten 3 Stunden), Tagesverlauf (Leistungskurve
-  des ganzen Tages von 05:00 bis 22:00 Uhr mit dem Tages-Höchstwert in
-  Watt, darunter ein Fortschrittsbalken, der sich über den Tag füllt),
-  Ertrag (Heute, Woche als gleitendes 7-Tage-Fenster, Monat, Jahr -
-  der Jahreswert steht jetzt ohne Nachkommastelle und dadurch größer
-  und besser lesbar da), Verlauf (drei antippbare Reiter
-  Tage/Monate/Jahre, je eine Balkengrafik der letzten 7 Tage, Monate
-  bzw. Kalenderjahre) und als letzte, neue Seite Wetter
-  (Wochenvorschau mit Wochentag, Wettersymbol sowie Höchst-/
-  Tiefsttemperatur pro Tag, dieselben Daten wie in der Web-Ansicht).
-- **Laufende Werte sofort gesichert**: Nicht nur der heutige Tagesertrag,
-  sondern auch der laufende Monats- und Jahreswert werden bei jeder
-  Änderung sofort gesichert (`months.csv`/`years.csv` im Ordner
-  `/SolarHistory`, im selben Stil wie `days.csv`) - nach einem Neustart
-  mitten im Monat oder Jahr fehlt dadurch nichts.
-- **Aktuellere Werte**: Die Werte auf dem CYD waren bisher bis zu etwa
-  30 Minuten alt. Jetzt werden die jeweils neuesten Werte angezeigt
-  (in der Regel ca. 1-2 Minuten alt).
-- **Echtes Auslesen beim Antippen**: Antippen einer Kachel liest jetzt
-  echte, frische Werte direkt vom Regler ab (nur ein Lesebefehl, kein
-  Schreibzugriff) - jede dieser Auslesungen steht im Operationsprotokoll
-  des Portals. Kacheln für Ertragswerte aktualisieren weiterhin nur über
-  den normalen Abruf.
-- **Batterie auch nachts**: Die Batteriewerte werden nachts alle 10
-  Minuten aktualisiert (nur die Anzeige, die Ertragsdaten bleiben davon
-  unberührt). Die Statuszeile auf der Batterie-Seite zeigt dabei den
-  Zeitpunkt der nächsten Abfrage. Eine Batterie-Kachel antippen fragt
-  jetzt auch nachts sofort frische Werte vom Regler ab - andere Kacheln
-  (Leistung, Ertrag) bleiben nachts weiterhin gesperrt.
-- **Mondsichel immer weiß**, unabhängig von der gewählten Systemfarbe.
-- **Robustere Rückmeldung beim Antippen**: "Lade..." und danach wieder
-  die normale Beschriftung - kein Hängenbleiben, kein Flackern. Der
-  Hinweis im Nachtmodus bleibt dabei länger stehen.
-- **Nachtmodus**: Die Abfrage läuft nur noch zwischen 04:30 und
-  22:30 Uhr - danach eine Abschlussabfrage, bestätigt per Abgleich mit
-  dem Tages-Backup. Bestätigt erscheint im Kopfbereich eine kleine
-  Mondsichel, bis die Abfrage um 04:30 Uhr wieder beginnt. Tippt man
-  nachts trotzdem auf eine Kachel, zeigt die Rückmeldung einen Hinweis,
-  dass die Aktualisierung erst wieder ab 04:30 Uhr möglich ist.
-- **Datenalter statt "veraltet"**: Die Statuszeile zeigt bei älteren
-  Werten jetzt z.B. "Portaldaten 12 Min alt" an statt nur "veraltet" -
-  bricht bei Bedarf in zwei Zeilen um, statt abgeschnitten zu werden.
-- **Einheitliche Farben** auf allen Seiten: Beschriftungen, Einheiten
-  (kWh, W, V, A, %, °C), Rahmen und Kurven/Balken in der gewählten
-  Systemfarbe. Alle vom Portal oder Wetterdienst abgefragten Werte -
-  Zahlen UND Texte, z.B. Leistung, Spannung, Ertrag, Temperatur,
-  Ladestatus - erscheinen systemweit in einer zweiten, gedämpften Farbe,
-  ebenso das Diagramm-Raster und die Wochentage/Monatsnamen/Jahreszahlen
-  in den Übersichten.
-- **Ertragsbuch**: zählt Woche/Monat/Jahr selbst (die Portal-Summen
-  haben bekanntermaßen Lücken), mit täglichem Backup im Ordner
-  `/SolarHistory` im SD-Karten-Root und manueller Korrekturmöglichkeit.
-  Dieser Ordner enthält alle Solardaten und bleibt bei einem
-  Zurücksetzen erhalten - nur die Einstellungen werden dabei gelöscht.
-- **Web-Ansicht**: Im Menü unter "Netzwerke" → "WebUI" steht die Adresse,
-  die sich im Browser eines Geräts im selben WLAN öffnen lässt - zeigt
-  alle Werte groß und aufgeräumt auf Handy oder PC, mit eigenen Tabs für
-  Übersicht, Leistung, Tagesverlauf, Ertrag, Batterie, PV-Status, Verlauf
-  (Tage/Monate/Jahre), Wetter (inklusive Wettersymbolen und
-  Leistungskurve) und Daten (Dateien auf der SD-Karte ansehen, herunterladen,
-  bearbeiten und löschen, inklusive des Ordners `/SolarHistory` - der
-  bleibt dort zum Schutz der Solardaten nur zum Ansehen und
-  Herunterladen) - genau wie am Gerät. Die Übersichtsseite zeigt neben
-  Leistung, Heute und Batterie jetzt auch die Batteriespannung als
-  eigene Kachel. Der Reiter "Daten" zeigt seinen
-  Inhalt jetzt schon beim ersten Antippen zuverlässig an. Dort lässt sich
-  jede Datei einzeln oder ein ganzer Ordner als ZIP herunterladen, und
-  ein Knopf "Backup erstellen" sichert Einstellungen und Solardaten
-  zusammen in einer ZIP-Datei. Jetzt auch erreichbar, während am Gerät
-  selbst die WebUI-Seite (oder eine andere Vollbild-Seite) geöffnet
-  ist. Eine kleine Statuszeile unten zeigt Version, Verbindung zum
-  Gerät und Portal-Status. Der Tagesverlauf hat einen
-  Fortschrittsbalken unter der stündlichen Zeitachse, die
-  Balkengrafiken (Tage/Monate/Jahre) zeigen die Höhe jetzt korrekt
-  proportional zum Wert, und die Tage-Ansicht zeigt den genauen
-  Tagesertrag mit zwei Nachkommastellen in richtiger, lückenloser
-  Reihenfolge.
-- **Animierte Haus-Grafik** unten in der Web-Ansicht (auf allen Reitern
-  außer Wetter und Daten): tagsüber eine Tagesansicht mit Sonne, nachts
-  eine Nachtansicht mit Mond - der Wechsel erfolgt zum tatsächlichen
-  Sonnenauf- und -untergang des Standorts. Tagsüber laufen leuchtende
-  Punkte entlang des Energiewegs nur, wenn die Anlage gerade Ertrag
-  liefert, und schneller, je mehr sie produziert; nachts bewegt sich ein
-  einzelner, ruhiger Lichtpunkt. Bei Niederschlag in der Region zeigt die
-  Grafik passend dazu Regen oder Schnee.
-- **Startlogo** "Sonne im Schild", erscheint 7 Sekunden bei jedem Start.
-- **Helligkeit** der Hintergrundbeleuchtung stufenlos einstellbar im Menü.
-- Tippen auf das WLAN-Symbol im Kopfbereich öffnet direkt "Netzwerke".
-- **Geräte-Seriennummer wird automatisch** nach dem Login vom
-  Solar-Guardian-Portal geholt - man muss sie nicht mehr eintippen,
-  außer bei Problemen oder mehreren Geräten.
-- **Genaueres Wetter**: Das aktuelle Wetter (Temperatur und Symbol) kommt
-  jetzt von MET Norway, Open-Meteo bleibt als Rückfall, falls MET Norway
-  nicht erreichbar ist.
-- **Dateiexplorer** im Menü unter "Dateien": Dateien auf der SD-Karte
-  ansehen und einzeln löschen (mit Rückfrage).
-- **Empfindliche, zuverlässige Bedienung**: flackerfreie Anzeige, keine
-  abgeschnittenen Texte, feinfühlige Wisch-Gesten zwischen den Seiten,
-  saubere Anzeige beim Öffnen und Verlassen von Vollbild-Bildschirmen.
-- **Absicherung**: Zeitlimit für jede Netzwerk-Abfrage, ein Wächter gegen
-  hängenbleibende Hintergrund-Abgleiche mit kontrolliertem Neustart (gibt
-  danach nicht für immer auf, sondern versucht es nötigenfalls stündlich
-  weiter), sichere Schreibzugriffe auf die SD-Karte.
-- **Menü**: Konto (Benutzername, Passwort, Geräte-Seriennummer - wird
-  normalerweise automatisch geholt), Netzwerke (bis zu 3 WLANs),
-  Systemfarbe, Sprache (Deutsch/Englisch), Ertragswerte (Monat/Jahr
-  manuell korrigieren), Dateien, Zurücksetzen. Der Standort für die
-  Wetterkachel wird automatisch ermittelt und hat deshalb keinen
-  eigenen Menüpunkt.
-- **Ersteinrichtung** direkt am Gerät: Touch-Kalibrierung, WLAN-Auswahl,
-  Solar-Guardian-Zugangsdaten - die Geräte-Seriennummer wird danach
-  automatisch vom Portal geholt.
+- Acht Wisch-Seiten am Gerät: Übersicht, PV-Status, Batterie, Leistung,
+  Tagesverlauf, Ertrag, Verlauf und Wetter.
+- Kacheln auf der Übersicht und den Detailseiten lassen sich antippen,
+  um frische Werte direkt vom Solarregler abzurufen.
+- Ertragsbuch mit Tages-, Monats- und Jahreswerten, täglichem Backup auf
+  der SD-Karte und manueller Korrekturmöglichkeit.
+- Web-Ansicht mit allen Werten und einer animierten Haus-Grafik, die den
+  Weg der Solarenergie zeigt.
+- Nachtmodus mit reduzierter Abfragefrequenz und eigener Mondsichel-
+  Anzeige.
+- Automatische Standortermittlung für eine Wetterkachel mit aktuellem
+  Wetter und Wochenvorschau.
+
+### Funktionen am Gerät
+
+#### Übersicht
+
+Die erste Seite nach dem Booten zeigt vier Kacheln auf einen Blick:
+Wetter (Symbol und aktuelle Temperatur, antippen öffnet die
+[Wochenansicht](#standort-und-wetter)), aktuelle Leistung, heutiger
+Ertrag und Batterie (Spannung, ein Füllstandssymbol in
+Autobatterie-Optik, das je nach Ladezustand die Farbe wechselt -
+grün/gelb/rot -, sowie der Ladezustand in Prozent). Leistung, Ertrag und
+Batterie antippen fragt die Werte sofort beim Solarregler ab; die Kachel zeigt dabei
+kurz "Lade..." und danach wieder ihre normale Beschriftung, ohne dass
+sich die Seite selbst ändert. Die Wetterkachel öffnet immer die
+Wochenansicht.
+
+#### Wisch-Seiten
+
+Von der Übersicht aus wischt man durch die weiteren Seiten, in dieser
+Reihenfolge:
+
+- **PV-Status**: PV-Spannung, PV-Strom, PV-Leistung und das heutige
+  Leistungsmaximum.
+- **Batterie**: Ladezustand, Spannung, Strom, Temperatur, Ladestatus mit
+  kurzer Erklärung der vier Zustände, sowie die höchste und tiefste
+  Batteriespannung des Tages.
+- **Leistung**: die aktuelle PV-Leistung groß im Blick, PV-Spannung und
+  -Strom als Kacheln, dazu eine Kurve der letzten drei Stunden.
+- **Tagesverlauf**: die Leistungskurve des ganzen Tages von 05:00 bis
+  22:00 Uhr mit dem Tages-Höchstwert in Watt und einem Fortschrittsbalken,
+  der sich über den Tag füllt.
+- **Ertrag**: Heute, Woche als gleitendes 7-Tage-Fenster, Monat und Jahr.
+- **Verlauf**: drei antippbare Reiter Tage, Monate und Jahre, jeweils als
+  Balkengrafik der letzten 7 Tage, Monate bzw. Kalenderjahre.
+- **Wetter**: eine Wochenvorschau mit Wochentag, Wettersymbol sowie
+  Höchst- und Tiefsttemperatur pro Tag - dieselben Daten wie in der
+  Web-Ansicht.
+
+Kacheln auf den Seiten Leistung, Ertrag, Batterie und PV-Status lassen
+sich ebenfalls antippen, um sofort frische Werte abzurufen.
+
+#### Nachtmodus
+
+Die Abfrage läuft zwischen 04:30 und 22:30 Uhr, danach folgt eine
+Abschlussabfrage, die per Abgleich mit dem Tages-Backup bestätigt wird.
+Sobald das bestätigt ist, erscheint im Kopfbereich eine kleine
+Mondsichel, bis die Abfrage um 04:30 Uhr wieder beginnt - unabhängig von
+der gewählten Systemfarbe ist sie immer weiß. Die Batteriewerte werden
+in dieser Zeit trotzdem alle 10 Minuten aktualisiert, und eine
+Batterie-Kachel lässt sich auch nachts antippen, um sofort frische Werte
+abzurufen. Andere Kacheln (Leistung, Ertrag) bleiben nachts gesperrt;
+ein Tipp darauf zeigt einen Hinweis, dass die Aktualisierung erst wieder
+ab 04:30 Uhr möglich ist.
+
+#### Anzeige und Bedienung
+
+Beschriftungen, Einheiten (kWh, W, V, A, %, °C), Rahmen sowie
+Kurven/Balken erscheinen in der im Menü gewählten Systemfarbe. Alle vom
+Portal oder Wetterdienst abgefragten Werte - Zahlen und Texte, z.B.
+Leistung, Spannung, Ertrag, Temperatur, Ladestatus - erscheinen
+systemweit in einer zweiten, gedämpften Farbe, ebenso das
+Diagramm-Raster und die Wochentage, Monatsnamen und Jahreszahlen in den
+Übersichten. Die Helligkeit der Hintergrundbeleuchtung lässt sich im
+Menü stufenlos einstellen, die Sprache ist auf Deutsch oder Englisch
+umstellbar. Beim Start erscheint für 7 Sekunden ein Startlogo. Tippen
+auf das WLAN-Symbol im Kopfbereich öffnet direkt die Netzwerk-Übersicht.
+Die Statuszeile zeigt bei älteren Werten das Datenalter an (z.B.
+"Portaldaten 12 Min alt") und bricht bei Bedarf in zwei Zeilen um.
+
+#### Menü
+
+Im Menü stehen: Netzwerke (bis zu 3 WLANs), Konto (Benutzername,
+Passwort, Geräte-Seriennummer), Systemfarbe, Helligkeit, Sprache,
+Ertragswerte (Monat/Jahr manuell korrigieren), Dateien (Dateiexplorer
+für die SD-Karte) und Zurücksetzen. Der Standort für die Wetterkachel
+wird automatisch ermittelt und hat deshalb keinen eigenen Menüpunkt.
+
+#### Ersteinrichtung am Gerät
+
+Direkt am Gerät durchlaufen: Touch-Kalibrierung, WLAN-Auswahl und die
+Eingabe der Solar-Guardian-Zugangsdaten. Die Geräte-Seriennummer wird
+nach der Anmeldung automatisch vom Solar-Guardian-Portal ermittelt - nur
+bei Problemen oder mehreren Geräten muss sie von Hand im Menü unter
+"Konto" eingetragen werden.
+
+### Ertragsbuch und Daten
+
+Das Ertragsbuch zählt Woche, Monat und Jahr selbst, da die
+Portal-Summen bekanntermaßen Lücken haben. Jeder Tag wird zusätzlich
+täglich auf der SD-Karte im Ordner `/SolarHistory` gesichert; dieser
+Ordner enthält alle Solardaten und bleibt bei einem Zurücksetzen
+erhalten - nur die Einstellungen werden dabei gelöscht. Die Werte lassen
+sich im Menü unter "Ertragswerte" manuell korrigieren, und ein eigener
+Dateiexplorer im Menü zeigt die Dateien auf der SD-Karte.
+
+### Web-Ansicht
+
+Im Menü unter "Netzwerke" → "WebUI" steht die Adresse, die sich im
+Browser eines Geräts im selben WLAN öffnen lässt. Sie zeigt alle Werte
+groß und aufgeräumt auf Handy oder PC, mit eigenen Reitern für:
+
+- **Übersicht**: Leistung, Heute, Batterie und Batteriespannung.
+- **Leistung**
+- **Tagesverlauf**
+- **Ertrag**
+- **Batterie**
+- **PV-Status**
+- **Verlauf** (Tage/Monate/Jahre)
+- **Wetter** (inklusive Wettersymbolen und Leistungskurve)
+- **Daten**: Dateien auf der SD-Karte ansehen, herunterladen, bearbeiten
+  und löschen, einzeln oder als ZIP für einen ganzen Ordner. Ein Knopf
+  "Backup erstellen" sichert Einstellungen und Solardaten zusammen in
+  einer ZIP-Datei. Der Ordner `/SolarHistory` steht hier zum Schutz der
+  Solardaten nur zum Ansehen und Herunterladen bereit.
+
+Eine kleine Statuszeile unten zeigt Version, Verbindung zum Gerät und
+Portal-Status.
+
+#### Animierte Haus-Grafik
+
+Unterhalb der Werte zeigt die Web-Ansicht auf allen Reitern außer Wetter
+und Daten eine animierte Haus-Grafik mit dem Weg der Solarenergie. Bei
+Tag zeigt sie eine Tagesansicht, bei Nacht eine Nachtansicht - der
+Wechsel erfolgt zum tatsächlichen Sonnenauf- und -untergang des
+Standorts. Die Stromleitungen sind als leuchtende Schläuche
+dargestellt, auf denen ein blaues Lauflicht läuft, solange die Anlage
+Ertrag liefert - je mehr Leistung, desto schneller. Nachts läuft ein
+ruhiges, gleichmäßiges Lauflicht. Bei Regen oder Schnee in der Region
+zeigt die Grafik eine passende Regen- oder Schneeanimation.
+
+### Standort und Wetter
+
+Wetterdaten: MET Norway (CC BY 4.0) für das aktuelle Wetter (Temperatur
+und Symbol), [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) für
+die Wochenvorhersage, die Standortsuche und als Rückfall - beide
+kostenlos und ohne Zugangsschlüssel. Der Standort wird automatisch über
+die öffentliche IP-Adresse des Geräts ermittelt (dabei geht die
+IP-Adresse an den jeweiligen Ermittlungsdienst; die Genauigkeit liegt
+nur auf Stadt-Ebene, nicht auf die genaue Adresse). Für einen anderen
+Standort: die Wetterkachel auf der Übersicht lange gedrückt halten -
+dort lässt sich der Standort von Hand per Ortsname oder Postleitzahl
+setzen (die Suche zeigt eine antippbare Trefferliste zur Auswahl, auch
+bei nur einem Treffer) oder die automatische Ermittlung erneut
+anstoßen; ein von Hand gesetzter Standort bleibt erhalten und wird
+automatisch nicht überschrieben. Ohne erkannten Standort zeigt die
+Wetterkachel "Standort wählen" statt eines Symbols. Das Wetter
+aktualisiert sich alle 30 Minuten, dazu sofort nach dem WLAN-Verbinden
+und nach einer Standortänderung.
+
+### Zuverlässigkeit
+
+Jede Netzwerk-Abfrage ist mit einem Zeitlimit abgesichert, sodass eine
+hängende Verbindung nie unbegrenzt blockiert. Ein eigener Wächter
+erkennt, falls der Hintergrund-Abgleich trotzdem einmal länger als
+nötig steht, und startet das Gerät dann kontrolliert neu, ohne dabei
+gesicherte Ertragsdaten zu verlieren. Bleibt das Problem bestehen,
+versucht das Gerät es höchstens noch einmal pro Stunde weiter, statt für
+immer aufzugeben. Die Anzeige selbst bleibt davon immer unberührt und
+bedienbar.
 
 ### Installation
 
@@ -180,53 +221,16 @@ Schnittstelle kann sich jederzeit ändern. Die Zugangsdaten liegen im
 Klartext auf der SD-Karte (`/SolarGuardian/config.json`), wie es für ein
 privates Gerät ohne weitere Absicherung üblich ist.
 
-Das Gerät ist gegen hängende Netzwerkabfragen abgesichert: Jede HTTPS-
-Abfrage bricht spätestens nach 20 Sekunden insgesamt ab (nicht erst nach
-einer möglicherweise viel längeren Zeit), und ein eigener Wächter
-erkennt, falls der Hintergrund-Abgleich trotzdem einmal länger als 10-15
-Minuten steht, und startet das Gerät dann selbstständig neu (gesicherte
-Ertragsdaten gehen dabei nie verloren). Hilft das mehrfach hintereinander
-nicht, versucht es das Gerät höchstens noch einmal pro Stunde weiter,
-statt für immer aufzugeben - die Anzeige selbst bleibt davon immer
-unberührt und bedienbar.
-
 ### Anpassen
 
-Die Geräte-Seriennummer wird direkt am Gerät eingegeben: bei der
-Ersteinrichtung auf einem eigenen Bildschirm, oder später jederzeit im
-Menü unter "Konto", dort auf das Feld "Seriennummer" tippen. Sie landet
-in `device_no` in
+Die Geräte-Seriennummer lässt sich jederzeit im Menü unter "Konto" auf
+dem Feld "Seriennummer" bearbeiten. Sie landet in `device_no` in
 `/SolarGuardian/config.json` auf der SD-Karte. Man findet sie im
 Solar-Guardian-Portal auf der Geräteseite; die Adresszeile dort enthält
 `devid=` gefolgt von der Seriennummer. Die Startwerte für den Reiter
-"Jahre" (Vorjahresertrag) stehen in `years.json` auf der SD-Karte und
-können dort direkt angepasst werden.
-
-Das tägliche Ertrags-Backup liegt im Ordner `/SolarHistory` - bewusst
-ausserhalb von `/SolarGuardian`, damit ein "Zurücksetzen" im Menü diese
-Sicherung nicht mit löscht und der heutige Tagesertrag danach automatisch
-wiederhergestellt wird.
-
-### Standort und Wetter
-
-Wetterdaten: MET Norway (CC BY 4.0) für das aktuelle Wetter (Temperatur
-und Symbol), [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) für
-die Wochenvorhersage, die Standortsuche und als Rückfall - beide
-kostenlos, ohne Zugangsschlüssel. Der Standort wird automatisch über die
-öffentliche IP-Adresse des Geräts ermittelt (dabei geht die IP-Adresse an
-den jeweiligen Ermittlungsdienst; die Genauigkeit liegt nur auf
-Stadt-Ebene, nicht auf die genaue Adresse). Ohne erkannten Standort oder
-für einen anderen Ort: die Wetterkachel auf der Übersicht lange gedrückt
-halten - dort lässt sich der Standort einmalig von Hand per Ortsname oder
-Postleitzahl setzen (die Suche zeigt immer eine antippbare Trefferliste
-zur Auswahl, auch bei nur einem Treffer) oder die
-automatische Ermittlung erneut anstoßen; ein von Hand gesetzter Standort
-wird danach nicht mehr automatisch überschrieben. Wer lieber direkt
-Koordinaten eintragen möchte, kann `location_lat`/`location_lon` auch
-direkt in `/SolarGuardian/config.json` setzen. Ohne erkannten Standort
-zeigt die Wetterkachel "Standort wählen" statt eines Symbols. Das Wetter
-aktualisiert sich alle 30 Minuten, dazu sofort nach dem WLAN-Verbinden und
-nach einer Standortänderung.
+"Jahre" (Vorjahresertrag) stehen in `years.json` im Ordner
+`/SolarHistory` auf der SD-Karte und können dort direkt angepasst
+werden.
 
 ### Galerie
 
@@ -247,133 +251,175 @@ bauen/flashen.
 ## English
 
 A solar dashboard for the Solar Guardian (EPEVER) cloud, running on an
-ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
+ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT). It
+shows the key values of a solar installation both directly on the
+device and in a browser, and keeps its own yield log with history and
+backup.
 
-### Features
+### Highlights
 
-- **Overview** (first page after boot): four tiles at a glance - weather
-  (icon + current temperature, tap for the [week view](#location-and-weather)),
-  current power output, today's yield, and battery (voltage, a
-  fill-level icon styled as a car battery that changes color by charge
-  level - green/yellow/red -, and the charge level in percent). Tapping
-  Power/Yield/Battery refreshes those values immediately - the tile
-  briefly shows "Loading..." and then returns to its normal label,
-  without switching the page itself (swipe to reach those pages as
-  before). The weather tile is unchanged and always opens the week
-  view. Tapping a tile on the Power, Yield, Battery, or PV status page
-  itself also triggers an immediate refresh with the same
-  "Loading..." feedback.
-- **Swipe pages** (order: Overview, PV status, Battery, Power, Daily
-  curve, Yield, History, Weather): PV status (PV voltage, PV current,
-  PV power, and today's power peak), Battery (charge level, voltage,
-  current, temperature, charging status with a short explanation of
-  all four states, plus the day's actual highest/lowest battery
-  voltage), Power (current PV power front and center, PV voltage/
-  current as tiles, a chart of the last 3 hours), Daily curve (the
-  power curve of the whole day from 05:00 to 22:00, with today's peak
-  value in watts and, below it, a progress bar that fills up over the
-  day), Yield (Today, Week as a rolling 7-day window, Month, Year -
-  the year value is now shown without decimal places, making it
-  larger and easier to read), History (three tappable tabs
-  Days/Months/Years, each a bar chart of the last 7 days, months, or
-  calendar years), and, as the new last page, Weather (a week-ahead
-  view with weekday, weather icon, and high/low temperature per day,
-  same data as in the web view).
-- **Running values saved immediately**: Not just today's running yield,
-  but also the running month and year value are now saved immediately
-  on every change (`months.csv`/`years.csv` in the `/SolarHistory`
-  folder, same style as `days.csv`) - nothing is missing after a
-  restart partway through a month or year.
-- **Fresher values**: Values on the CYD used to be up to about 30
-  minutes old. Now the latest available values are shown (typically
-  about 1-2 minutes old).
-- **Real readout on tap**: Tapping a tile now reads real, fresh values
-  directly from the controller (a read-only command, no write access) -
-  each of these readouts shows up in the portal's operation log. Yield
-  tiles still only update through the normal fetch.
-- **Battery updates at night too**: Battery values are now refreshed
-  every 10 minutes overnight (display only, yield data stays untouched).
-  The status line on the Battery page shows the time of the next fetch.
-  Tapping a battery tile now also triggers an immediate, fresh readout
-  at night - other tiles (Power, Yield) remain locked overnight as
-  before.
-- **Crescent moon always white**, regardless of the chosen theme color.
-- **More robust tap feedback**: "Loading..." and then back to the normal
-  label - no getting stuck, no flicker. The night-mode hint now stays on
-  screen longer.
-- **Night mode**: fetching now only runs between 04:30 and 22:30 -
-  followed by a final query, confirmed by comparing it against the
-  day's backup. Once confirmed, a small crescent moon appears in the
-  header until fetching resumes at 04:30. Tapping a tile at night still
-  shows a hint that refreshing is only possible again starting at 04:30.
-- **Data age instead of "stale"**: the status line now shows e.g. "Portal
-  data 12 min old" for older values instead of just "stale" - wrapping to
-  two lines when needed instead of getting cut off.
-- **Consistent colors** across every page: labels, units (kWh, W, V, A,
-  %, °C), borders, and chart curves/bars use the chosen theme color.
-  Every value fetched from the portal or weather service - numbers AND
-  text alike, e.g. power, voltage, yield, temperature, charging status -
-  appears system-wide in a second, dimmed color, along with the chart
-  grid and the weekdays/month names/years shown in the overviews.
-- **Yield log**: counts week/month/year itself (the portal's own totals
-  are known to have gaps), with a daily backup in the `/SolarHistory`
-  folder on the SD card root and manual correction. This folder holds
-  all solar data and survives a factory reset - only the settings get
-  deleted.
-- **Web view**: In the menu under "Networks" → "WebUI" you'll find the
-  address to open in a browser on a device in the same WiFi network -
-  shows all values large and clean on your phone or PC, with its own
-  tabs for Overview, Power, Daily curve, Yield, Battery, PV status,
-  History (Days/Months/Years), Weather (including weather icons and the
-  power chart), and Data (view, download, edit, and delete files on the SD
-  card, including the `/SolarHistory` folder - which stays
-  view-and-download-only there to protect your solar data) - just
-  like on the device. The Overview tab now also shows battery voltage
-  as its own tile, next to Power, Today, and Battery. The Data tab now reliably shows its content the
-  very first time you open it. It lets you download any single file
-  or a whole folder as a ZIP, and a "Create backup" button saves
-  settings and solar data together in one ZIP file. Now also
-  reachable while the WebUI page itself (or any other full-screen
-  page) is open on the device. A small status line at the bottom
-  shows the version, the connection to the device, and the portal
-  status. The daily curve has a progress bar below the hourly time
-  axis, the bar charts (Days/Months/Years) now scale correctly in
-  proportion to the value, and the Days view shows the exact daily
-  yield with two decimal places in correct, gapless order.
-- **Animated house graphic** at the bottom of the web view (on every tab
-  except Weather and Data): a daytime scene with the sun during the day
-  and a nighttime scene with the moon at night, switching at the
-  location's actual sunrise and sunset. During the day, glowing light
-  points flow along the energy path only while the system is producing
-  power, and faster the more it produces; at night a single, calm light
-  point keeps moving. When it's raining or snowing in the area, the
-  graphic shows matching rain or snow.
-- **Boot logo** "sun in a shield", shown for 7 seconds on every start.
-- **Brightness** of the backlight, steplessly adjustable in the menu.
-- Tapping the WiFi icon in the header opens "Networks" directly.
-- **Device serial number is fetched automatically** after login from the
-  Solar Guardian portal - no need to type it in, except for problems or
-  more than one device.
-- **More accurate weather**: the current weather (temperature and icon)
-  now comes from MET Norway, with Open-Meteo as a fallback if MET Norway
-  is unreachable.
-- **File explorer** in the menu under "Files": view the files on the SD
-  card and delete them individually (with confirmation).
-- **Sensitive, reliable operation**: flicker-free display, no clipped
-  text, sensitive swipe gestures between pages, clean redraws when
-  opening and leaving full-screen pages.
-- **Hardening**: a timeout on every network request, a watchdog against a
-  stuck background sync with a controlled restart (doesn't give up
-  forever afterward, falls back to trying hourly if needed), safe SD card
-  writes.
-- **Menu**: Account (username, password, device serial number - normally
-  fetched automatically), Networks (up to 3 WiFi networks), Theme color,
-  Language (German/English), Yield values (manually correct month/year),
-  Files, Factory reset. The location used for the weather tile is
-  detected automatically and has no menu entry of its own.
-- **First-time setup** directly on the device: touch calibration, WiFi
-  selection, Solar Guardian account details - the device serial number
-  is then fetched from the portal automatically.
+- Eight swipe pages on the device: Overview, PV status, Battery, Power,
+  Daily curve, Yield, History, and Weather.
+- Tiles on the Overview and the detail pages can be tapped to fetch
+  fresh values directly from the solar controller.
+- Yield log with daily, monthly, and yearly totals, a daily backup on
+  the SD card, and manual correction.
+- Web view with all values plus an animated house graphic showing the
+  path of the solar energy.
+- Night mode with a reduced fetch rate and its own crescent moon
+  indicator.
+- Automatic location detection for a weather tile with current weather
+  and a week-ahead forecast.
+
+### Features on the device
+
+#### Overview
+
+The first page after boot shows four tiles at a glance: weather (icon
+and current temperature, tap to open the
+[week view](#location-and-weather)), current power output, today's
+yield, and battery (voltage, a fill-level icon styled as a car battery
+that changes color by charge level - green/yellow/red -, and the charge
+level in percent). Tapping Power, Yield, or Battery refreshes those
+values immediately; the tile briefly shows "Loading..." and then
+returns to its normal label, without switching the page itself. The
+weather tile always opens the week view.
+
+#### Swipe pages
+
+From the Overview, swiping moves through the remaining pages, in this
+order:
+
+- **PV status**: PV voltage, PV current, PV power, and today's power
+  peak.
+- **Battery**: charge level, voltage, current, temperature, charging
+  status with a short explanation of all four states, plus the day's
+  highest and lowest battery voltage.
+- **Power**: current PV power front and center, PV voltage/current as
+  tiles, plus a chart of the last three hours.
+- **Daily curve**: the power curve of the whole day from 05:00 to
+  22:00, with today's peak value in watts and a progress bar that fills
+  up over the day.
+- **Yield**: Today, Week as a rolling 7-day window, Month, and Year.
+- **History**: three tappable tabs Days, Months, and Years, each a bar
+  chart of the last 7 days, months, or calendar years.
+- **Weather**: a week-ahead view with weekday, weather icon, and
+  high/low temperature per day - the same data as in the web view.
+
+Tiles on the Power, Yield, Battery, and PV status pages can also be
+tapped to fetch fresh values immediately.
+
+#### Night mode
+
+Fetching runs between 04:30 and 22:30, followed by a final query that
+is confirmed by comparing it against the day's backup. Once confirmed,
+a small crescent moon appears in the header until fetching resumes at
+04:30 - it's always white, regardless of the chosen theme color.
+Battery values keep refreshing every 10 minutes during this time, and a
+battery tile can still be tapped at night for an immediate readout.
+Other tiles (Power, Yield) remain locked overnight; tapping one shows a
+hint that refreshing is only possible again starting at 04:30.
+
+#### Display and operation
+
+Labels, units (kWh, W, V, A, %, °C), borders, and chart curves/bars use
+the theme color chosen in the menu. Every value fetched from the portal
+or weather service - numbers and text alike, e.g. power, voltage,
+yield, temperature, charging status - appears system-wide in a second,
+dimmed color, along with the chart grid and the weekdays, month names,
+and years shown in the overviews. Backlight brightness is steplessly
+adjustable in the menu, and the language can be switched between German
+and English. A boot logo is shown for 7 seconds on every start. Tapping
+the WiFi icon in the header opens the network overview directly. The
+status line shows the data age for older values (e.g. "Portal data 12
+min old"), wrapping to two lines when needed.
+
+#### Menu
+
+The menu offers: Networks (up to 3 WiFi networks), Account (username,
+password, device serial number), Theme color, Brightness, Language,
+Yield values (manually correct month/year), Files (an SD card file
+explorer), and Factory reset. The location used for the weather tile is
+detected automatically and has no menu entry of its own.
+
+#### First-time setup on the device
+
+Directly on the device, in order: touch calibration, WiFi selection,
+and entering the Solar Guardian account details. The device serial
+number is fetched automatically from the Solar Guardian portal after
+login - only in case of problems or multiple devices does it need to be
+entered by hand in the menu under "Account".
+
+### Yield log and data
+
+The yield log counts week, month, and year itself, since the portal's
+own totals are known to have gaps. Each day is also backed up daily on
+the SD card in the `/SolarHistory` folder; this folder holds all solar
+data and survives a factory reset - only the settings get deleted. The
+values can be manually corrected in the menu under "Yield values", and
+a file explorer in the menu shows the files on the SD card.
+
+### Web view
+
+In the menu under "Networks" → "WebUI" you'll find the address to open
+in a browser on a device in the same WiFi network. It shows all values
+large and clean on your phone or PC, with its own tabs for:
+
+- **Overview**: Power, Today, Battery, and battery voltage.
+- **Power**
+- **Daily curve**
+- **Yield**
+- **Battery**
+- **PV status**
+- **History** (Days/Months/Years)
+- **Weather** (including weather icons and the power chart)
+- **Data**: view, download, edit, and delete files on the SD card,
+  individually or as a ZIP for a whole folder. A "Create backup" button
+  saves settings and solar data together in one ZIP file. The
+  `/SolarHistory` folder stays view-and-download-only here to protect
+  your solar data.
+
+A small status line at the bottom shows the version, the connection to
+the device, and the portal status.
+
+#### Animated house graphic
+
+Below the values, the web view shows an animated house graphic on every
+tab except Weather and Data, illustrating the path of the solar energy.
+It shows a daytime scene during the day and a nighttime scene at night,
+switching at the location's actual sunrise and sunset. The power lines
+are drawn as glowing tubes with a blue light running along them
+whenever the system is producing power - the more power, the faster it
+runs. At night, a calm, steady light keeps running. When it's raining
+or snowing in the area, the graphic shows a matching rain or snow
+animation.
+
+### Location and weather
+
+Weather data: MET Norway (CC BY 4.0) for the current weather
+(temperature and icon), [Open-Meteo.com](https://open-meteo.com/) (CC
+BY 4.0) for the weekly forecast, location search, and as a fallback -
+both free, no API key required. The location is detected automatically
+from the device's public IP address (this sends the IP address to the
+detection service; accuracy is only city-level, not an exact address).
+For a different location: press and hold the weather tile on the
+Overview - there you can set the location by hand (place name or postal
+code; the search shows a tappable list of matches to pick from, even
+with just one result) or trigger automatic detection again; a manually
+set location is never overwritten automatically afterward. Without a
+detected location, the weather tile shows "Set location" instead of an
+icon. The weather refreshes every 30 minutes, plus immediately after
+connecting to WiFi and after a location change.
+
+### Reliability
+
+Every network request is protected by a timeout, so a hanging
+connection never blocks indefinitely. A separate watchdog detects if the
+background sync still stays stuck longer than it should and restarts
+the device in a controlled way, without ever losing saved yield data.
+If the problem persists, the device falls back to trying at most once
+an hour instead of giving up forever. The display itself is never
+affected and stays fully usable.
 
 ### Installation
 
@@ -399,52 +445,15 @@ may change at any time. Account details are stored in plain text on the
 SD card (`/SolarGuardian/config.json`), as is typical for a private
 device without further hardening.
 
-The device is hardened against hanging network requests: every HTTPS
-request aborts after 20 seconds total at the latest (not after a
-possibly much longer stall), and a separate watchdog detects if the
-background sync still stays stuck for more than 10-15 minutes and
-restarts the device on its own (saved yield data is never lost in the
-process). If that doesn't help after a few tries, the device falls back
-to trying at most once an hour instead of giving up forever - the
-display itself is never affected and stays fully usable.
-
 ### Customizing
 
-The device serial number is entered directly on the device: on its own
-screen during first-time setup, or any time afterward under Menu →
-"Account", tap the "Serial number" field there. It ends up in
-`device_no` in `/SolarGuardian/
-config.json` on the SD card. You can find it on the device page in the
-Solar Guardian portal; its address bar contains `devid=` followed by the
-serial number. The seed values for the "Years" tab (previous years'
-yield) live in `years.json` on the SD card and can be edited there
-directly.
-
-The daily yield backup lives in the `/SolarHistory` folder - deliberately
-outside `/SolarGuardian`, so a "Factory reset" in the menu never deletes
-it and today's yield is automatically restored afterward.
-
-### Location and weather
-
-Weather data: MET Norway (CC BY 4.0) for the current weather
-(temperature and icon), [Open-Meteo.com](https://open-meteo.com/) (CC
-BY 4.0) for the weekly forecast, location search, and as a fallback -
-both free, no API key required. The location is detected automatically
-from
-the device's public IP address (this sends the IP address to the
-detection service; accuracy is only city-level, not an exact address).
-Without a detected location, or to use a different one: press and hold
-the weather tile on the Overview - there you can set the location by
-hand once (place
-name or postal code; the search always shows a tappable list of matches
-to pick from, even with just one result) or trigger automatic
-detection again; a manually set location is never overwritten
-automatically afterward. If you'd rather enter coordinates directly, you
-can also set `location_lat`/`location_lon` straight in
-`/SolarGuardian/config.json`. Without a detected location, the weather
-tile shows "Set location" instead of an icon. The weather refreshes every
-30 minutes, plus immediately after connecting to WiFi and after a
-location change.
+The device serial number can be edited any time in the menu under
+"Account", on the "Serial number" field. It ends up in `device_no` in
+`/SolarGuardian/config.json` on the SD card. You can find it on the
+device page in the Solar Guardian portal; its address bar contains
+`devid=` followed by the serial number. The seed values for the "Years"
+tab (previous years' yield) live in `years.json` in the `/SolarHistory`
+folder on the SD card and can be edited there directly.
 
 ### Gallery
 

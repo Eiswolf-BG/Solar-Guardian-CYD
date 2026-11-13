@@ -53,3 +53,35 @@ A few more photos of Solar Guardian CYD in action.
 
 ![Overview screen in a different theme color](images/overview-theme.jpg)
 **Overview**, shown here in a different theme color.
+
+---
+
+## Web view
+
+![Web view overview](images/webui-overview.jpg)
+**Overview** – weather, power, today's yield, and battery voltage, with the animated house graphic below.
+
+---
+
+![Web view power](images/webui-power.jpg)
+**Power** – current power, voltage, current, today's peak, and a chart of the last 3 hours.
+
+---
+
+![Web view daily curve](images/webui-daily-curve.jpg)
+**Daily curve** – the power curve of the whole day, with a progress bar below the hourly axis.
+
+---
+
+![Web view battery](images/webui-battery.jpg)
+**Battery** – charge level, voltage, current, temperature, and the day's voltage range.
+
+---
+
+![Web view history](images/webui-history.jpg)
+**History** – a bar chart of the last months, one of three tabs alongside days and years.
+
+---
+
+![Web view weather](images/webui-weather.jpg)
+**Weather** – a week-ahead forecast with weekday, icon, and high/low temperature per day.
