@@ -23,6 +23,14 @@ Ein Solar-Dashboard für die Solar-Guardian-Cloud (EPEVER) auf einem ESP32
 wichtigsten Werte der Solaranlage sowohl direkt am Gerät als auch im
 Browser und führt dabei ein eigenes Ertragsbuch mit Verlauf und Backup.
 
+> **Getestet mit:** EPEVER Tracer-AN (MPPT-Laderegler), angebunden über
+> das Cloud-Gateway der Solar-Guardian-Plattform. Andere Reglermodelle
+> der Plattform sind nicht getestet - sie können funktionieren, wenn sie
+> dieselben Messwerte liefern, das ist aber nicht sicher. Wer die App mit
+> einem anderen Modell ausprobiert, ist herzlich eingeladen, die
+> Erfahrung als [Issue auf GitHub](https://github.com/Eiswolf-BG/Solar-Guardian-CYD/issues)
+> zu teilen.
+
 ### Highlights
 
 - Acht Wisch-Seiten am Gerät: Übersicht, PV-Status, Batterie, Leistung,
@@ -222,7 +230,8 @@ Dies ist eine inoffizielle Schnittstelle zur Solar-Guardian-Cloud (EPEVER)
 - es besteht keine Verbindung zu oder Zusammenarbeit mit EPEVER, und die
 Schnittstelle kann sich jederzeit ändern. Die Zugangsdaten liegen im
 Klartext auf der SD-Karte (`/SolarGuardian/config.json`), wie es für ein
-privates Gerät ohne weitere Absicherung üblich ist.
+privates Gerät ohne weitere Absicherung üblich ist. Mit welchem
+Reglermodell getestet wurde, steht oben unter "Getestet mit".
 
 ### Anpassen
 
@@ -258,6 +267,13 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT). It
 shows the key values of a solar installation both directly on the
 device and in a browser, and keeps its own yield log with history and
 backup.
+
+> **Tested with:** EPEVER Tracer-AN (MPPT charge controller), connected
+> through the Solar Guardian platform's cloud gateway. Other controller
+> models on the platform haven't been tested - they may work if they
+> report the same values, but that isn't guaranteed. Anyone who tries
+> the app with a different model is warmly invited to share their
+> experience as an [issue on GitHub](https://github.com/Eiswolf-BG/Solar-Guardian-CYD/issues).
 
 ### Highlights
 
@@ -449,7 +465,8 @@ This is an unofficial interface to the Solar Guardian (EPEVER) cloud -
 there is no affiliation with or endorsement by EPEVER, and the interface
 may change at any time. Account details are stored in plain text on the
 SD card (`/SolarGuardian/config.json`), as is typical for a private
-device without further hardening.
+device without further hardening. The controller model used for
+testing is listed above under "Tested with".
 
 ### Customizing
 
