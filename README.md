@@ -169,22 +169,25 @@ zeigt die Grafik eine passende Regen- oder Schneeanimation.
 
 ### Standort und Wetter
 
-Wetterdaten: MET Norway (CC BY 4.0) für das aktuelle Wetter (Temperatur
-und Symbol), [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) für
-die Wochenvorhersage, die Standortsuche und als Rückfall - beide
-kostenlos und ohne Zugangsschlüssel. Der Standort wird automatisch über
-die öffentliche IP-Adresse des Geräts ermittelt (dabei geht die
-IP-Adresse an den jeweiligen Ermittlungsdienst; die Genauigkeit liegt
-nur auf Stadt-Ebene, nicht auf die genaue Adresse). Für einen anderen
-Standort: die Wetterkachel auf der Übersicht lange gedrückt halten -
-dort lässt sich der Standort von Hand per Ortsname oder Postleitzahl
-setzen (die Suche zeigt eine antippbare Trefferliste zur Auswahl, auch
-bei nur einem Treffer) oder die automatische Ermittlung erneut
-anstoßen; ein von Hand gesetzter Standort bleibt erhalten und wird
-automatisch nicht überschrieben. Ohne erkannten Standort zeigt die
-Wetterkachel "Standort wählen" statt eines Symbols. Das Wetter
-aktualisiert sich alle 30 Minuten, dazu sofort nach dem WLAN-Verbinden
-und nach einer Standortänderung.
+Wetterdaten: [MET Norway](https://api.met.no/) (CC BY 4.0) für das
+aktuelle Wetter (Temperatur und Symbol), [Open-Meteo.com](https://open-meteo.com/)
+(CC BY 4.0) für die Wochenvorhersage, die Standortsuche und als
+Rückfall - beide kostenlos und ohne Zugangsschlüssel. Der Standort wird
+automatisch über die öffentliche IP-Adresse des Geräts ermittelt (dabei
+geht die IP-Adresse an den jeweiligen Ermittlungsdienst; die
+Genauigkeit liegt nur auf Stadt-Ebene, nicht auf die genaue Adresse).
+Für einen anderen Standort: die Wetterkachel auf der Übersicht lange
+gedrückt halten - dort lässt sich der Standort von Hand per Ortsname
+oder Postleitzahl setzen (die Suche zeigt eine antippbare Trefferliste
+zur Auswahl, auch bei nur einem Treffer) oder die automatische
+Ermittlung erneut anstoßen. Ein von Hand gesetzter Standort bleibt
+dauerhaft erhalten. Ohne erkannten Standort zeigt die Wetterkachel
+"Standort wählen" statt eines Symbols. Das Wetter aktualisiert sich
+alle 30 Minuten, dazu sofort nach dem WLAN-Verbinden und nach einer
+Standortänderung. Bleibt das Wetter einmal aus, kann einer der beiden
+Dienste gerade nicht erreichbar sein - der aktuelle Status lässt sich
+auf den Status-Seiten von [MET Norway](https://status.met.no/) und
+[Open-Meteo](https://status.open-meteo.com/) prüfen.
 
 ### Zuverlässigkeit
 
@@ -396,20 +399,23 @@ animation.
 
 ### Location and weather
 
-Weather data: MET Norway (CC BY 4.0) for the current weather
-(temperature and icon), [Open-Meteo.com](https://open-meteo.com/) (CC
-BY 4.0) for the weekly forecast, location search, and as a fallback -
-both free, no API key required. The location is detected automatically
-from the device's public IP address (this sends the IP address to the
-detection service; accuracy is only city-level, not an exact address).
-For a different location: press and hold the weather tile on the
-Overview - there you can set the location by hand (place name or postal
-code; the search shows a tappable list of matches to pick from, even
-with just one result) or trigger automatic detection again; a manually
-set location is never overwritten automatically afterward. Without a
-detected location, the weather tile shows "Set location" instead of an
-icon. The weather refreshes every 30 minutes, plus immediately after
-connecting to WiFi and after a location change.
+Weather data: [MET Norway](https://api.met.no/) (CC BY 4.0) for the
+current weather (temperature and icon), [Open-Meteo.com](https://open-meteo.com/)
+(CC BY 4.0) for the weekly forecast, location search, and as a
+fallback - both free, no API key required. The location is detected
+automatically from the device's public IP address (this sends the IP
+address to the detection service; accuracy is only city-level, not an
+exact address). For a different location: press and hold the weather
+tile on the Overview - there you can set the location by hand (place
+name or postal code; the search shows a tappable list of matches to
+pick from, even with just one result) or trigger automatic detection
+again. A manually set location is kept permanently. Without a detected
+location, the weather tile shows "Set location" instead of an icon.
+The weather refreshes every 30 minutes, plus immediately after
+connecting to WiFi and after a location change. If the weather is
+ever missing, one of the two services may currently be unreachable -
+their current status can be checked on the status pages of
+[MET Norway](https://status.met.no/) and [Open-Meteo](https://status.open-meteo.com/).
 
 ### Reliability
 
