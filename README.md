@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.5-blue)
+![version](https://img.shields.io/badge/version-2.6-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -163,6 +163,11 @@ groß und aufgeräumt auf Handy oder PC, mit eigenen Reitern für:
 Eine kleine Statuszeile unten zeigt Version, Verbindung zum Gerät und
 Portal-Status.
 
+Auf Handys und Tablets erscheint beim Öffnen ein Hinweis "Tippen für
+Vollbild", der nach einem Tipp die Browser-Leisten ausblendet. Beim
+Zurückkehren in einen offenen Tab holt die Web-Ansicht sofort frische
+Werte.
+
 #### Animierte Haus-Grafik
 
 Unterhalb der Werte zeigt die Web-Ansicht auf allen Reitern außer Wetter
@@ -214,7 +219,7 @@ bedienbar.
    Konfiguration und das Ertragsbuch benötigt.
 2. Firmware über den [Web-Flasher](https://eiswolf-bg.github.io/Solar-Guardian-CYD/)
    installieren (Chrome, Edge oder Opera, USB-Kabel). Dort lassen sich
-   die letzten drei Versionen auswählen.
+   die aktuelle und die vorherige Version auswählen.
 3. Beim ersten Start: Touch kalibrieren, WLAN auswählen, Solar-Guardian-
    E-Mail und Passwort eingeben.
 
@@ -401,6 +406,10 @@ large and clean on your phone or PC, with its own tabs for:
 A small status line at the bottom shows the version, the connection to
 the device, and the portal status.
 
+On phones and tablets, a "Tap for full screen" hint appears on opening;
+after a tap it hides the browser bars. When returning to an open tab, the
+web view fetches fresh values immediately.
+
 #### Animated house graphic
 
 Below the values, the web view shows an animated house graphic on every
@@ -448,8 +457,8 @@ affected and stays fully usable.
 1. Insert a FAT32-formatted SD card into the device - needed for
    configuration and the yield log.
 2. Install the firmware via the [Web Flasher](https://eiswolf-bg.github.io/Solar-Guardian-CYD/)
-   (Chrome, Edge, or Opera, USB cable). The last three versions are
-   selectable there.
+   (Chrome, Edge, or Opera, USB cable). The current and the previous
+   version can be selected there.
 3. On first boot: calibrate touch, select WiFi, enter your Solar Guardian
    email and password.
 

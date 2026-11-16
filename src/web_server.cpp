@@ -115,6 +115,11 @@ footer div{margin-top:3px;}
 .filesRow button.dlFolder{color:var(--accent);border-color:var(--accent);font-size:.68rem;}
 #filesProgress{color:var(--dim);font-size:.78rem;margin:6px 0;}
 .err{color:#ff5050;}
+/* Hinweis "Tippen fuer Vollbild" (Auftrag "Rueckkehr-Aktualisierung und Vollbild-Hinweis"): kleine Kapsel unten mittig, nur Anzeige - fest
+   positioniert, pointer-events:none (schluckt keinen Tipp), verdraengt nichts, weiches Ein-/Ausblenden (0,3 s), Sicherheitsabstand fuer Handys. */
+#fsHint{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:80%;max-width:420px;min-height:64px;padding:12px 18px;border-radius:16px;background:#2a2a2a;border:1px solid #777;color:#f2f2f2;font-size:20px;font-weight:700;line-height:1.25;display:flex;align-items:center;justify-content:center;gap:12px;text-align:center;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;box-shadow:0 2px 14px rgba(0,0,0,.7);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+#fsHint.show{opacity:1;pointer-events:auto;}
+#fsHint svg{width:28px;height:28px;flex:none;}
 /* Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
    Ueberarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten") -
    Aussehen/Massverhaeltnis 1:1 aus der bestaetigten Vorlage solarenergy.html
@@ -245,13 +250,14 @@ footer div{margin-top:3px;}
   <div><span id="footerConnDot" class="statusDot"></span><span id="footerConnText"></span></div>
   <div id="footerPortalText"></div>
 </footer>
+<div id="fsHint" role="status" aria-live="polite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><line x1="21" y1="3" x2="14" y2="10"/><polyline points="9 21 3 21 3 15"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span id="fsHintTxt"></span></div>
 <script>
 (function(){
 var L={
  de:{tabs:['Übersicht','Leistung','Tagesverlauf','Ertrag','Batterie','PV-Status','Verlauf','Wetter','Daten'],
      power:'Leistung',today:'Heute',battery:'Batterie',week:'Woche',month:'Monat',year:'Jahr',
      voltage:'Spannung',current:'Strom',temp:'Temperatur',status:'Status',weather:'Wetter',
-     stand:'Stand',next:'Nächste Abfrage',noLoc:'Standort nicht gesetzt',noConn:'Keine Verbindung zum Gerät',
+     stand:'Stand',fsHint:'Tippen für Vollbild',next:'Nächste Abfrage',noLoc:'Standort nicht gesetzt',noConn:'Keine Verbindung zum Gerät',
      wd:['So','Mo','Di','Mi','Do','Fr','Sa'],
      mo:['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
      now:'jetzt',max:'Max',days:'Tage',months:'Monate',years:'Jahre',
@@ -275,7 +281,7 @@ var L={
  en:{tabs:['Overview','Power','Daily curve','Yield','Battery','PV status','History','Weather','Data'],
      power:'Power',today:'Today',battery:'Battery',week:'Week',month:'Month',year:'Year',
      voltage:'Voltage',current:'Current',temp:'Temperature',status:'Status',weather:'Weather',
-     stand:'As of',next:'Next update',noLoc:'No location set',noConn:'Lost connection to device',
+     stand:'As of',fsHint:'Tap for full screen',next:'Next update',noLoc:'No location set',noConn:'Lost connection to device',
      wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
      mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
      now:'now',max:'Max',days:'Days',months:'Months',years:'Years',
@@ -1186,6 +1192,7 @@ if (!houseReduceMotion) requestAnimationFrame(wxFrame); // "weniger Bewegung": k
 function render(data){
   if(data.lang && data.lang!==lang){ lang=data.lang; t=L[lang]||L.de; buildTabs(); showTab(); }
   document.documentElement.lang=lang;
+  if(!langKnown){ langKnown=true; fsHintReady(); } // erste Antwort da: Sprache steht fest, ein wartender Hinweis darf erscheinen
   var accent=data.accent||'#39ff14';
   document.documentElement.style.setProperty('--accent',accent);
   document.querySelector('meta[name=theme-color]') || (function(){
@@ -1297,6 +1304,9 @@ function updateFooterConn(connected){
 
 var APP_FWV='';
 var failCount=0;
+var langKnown=false, fsHintReady=function(){}, fsRearm=function(){}; // vom Vollbild-Hinweis unten belegt
+var pollTimer=null;
+function startPollTimer(){ if(pollTimer) clearInterval(pollTimer); pollTimer=setInterval(poll,5000); }
 function poll(){
   fetch('/api/data').then(function(r){ return r.json(); }).then(function(data){
     failCount=0;
@@ -1307,9 +1317,107 @@ function poll(){
     if(failCount>=2) updateFooterConn(false);
   });
 }
+// Vollbild-Hinweis "Tippen fuer Vollbild" (einzige Vollbild-Funktion; kein Knopf, keine gespeicherte Vorliebe): Er wird beim Laden UND bei jeder Rueckkehr in die
+// Seite (fsRearm, aus onReturn) scharf gestellt, aber NUR auf Touch-Geraeten (matchMedia "(hover: none) and (pointer: coarse)"), wenn der Browser Vollbild fuer
+// Elemente kennt, die Seite nicht als installierte App (Standalone) laeuft und nicht schon im Vollbild ist. Er steht ca. 8 s (Ein-/Ausblenden 0,3 s) und ist
+// antippbar. Ein Tipp auf den Hinweis ODER irgendwo auf der Seite schaltet Vollbild ein: Listener auf pointerdown, touchstart, pointerup, touchend und click
+// (jeweils once, passiv, Erfassungsphase, kein preventDefault/stopPropagation -> die normale Aktion, z.B. Reiter oeffnen, bleibt). Die Anfrage wird direkt im
+// Ereignis aufgerufen. touchstart/pointerdown zaehlen in Chrome nicht als Nutzergeste: wird dort eine Anfrage abgelehnt, bleibt der Hinweis stehen, bis
+// pointerup/touchend/click kommt; wird DIESE abgelehnt (oder laufen 8 s ab), werden alle Listener entfernt und der Hinweis ausgeblendet - nichts wiederholt sich.
+// Nach Erfolg werden alle Listener entfernt. Es wartet nie mehr als ein Satz Listener. Nach dem Verlassen per Wischgeste/Zurueck kommt der Hinweis erst bei der
+// naechsten Rueckkehr bzw. beim naechsten Laden wieder.
+(function(){
+  var hint=document.getElementById('fsHint'), hintTxt=document.getElementById('fsHintTxt'), de=document.documentElement;
+  if(!hint) return;
+  function isFs(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
+  var touch=false, sa=false;
+  try{ touch=!!(window.matchMedia&&window.matchMedia('(hover: none) and (pointer: coarse)').matches); }catch(e){}
+  try{ sa=!!((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true); }catch(e){}
+  var sup=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);
+  if(!touch||!sup||sa) return;
+  var hintTimer=null, hintClear=null, hintFallback=null, armed=false, pending=false;
+  var evs=['pointerdown','touchstart','pointerup','touchend','click'];
+  function hideHint(){
+    clearTimeout(hintTimer); clearTimeout(hintFallback);
+    hint.classList.remove('show');
+    clearTimeout(hintClear); hintClear=setTimeout(function(){ if(!hint.classList.contains('show')&&hintTxt) hintTxt.textContent=''; },400); // Text erst nach dem Ausblenden leeren (Bildschirmleser)
+  }
+  function disarm(){
+    evs.forEach(function(n){ document.removeEventListener(n,go,true); });
+    armed=false; pending=false; hideHint();
+  }
+  function showHint(){
+    if(!armed) return;
+    clearTimeout(hintFallback);
+    if(hintTxt) hintTxt.textContent=(t&&t.fsHint)||'';
+    clearTimeout(hintClear);
+    hint.classList.add('show');
+    clearTimeout(hintTimer); hintTimer=setTimeout(disarm,8000); // nach 8 s ohne Tipp: Hinweis weg UND Listener weg
+  }
+  function go(ev){
+    if(!armed||pending) return;
+    if(isFs()){ disarm(); return; }
+    var rq=de.requestFullscreen||de.webkitRequestFullscreen, r, last=!ev||ev.type==='click'||ev.type==='pointerup'||ev.type==='touchend';
+    if(!rq){ disarm(); return; }
+    pending=true;
+    try{ r=rq.call(de); }catch(e){ if(last) disarm(); else pending=false; return; }
+    if(r&&r.then){
+      r.then(function(){ disarm(); },function(){ if(last) disarm(); else pending=false; });
+    }else disarm();
+  }
+  function arm(){
+    if(armed||isFs()) return;         // nie zwei Listener gleichzeitig; im Vollbild nichts
+    armed=true; pending=false;
+    evs.forEach(function(n){ document.addEventListener(n,go,{capture:true,passive:true,once:true}); });
+    if(langKnown) showHint();         // sonst erst nach der ersten Antwort (richtige Sprache), spaetestens nach 1,2 s
+    else{ clearTimeout(hintFallback); hintFallback=setTimeout(showHint,1200); }
+  }
+  fsRearm=arm;
+  fsHintReady=function(){ if(armed) showHint(); };
+  function upd(){ if(isFs()&&armed) disarm(); }
+  document.addEventListener('fullscreenchange',upd);
+  document.addEventListener('webkitfullscreenchange',upd);
+  arm(); // beim Laden
+})();
+
+// Rueckkehr in die Seite (Auftrag "Rueckkehr-Aktualisierung und Vollbild-Hinweis"): Auf Android bleibt die WebUI als Tab offen und wird beim erneuten Oeffnen der
+// Verknuepfung nur nach vorn geholt, ohne Neuladen. Erkannt wird die Rueckkehr ueber visibilitychange (sichtbar), pageshow (auch aus dem Seitenspeicher/bfcache),
+// window focus und online. Ereignisse innerhalb von 3 s werden zu EINEM Abruf zusammengefasst (Entprellen). Dann sofort frische Daten: /api/data (damit auch
+// "Stand"/"Naechste Abfrage", Tag-/Nacht-Bild, Sonnenstand und Wetter-Animation neu bewertet werden) plus der Abruf des gerade offenen Reiters (Tagesverlauf,
+// Verlauf), danach der normale 5-s-Takt neu gestartet (keine doppelten Abfragen) und der Vollbild-Listener neu scharf gestellt. War die Seite laenger als
+// 30 Minuten unsichtbar, wird stattdessen einmal komplett neu geladen (nach dem Neuladen ist hiddenAt leer -> keine Reload-Schleife).
+var RETURN_DEBOUNCE_MS=3000, RELOAD_AFTER_MS=30*60*1000;
+var hiddenAt=0, lastReturnAt=Date.now(), reloading=false;
+function markHidden(){ if(!hiddenAt) hiddenAt=Date.now(); }
+function refreshNow(){
+  poll();
+  if (activeTab===TAB_DAILY) pollDay();
+  if (activeTab===TAB_HISTORY) pollHistory();
+  startPollTimer();
+}
+function onReturn(){
+  if(document.visibilityState==='hidden') return;
+  var now=Date.now();
+  if(hiddenAt && now-hiddenAt>RELOAD_AFTER_MS){
+    if(reloading) return;
+    reloading=true; hiddenAt=0;
+    location.reload();
+    return;
+  }
+  if(now-lastReturnAt<RETURN_DEBOUNCE_MS) return;
+  lastReturnAt=now; hiddenAt=0;
+  refreshNow();
+  fsRearm();
+}
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') markHidden(); else onReturn(); });
+window.addEventListener('pagehide',markHidden);
+window.addEventListener('pageshow',onReturn);
+window.addEventListener('focus',onReturn);
+window.addEventListener('online',onReturn);
+
 buildTabs(); showTab();
 poll();
-setInterval(poll,5000);
+startPollTimer();
 })();
 </script>
 </body>
@@ -1672,6 +1780,10 @@ setInterval(poll,5000);
     // Sendet die statische Seite direkt aus dem Flash in Stuecken (Auftrag
     // "chunked/sendContent", kein grosser String im RAM).
     void sendPageChunked() {
+        // Startseite (HTML mit eingebettetem JS/CSS) NIE zwischenspeichern, damit ein Update sofort ankommt (Android-Chrome holte sonst die alte Seite).
+        server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        server.sendHeader("Pragma", "no-cache");
+        server.sendHeader("Expires", "0");
         server.setContentLength(CONTENT_LENGTH_UNKNOWN);
         server.send(200, "text/html", "");
         size_t total = sizeof(PAGE_HTML) - 1; // ohne abschliessendes NUL
