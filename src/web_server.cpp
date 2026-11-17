@@ -48,6 +48,8 @@ nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
 main{padding:14px;max-width:760px;margin:0 auto;}
 section{display:none;}
 section.active{display:block;}
+@keyframes tabIn{from{opacity:.35}to{opacity:1}}
+section.swipein{animation:tabIn .2s ease-out;}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
 .card{background:var(--card);border:1px solid #242424;border-radius:10px;padding:14px;}
 .card .label{font-size:.78rem;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
@@ -1378,6 +1380,46 @@ function poll(){
   document.addEventListener('fullscreenchange',upd);
   document.addEventListener('webkitfullscreenchange',upd);
   arm(); // beim Laden
+})();
+
+// Wischen wechselt die Reiter (nur Touch-Geraete): waagrechter Wisch an beliebiger Stelle = naechster/vorheriger Reiter, am Anfang/Ende kein Umbruch.
+// Der Wechsel ruft den onclick des Reiter-Knopfs auf (button.click()) - also exakt dieselbe Funktion wie ein Antippen. Nur passive Listener, nie preventDefault.
+// Ausgewertet wird nur: 1 Finger, >=60 px waagrecht, waagrecht >= 1,5 x senkrecht, <=700 ms, Start nicht in den ersten 24 px links/rechts (Android-Zurueck-Geste),
+// nicht in der Reiterleiste, nicht in Eingabefeldern (Editor im Daten-Reiter) und nicht in Elementen, die selbst seitlich scrollen.
+(function(){
+  var sx=0, sy=0, st=0, ok=false;
+  function hScroll(el){
+    for(;el&&el!==document.body&&el.nodeType===1;el=el.parentElement){
+      if(el.id==='tabs'||/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return true;
+      if(el.scrollWidth>el.clientWidth+1){
+        var ox=''; try{ ox=getComputedStyle(el).overflowX; }catch(e){}
+        if(ox==='auto'||ox==='scroll') return true;
+      }
+    }
+    return false;
+  }
+  document.addEventListener('touchstart',function(e){
+    ok=false;
+    if(e.touches.length!==1) return;
+    var p=e.touches[0];
+    if(p.clientX<24||p.clientX>window.innerWidth-24) return;
+    if(hScroll(e.target)) return;
+    sx=p.clientX; sy=p.clientY; st=Date.now(); ok=true;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){ if(e.touches.length!==1) ok=false; },{passive:true});
+  document.addEventListener('touchcancel',function(){ ok=false; },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(!ok) return; ok=false;
+    var p=e.changedTouches[0]; if(!p) return;
+    var dx=p.clientX-sx, dy=p.clientY-sy;
+    if(Date.now()-st>700||Math.abs(dx)<60||Math.abs(dx)<1.5*Math.abs(dy)) return;
+    var n=activeTab+(dx<0?1:-1), b=tabsEl.children[n];
+    if(!b) return;                       // erster/letzter Reiter: nichts tun
+    b.click();                           // gleiche Funktion wie Antippen
+    try{ tabsEl.scrollTo({left:b.offsetLeft-(tabsEl.clientWidth-b.offsetWidth)/2,behavior:'smooth'}); }catch(x){ tabsEl.scrollLeft=b.offsetLeft; }
+    var sec=document.getElementById(tabIds[n]);
+    if(sec){ sec.classList.remove('swipein'); void sec.offsetWidth; sec.classList.add('swipein'); }
+  },{passive:true});
 })();
 
 // Rueckkehr in die Seite (Auftrag "Rueckkehr-Aktualisierung und Vollbild-Hinweis"): Auf Android bleibt die WebUI als Tab offen und wird beim erneuten Oeffnen der

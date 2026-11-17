@@ -603,28 +603,27 @@ Popups, neue wie alte):**
   Release händisch mit der Versionsnummer im Web-Flasher-Manifest
   (`manifest.json` im Wurzelverzeichnis) übereinstimmen** - beide Stellen
   zusammen pflegen, nicht nur eine davon vergessen.
-- **Web-Flasher: bis zu drei Versionen wählbar, aktuell nur zwei** (Auftrag
-  "Web-Flasher: die letzten drei Versionen zur Auswahl", 03.11.; Anpassung
-  v2.6): `index.html` hat ein `<select id="versionSelect">` (neueste =
-  Wurzelverzeichnis/`manifest.json`, vorausgewählt und als "(current)"
-  markiert; die älteren liegen je in einem eigenen Unterordner
-  `versions/vX.Y/` mit eigenem `firmware.bin` + `manifest.json`,
-  `bootloader.bin`/`partitions.bin` werden dort unverändert hinein
-  kopiert, sofern sie sich seit der jeweiligen Version nicht geändert
-  haben - mit `git show vX.Y:bootloader.bin` prüfen, nicht annehmen; die
-  `firmware.bin` einer archivierten Version IMMER byte-identisch aus dem
-  Git-Tag bzw. dem GitHub-Release-Asset holen (sha256 vergleichen), nie
-  die Datei vom Wurzelverzeichnis auf main, falls dort zwischenzeitlich
-  still nachgepusht wurde). **Rotationsregel bei JEDEM künftigen
-  Release:** neue Version kommt als Wurzel-`manifest.json`/-`firmware.bin`
-  rein, die bisherige Wurzel-Version wandert nach `versions/`, und
-  gibt es dann mehr als drei wählbare Versionen, wird die älteste
-  entfernt (Ordner, Manifest, Dropdown-Eintrag; Git-Tags und GitHub-
-  Releases bleiben bestehen). **Ausnahme:** v2.4 und älter werden wegen
-  eines bekannten Bootloop-Fehlers dauerhaft NICHT mehr im Web-Flasher
-  angeboten. Der Web-Flasher zeigt deshalb aktuell nur zwei Versionen
-  (v2.6, v2.5). Beim nächsten Release (v2.7) entsteht daraus v2.7, v2.6,
-  v2.5; erst danach gilt wieder die Drei-Versionen-Rotation.
+- **Web-Flasher: genau zwei Versionen wählbar** (Auftrag "Web-Flasher: die
+  letzten drei Versionen zur Auswahl", 03.11.; ab v2.7 per Alex' Anweisung
+  auf zwei Versionen reduziert): `index.html` hat ein
+  `<select id="versionSelect">` (neueste = Wurzelverzeichnis/
+  `manifest.json`, vorausgewählt und als "(current)" markiert; die vorherige
+  liegt in einem eigenen Unterordner `versions/vX.Y/` mit eigenem
+  `firmware.bin` + `manifest.json`, `bootloader.bin`/`partitions.bin` werden
+  dort unverändert hinein kopiert, sofern sie sich seit der jeweiligen
+  Version nicht geändert haben - mit `git show vX.Y:bootloader.bin` prüfen,
+  nicht annehmen; die `firmware.bin` einer archivierten Version IMMER
+  byte-identisch aus dem Git-Tag bzw. dem GitHub-Release-Asset holen
+  (sha256 vergleichen), nie die Datei vom Wurzelverzeichnis auf main, falls
+  dort zwischenzeitlich still nachgepusht wurde). **Rotationsregel bei JEDEM
+  künftigen Release:** neue Version kommt als Wurzel-`manifest.json`/
+  -`firmware.bin` rein, die bisherige Wurzel-Version wandert nach
+  `versions/`, und alles Ältere wird entfernt (Ordner, Manifest, Dropdown-
+  Eintrag; Git-Tags und GitHub-Releases bleiben bestehen) - es bleiben
+  immer genau die neue und die vorherige Version. **Ausnahme:** v2.4 und
+  älter werden wegen eines bekannten Bootloop-Fehlers dauerhaft NICHT mehr
+  im Web-Flasher angeboten. Stand v2.7: Flasher zeigt v2.7 (current) und
+  v2.6.
 - **Animierte Haus-Grafik (Auftrag "Animierte Haus-Grafik in der WebUI",
   Überarbeitungen "Tag/Nacht nach Sonnenstand" und "zwei Bild-Varianten"):**
   unterhalb des jeweiligen Reiter-Inhalts, auf allen Reitern außer "Wetter"

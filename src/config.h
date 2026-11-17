@@ -28,7 +28,7 @@ namespace Config {
     // mit der Versionsnummer im Web-Flasher-Manifest (manifest.json,
     // Wurzelverzeichnis) uebereinstimmen - beim naechsten echten Release
     // beide Stellen zusammen pflegen, nicht nur eine davon.
-    constexpr const char* FW_VERSION = "2.6";
+    constexpr const char* FW_VERSION = "2.7";
 
     // Task-Watchdog-Zeitlimit (Core 0, siehe main.cpp::setup() und
     // CLAUDE.md "Bekannte Probleme"/Boot-Loop-Fix 09.11.): Standard waere

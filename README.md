@@ -6,7 +6,7 @@ ESP32 "Cheap Yellow Display" (CYD, ESP32-2432S028, 2.8" touch TFT).
 ![platform](https://img.shields.io/badge/platform-ESP32--2432S028-yellow)
 ![framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-2.6-blue)
+![version](https://img.shields.io/badge/version-2.7-blue)
 
 ![Solar Guardian CYD - Yield screen](docs/images/main.jpg)
 
@@ -167,6 +167,9 @@ Auf Handys und Tablets erscheint beim Öffnen ein Hinweis "Tippen für
 Vollbild", der nach einem Tipp die Browser-Leisten ausblendet. Beim
 Zurückkehren in einen offenen Tab holt die Web-Ansicht sofort frische
 Werte.
+
+Auf dem Handy kann man zwischen den Reitern auch durch Wischen nach
+links oder rechts wechseln, an beliebiger Stelle der Seite.
 
 #### Animierte Haus-Grafik
 
@@ -409,6 +412,9 @@ the device, and the portal status.
 On phones and tablets, a "Tap for full screen" hint appears on opening;
 after a tap it hides the browser bars. When returning to an open tab, the
 web view fetches fresh values immediately.
+
+On a phone you can also switch between the tabs by swiping left or right
+anywhere on the page.
 
 #### Animated house graphic
 
